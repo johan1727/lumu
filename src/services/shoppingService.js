@@ -65,7 +65,7 @@ exports.searchGoogleShopping = async (query, radius, lat, lng, intentType) => {
             url: 'https://google.serper.dev/search',
             headers: { 'X-API-KEY': apiKey, 'Content-Type': 'application/json' },
             data: JSON.stringify({
-                q: `${query} precio comprar site:walmart.com.mx OR site:liverpool.com.mx OR site:coppel.com OR site:bestbuy.com.mx OR site:elektra.com.mx OR site:costco.com.mx OR site:sams.com.mx OR site:oficedepot.com.mx`,
+                q: `${query} precio comprar site:walmart.com.mx OR site:liverpool.com.mx OR site:coppel.com OR site:bestbuy.com.mx OR site:elektra.com.mx OR site:costco.com.mx OR site:sams.com.mx OR site:officedepot.com.mx`,
                 gl: 'mx', hl: 'es', num: 10
             }),
             timeout: SERPER_TIMEOUT
@@ -192,7 +192,7 @@ exports.searchGoogleShopping = async (query, radius, lat, lng, intentType) => {
                         const R = 6371;
                         const dLat = toRad(p.latitude - lat);
                         const dLng = toRad(p.longitude - lng);
-                        const a = Math.sin(dLat/2)**2 + Math.cos(toRad(lat)) * Math.cos(toRad(p.latitude)) * Math.sin(dLng/2)**2;
+                        const a = Math.sin(dLat / 2) ** 2 + Math.cos(toRad(lat)) * Math.cos(toRad(p.latitude)) * Math.sin(dLng / 2) ** 2;
                         distanceKm = Math.round(R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a)) * 10) / 10;
                     }
                     const distStr = distanceKm != null ? ` · ${distanceKm} km` : '';

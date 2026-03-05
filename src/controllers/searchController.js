@@ -70,7 +70,7 @@ exports.searchProduct = async (req, res) => {
                         });
                     }
                     // Log this anonymous search (fire & forget)
-                    supabase.from('rate_limits').insert({ ip, created_at: new Date().toISOString() }).then(() => {}).catch(() => {});
+                    supabase.from('rate_limits').insert({ ip, created_at: new Date().toISOString() }).then(() => { }).catch(() => { });
                 } catch (e) {
                     console.warn('[Anon Paywall] Supabase error, allowing request:', e.message);
                 }
@@ -93,46 +93,46 @@ exports.searchProduct = async (req, res) => {
         if (userId && supabase) {
             const { data: profile } = await supabase.from('profiles').select('plan, is_premium').eq('id', userId).single();
             if (profile) {
-                    let reqLimit = 5;
-                    let isDaily = true;
-                    let planName = 'Gratis';
+                let reqLimit = 5;
+                let isDaily = true;
+                let planName = 'Gratis';
 
-                    if (profile.plan === 'b2b') {
-                        reqLimit = 5000;
-                        isDaily = false;
-                        planName = 'Revendedor B2B';
-                    } else if (profile.is_premium || profile.plan === 'personal_vip') {
-                        reqLimit = 500;
-                        isDaily = false;
-                        planName = 'VIP';
+                if (profile.plan === 'b2b') {
+                    reqLimit = 5000;
+                    isDaily = false;
+                    planName = 'Revendedor B2B';
+                } else if (profile.is_premium || profile.plan === 'personal_vip') {
+                    reqLimit = 500;
+                    isDaily = false;
+                    planName = 'VIP';
+                }
+
+                let queryDate = new Date();
+                if (isDaily) {
+                    queryDate.setHours(0, 0, 0, 0);
+                } else {
+                    queryDate.setDate(1); // Inicio de mes
+                    queryDate.setHours(0, 0, 0, 0);
+                }
+
+                const { count, error } = await supabase.from('searches')
+                    .select('*', { count: 'exact', head: true })
+                    .eq('user_id', userId)
+                    .gte('created_at', queryDate.toISOString());
+
+                if (!error) {
+                    if (count >= reqLimit) {
+                        const errorMsg = isDaily
+                            ? 'Límite diario de búsquedas gratuitas alcanzado. Mejora a VIP para búsquedas sin límites.'
+                            : `Límite mensual de búsquedas alcanzado (${reqLimit} para el plan ${planName}). Por favor espera a tu siguiente ciclo o contacta a soporte.`;
+                        return res.status(402).json({ error: errorMsg, paywall: !profile.is_premium, upgrade_required: profile.is_premium });
                     }
 
-                    let queryDate = new Date();
-                    if (isDaily) {
-                        queryDate.setHours(0, 0, 0, 0);
-                    } else {
-                        queryDate.setDate(1); // Inicio de mes
-                        queryDate.setHours(0, 0, 0, 0);
-                    }
-
-                    const { count, error } = await supabase.from('searches')
-                        .select('*', { count: 'exact', head: true })
-                        .eq('user_id', userId)
-                        .gte('created_at', queryDate.toISOString());
-
-                    if (!error) {
-                        if (count >= reqLimit) {
-                            const errorMsg = isDaily
-                                ? 'Límite diario de búsquedas gratuitas alcanzado. Mejora a VIP para búsquedas sin límites.'
-                                : `Límite mensual de búsquedas alcanzado (${reqLimit} para el plan ${planName}). Por favor espera a tu siguiente ciclo o contacta a soporte.`;
-                            return res.status(402).json({ error: errorMsg, paywall: !profile.is_premium, upgrade_required: profile.is_premium });
-                        }
-
-                        // Generar Warning si está cerca del límite
-                        if (!isDaily && count >= reqLimit * 0.9) {
-                            usageWarning = `⚠️ Te estás acercando a tu límite mensual (${count}/${reqLimit} búsquedas).`;
-                        } else if (isDaily && count === reqLimit - 1) {
-                            usageWarning = `⚠️ Te queda 1 búsqueda gratuita hoy.`;
+                    // Generar Warning si está cerca del límite
+                    if (!isDaily && count >= reqLimit * 0.9) {
+                        usageWarning = `⚠️ Te estás acercando a tu límite mensual (${count}/${reqLimit} búsquedas).`;
+                    } else if (isDaily && count === reqLimit - 1) {
+                        usageWarning = `⚠️ Te queda 1 búsqueda gratuita hoy.`;
                     }
                 }
             }
@@ -280,7 +280,7 @@ exports.searchProduct = async (req, res) => {
         const mainProductKeywords = /consola|laptop|iphone|samsung|galaxy|macbook|ipad|playstation|xbox|nintendo|switch|televisor|tv |pantalla|refrigerador|lavadora|aire acondicionado|pc gamer|computadora|airpods|watch|pixel|fold|flip/i;
         const accessoryKeywords = /funda|case|protector|mica|cristal|templado|cable|cargador|soporte|base|skin|sticker|grip|joystick|thumb|screen protector|película|pelicula|correa|strap|bolsa|estuche|adaptador|hub|dock(?!ing)|batería|battery|replacement|reemplazo|vidrio|silicona|silicone|tpu|rubber|cover|carcasa|cubierta|holder|mount|stand|sleeve|pouch|cleaning|limpieza|ear.?tip|ear.?bud|ear.?pad|ear.?cushion|hook/i;
         const isMainProductSearch = mainProductKeywords.test(searchQuery);
-        
+
         // Marcar cada item como accesorio o no
         if (isMainProductSearch) {
             for (const item of uniqueResults) {
@@ -299,7 +299,7 @@ exports.searchProduct = async (req, res) => {
                 if (a._isAccessory && !b._isAccessory) return 1;
                 if (!a._isAccessory && b._isAccessory) return -1;
             }
-            
+
             const aPrice = a.price == null ? Infinity : parseFloat(a.price);
             const bPrice = b.price == null ? Infinity : parseFloat(b.price);
 
@@ -384,6 +384,15 @@ exports.searchProduct = async (req, res) => {
         // NUEVO: Guardar en Caché
         await cacheService.saveToCache(searchQuery, radius, lat, lng, productsWithTrend);
         await cacheService.savePriceSnapshot(searchQuery, radius, lat, lng, productsWithTrend);
+
+        // FIX #1: Registrar búsqueda para usuarios autenticados (Rate Limiting)
+        if (userId && supabase) {
+            supabase.from('searches').insert({
+                user_id: userId,
+                query: finalQuery || searchQuery,
+                created_at: new Date().toISOString()
+            }).then(() => { }).catch(e => console.error('[Search Logging] Error:', e.message));
+        }
 
         // 6. Devolver respuesta estandarizada al frontend
         return res.json({
@@ -482,7 +491,7 @@ exports.bulkSearch = async (req, res) => {
                             desde_cache: false
                         };
                         // Save to cache async
-                        cacheService.saveToCache(searchQuery, radius, lat, lng, [topResult]).catch(() => {});
+                        cacheService.saveToCache(searchQuery, radius, lat, lng, [topResult]).catch(() => { });
                         return topResult;
                     }
                     return null;
@@ -504,7 +513,7 @@ exports.bulkSearch = async (req, res) => {
             const inserts = bulkResults
                 .filter(r => r.encontrado)
                 .map(r => ({ user_id: userId, query: r.query_original }));
-            supabase.from('searches').insert(inserts).then(() => {}).catch(e => console.error('Bulk insert error:', e));
+            supabase.from('searches').insert(inserts).then(() => { }).catch(e => console.error('Bulk insert error:', e));
         }
 
         return res.json({

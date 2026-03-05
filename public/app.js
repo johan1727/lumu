@@ -1337,7 +1337,16 @@ async function initApp() {
                     body: JSON.stringify(searchBody)
                 });
 
-                const data = await response.json();
+                // FIX #2: Defensive parsing to prevent "Unexpected token 'A'" crash
+                let data;
+                try {
+                    const textData = await response.text();
+                    data = JSON.parse(textData);
+                } catch (parseError) {
+                    console.error('Invalid JSON response from server:', parseError);
+                    throw new Error('El servidor devolvió un error inesperado. Por favor, intenta de nuevo.');
+                }
+
 
                 if (!response.ok) {
                     // Handle rate limit (429) and paywall (402) specially
