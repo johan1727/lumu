@@ -57,20 +57,21 @@ exports.searchProduct = async (req, res) => {
                 try {
                     const todayStart = new Date();
                     todayStart.setHours(0, 0, 0, 0);
+                    const searchIpKey = `search:${ip}`;
                     const { count, error } = await supabase
                         .from('rate_limits')
                         .select('*', { count: 'exact', head: true })
-                        .eq('ip', ip)
+                        .eq('ip', searchIpKey)
                         .gte('created_at', todayStart.toISOString());
 
                     if (!error && count >= ANON_DAILY_LIMIT) {
                         return res.status(402).json({
-                            error: `Límite diario de ${ANON_DAILY_LIMIT} búsquedas gratuitas alcanzado. Inicia sesión o hazte VIP para más búsquedas.`,
+                            error: `Límite diario de ${ANON_DAILY_LIMIT} búsquedas gratuitas alcanzado.Inicia sesión o hazte VIP para más búsquedas.`,
                             paywall: true
                         });
                     }
                     // Log this anonymous search (fire & forget)
-                    supabase.from('rate_limits').insert({ ip, created_at: new Date().toISOString() }).then(() => { }).catch(() => { });
+                    supabase.from('rate_limits').insert({ ip: searchIpKey, created_at: new Date().toISOString() }).then(() => { }).catch(() => { });
                 } catch (e) {
                     console.warn('[Anon Paywall] Supabase error, allowing request:', e.message);
                 }
@@ -78,11 +79,11 @@ exports.searchProduct = async (req, res) => {
                 // RAM fallback (unreliable in serverless but better than nothing)
                 if (!global._anonSearchLog) global._anonSearchLog = {};
                 const todayKey = new Date().toISOString().slice(0, 10);
-                const ipKey = `${ip}:${todayKey}`;
+                const ipKey = `${ip}:${todayKey} `;
                 global._anonSearchLog[ipKey] = (global._anonSearchLog[ipKey] || 0) + 1;
                 if (global._anonSearchLog[ipKey] > ANON_DAILY_LIMIT) {
                     return res.status(402).json({
-                        error: `Límite diario de ${ANON_DAILY_LIMIT} búsquedas gratuitas alcanzado. Inicia sesión o hazte VIP para más búsquedas.`,
+                        error: `Límite diario de ${ANON_DAILY_LIMIT} búsquedas gratuitas alcanzado.Inicia sesión o hazte VIP para más búsquedas.`,
                         paywall: true
                     });
                 }
@@ -124,13 +125,13 @@ exports.searchProduct = async (req, res) => {
                     if (count >= reqLimit) {
                         const errorMsg = isDaily
                             ? 'Límite diario de búsquedas gratuitas alcanzado. Mejora a VIP para búsquedas sin límites.'
-                            : `Límite mensual de búsquedas alcanzado (${reqLimit} para el plan ${planName}). Por favor espera a tu siguiente ciclo o contacta a soporte.`;
+                            : `Límite mensual de búsquedas alcanzado(${reqLimit} para el plan ${planName}).Por favor espera a tu siguiente ciclo o contacta a soporte.`;
                         return res.status(402).json({ error: errorMsg, paywall: !profile.is_premium, upgrade_required: profile.is_premium });
                     }
 
                     // Generar Warning si está cerca del límite
                     if (!isDaily && count >= reqLimit * 0.9) {
-                        usageWarning = `⚠️ Te estás acercando a tu límite mensual (${count}/${reqLimit} búsquedas).`;
+                        usageWarning = `⚠️ Te estás acercando a tu límite mensual(${count} / ${reqLimit} búsquedas).`;
                     } else if (isDaily && count === reqLimit - 1) {
                         usageWarning = `⚠️ Te queda 1 búsqueda gratuita hoy.`;
                     }
@@ -144,7 +145,7 @@ exports.searchProduct = async (req, res) => {
 
         let llmAnalysis;
         if (skipLLM) {
-            console.log(`[Direct Search] Saltando LLM para: ${query}`);
+            console.log(`[Direct Search] Saltando LLM para: ${query} `);
             llmAnalysis = {
                 action: 'search',
                 searchQuery: query,
@@ -186,20 +187,20 @@ exports.searchProduct = async (req, res) => {
             });
         }
 
-        console.log(`[Search Pipeline] Buscando: "${searchQuery}" | radius=${radius} | lat=${lat} | lng=${lng} | intent=${llmAnalysis.intent_type}`);
+        console.log(`[Search Pipeline]Buscando: "${searchQuery}" | radius=${radius} | lat=${lat} | lng=${lng} | intent=${llmAnalysis.intent_type} `);
         const shoppingResults = await shoppingService.searchGoogleShopping(searchQuery, radius, lat, lng, llmAnalysis.intent_type);
-        console.log(`[Search Pipeline] Resultados de shoppingService: ${shoppingResults.length}`);
+        console.log(`[Search Pipeline] Resultados de shoppingService: ${shoppingResults.length} `);
 
         // Check remaining time before alt queries (skip if running low)
         const elapsedMs = Date.now() - searchStartTime;
         const remainingMs = MASTER_TIMEOUT_MS - elapsedMs;
-        console.log(`[Search Pipeline] Elapsed: ${elapsedMs}ms, Remaining: ${remainingMs}ms`);
+        console.log(`[Search Pipeline]Elapsed: ${elapsedMs} ms, Remaining: ${remainingMs} ms`);
 
         // NUEVO: Multi-Query Background Scraper para Variantes (skip if < 15s remaining)
         const cleanSearchQuery = searchQuery.replace(/\s+-\w+/g, '').trim();
         const altQueries = llmAnalysis.alternativeQueries || [];
         if (altQueries.length > 0 && remainingMs > 15000) {
-            console.log(`Ejecutando Multi-Query alternativas: ${altQueries.join(', ')}`);
+            console.log(`Ejecutando Multi - Query alternativas: ${altQueries.join(', ')} `);
             const directScraper = require('../services/directScraper');
             const altPromises = [];
             for (const altQ of altQueries.slice(0, 1)) { // Reduced from 2 to 1 alt query
@@ -226,10 +227,10 @@ exports.searchProduct = async (req, res) => {
             console.log(`[Search Pipeline] Skipping alt queries — only ${remainingMs}ms remaining`);
         }
 
-        console.log(`[Search Pipeline] Total resultados (con alt queries): ${shoppingResults.length}`);
+        console.log(`[Search Pipeline] Total resultados(con alt queries): ${shoppingResults.length} `);
 
         if (shoppingResults.length === 0) {
-            console.warn(`[Search Pipeline] ⚠️ CERO resultados para "${searchQuery}". Serper key: ${process.env.SERPER_API_KEY ? 'SET' : 'MISSING'}`);
+            console.warn(`[Search Pipeline] ⚠️ CERO resultados para "${searchQuery}".Serper key: ${process.env.SERPER_API_KEY ? 'SET' : 'MISSING'} `);
             return res.json({
                 tipo_respuesta: 'resultados',
                 intencion_detectada: {
@@ -267,7 +268,7 @@ exports.searchProduct = async (req, res) => {
             if (price < 5) return false;
             return true;
         });
-        console.log(`[Search Pipeline] Después de pre-filter: ${cleanedResults.length} de ${shoppingResults.length}`);
+        console.log(`[Search Pipeline] Después de pre - filter: ${cleanedResults.length} de ${shoppingResults.length} `);
 
         // Deduplicación: por URL exacta + Jaccard similarity en títulos
         const seen = new Set();
@@ -303,7 +304,7 @@ exports.searchProduct = async (req, res) => {
                 const price = item.price != null ? parseFloat(item.price) : null;
                 item._isAccessory = accessoryKeywords.test(titleLower);
             }
-            console.log(`[Anti-Accesorio] ${uniqueResults.filter(i => !i._isAccessory).length} productos principales, ${uniqueResults.filter(i => i._isAccessory).length} accesorios marcados`);
+            console.log(`[Anti - Accesorio] ${uniqueResults.filter(i => !i._isAccessory).length} productos principales, ${uniqueResults.filter(i => i._isAccessory).length} accesorios marcados`);
         }
 
         // Ordenamos: productos principales por precio, luego accesorios por precio
@@ -457,7 +458,7 @@ exports.bulkSearch = async (req, res) => {
         let usageWarning = null;
         if (!error) {
             if (count >= reqLimit) {
-                return res.status(402).json({ error: `Límite mensual B2B alcanzado (${reqLimit} búsquedas). Por favor espera a tu siguiente ciclo para más lotes.`, upgrade_required: false });
+                return res.status(402).json({ error: `Límite mensual B2B alcanzado(${reqLimit} búsquedas).Por favor espera a tu siguiente ciclo para más lotes.`, upgrade_required: false });
             }
             if (count >= reqLimit * 0.9) {
                 usageWarning = `⚠️ Límite mensual al ${Math.floor((count / reqLimit) * 100)}% (${count}/${reqLimit}).`;
@@ -515,7 +516,7 @@ exports.bulkSearch = async (req, res) => {
                 const result = await Promise.race([searchPromise, timeoutPromise]);
                 return { query_original: q, encontrado: !!result, mejor_oferta: result };
             } catch (err) {
-                console.error(`Error procesando item B2B "${q}":`, err.message);
+                console.error(`Error procesando item B2B "${q}": `, err.message);
                 return { query_original: q, encontrado: false, error: err.message === 'Timeout' ? 'Tiempo agotado' : 'Fallo al extraer datos' };
             }
         });

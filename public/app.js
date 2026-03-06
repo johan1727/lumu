@@ -1189,7 +1189,7 @@ async function initApp() {
                             finalQuery = visionData.searchQuery;
                             addChatBubble('ai', `Identifiqué: **${visionData.productName}**. Buscando las mejores ofertas... ⚡`, false);
                             // Clear image state
-                            selectedImageBase66 = null;
+                            selectedImageBase64 = null;
                             imageUpload.value = '';
                             if (imagePreviewContainer) imagePreviewContainer.classList.add('hidden');
                         }

@@ -27,6 +27,7 @@ function sanitizeUserInput(text) {
         .replace(/\byou\s+are\s+now\b/gi, '[filtered]')
         .replace(/\bact\s+as\b/gi, '[filtered]')
         .replace(/\bnew\s+instructions?\s*:/gi, '[filtered]')
+        .replace(/(site:\S+|http\S+)/gi, '[filtered url]') // Prevents force-domain injections
         .slice(0, 500);  // Hard limit
 }
 
@@ -39,18 +40,21 @@ exports.analyzeMessage = async (userText, chatHistory = []) => {
     // SECURITY: Sanitize user input before sending to LLM
     const sanitizedText = sanitizeUserInput(userText);
 
+    // Limit chat history to prevent context window overrun and save tokens
+    const recentHistory = chatHistory.slice(-6);
+
     // Formatear el historial para el prompt
-    const historyText = chatHistory.length > 0
-        ? chatHistory.map(msg => `${msg.role === 'user' ? 'Usuario' : 'Asistente'}: ${msg.content}`).join('\n')
+    const historyText = recentHistory.length > 0
+        ? recentHistory.map(msg => `${msg.role === 'user' ? 'Usuario' : 'Asistente'}: ${msg.content}`).join('\n')
         : 'Sin historial previo.';
 
     // --- RAG: Extraer memorias relevantes de Supabase ---
     let extraContext = '';
     if (supabase) {
         try {
+            // ALWAYS use models that output 768 dimensions to match Supabase RPC `match_ai_memory`
             const candidateModels = [
-                process.env.GEMINI_EMBEDDING_MODEL || 'gemini-embedding-001',
-                'text-embedding-004'
+                process.env.GEMINI_EMBEDDING_MODEL || 'text-embedding-004'
             ];
 
             let queryVector = null;
@@ -95,54 +99,26 @@ exports.analyzeMessage = async (userText, chatHistory = []) => {
     const today = new Date();
     const currentDateStr = today.toISOString().split('T')[0];
 
-    const systemPrompt = `Eres Lumu, el Personal Shopper AI #1 de México. Eres experto en e-commerce mexicano, ultra-eficiente y carismático.
-Todos los precios son en MXN (Pesos Mexicanos). NUNCA en USD.
-TIENDAS PRIORITARIAS EN MÉXICO (las que nuestros scrapers revisan automáticamente): Amazon.com.mx, MercadoLibre.com.mx, Walmart.com.mx, Liverpool.com.mx, Coppel.com, Elektra.com.mx, Costco.com.mx, Sams.com.mx, BestBuy.com.mx, OfficeDepot.com.mx, HomeDepot.com.mx, AliExpress.
+    const systemPrompt = `Eres Lumu, el Personal Shopper AI #1 de México.
+Precios en MXN. NUNCA en USD.
 FECHA ACTUAL: ${currentDateStr}
-CONTEXTO CLAVE: Los usuarios son mexicanos buscando ofertas reales. Conoces bien la temporalidad de ofertas (Hot Sale mayo, Buen Fin noviembre, Prime Day julio, etc.).
 ${extraContext}`;
 
     const userPrompt = `
-    HISTORIAL DE CONVERSACIÓN:
+    HISTORIAL DE RECIENTE:
     ${historyText}
     
-    MENSAJE ACTUAL DEL USUARIO:
+    MENSAJE ACTUAL:
     "${sanitizedText}"
 
-    TUS OBJETIVOS Y REGLAS (¡CRÍTICO!):
-    1. ESTRATEGIA DE BÚSQUEDA LONG-TAIL INTELIGENTE: Tu objetivo es MAXIMIZAR la probabilidad de encontrar el producto correcto al mejor precio.
-       - Si el usuario pide algo genérico (ej. "laptop i7"), expande a búsqueda de alta calidad: "laptop intel core i7 16gb ram ssd 512gb".
-       - NUNCA uses términos vagos. SIEMPRE incluye marca, modelo o specs técnicas relevantes.
-       - Mantén máximo 6-8 palabras clave para no sobre-filtrar.
-       - SIEMPRE incluye "precio" o "comprar" para sesgar hacia resultados de shopping, NO reviews.
-    2. ACCIÓN INMEDIATA: Si el usuario menciona CUALQUIER producto identificable, siempre "action": "search". NUNCA uses "ask" si puedes inferir el producto.
-       - "search" → PRODUCTOS FÍSICOS o DIGITALES. searchQuery = Marca + Modelo + Specs clave + "-renovado -reacondicionado" (si nuevo).
-       - "search_service" → SERVICIOS LOCALES (plomero, dentista, albañil). searchQuery = Servicio + Ciudad/Zona.
-    3. OPTIMIZACIÓN DE PRECIO:
-       - "barato/económico" → Máximo 3 filtros negativos. Prefiere la marca con mejor relación calidad-precio en México.
-       - "gama media" → Sin filtros negativos. Busca las 2-3 marcas más vendidas del segmento.
-       - "premium/mejor/top" → Busca marca líder directamente (ej: Apple, Sony, Samsung).
-    4. CONDICIÓN: Asume "new" siempre, excepto si el usuario dice "usado", "segunda mano", "seminuevo", "refurbished".
-    5. CLASIFICACIÓN intent_type: "producto", "servicio_local", "mayoreo", "mayoreo_perecedero", "ocio", "otro".
-       - mayoreo_perecedero = frutas, verduras, carnes, abarrotes en mayoreo.
-       - servicio_local = profesionales/oficios que requieren ubicación.
-    6. TERMINOLOGÍA PROFESIONAL: Si el usuario busca material técnico (dental, médico, cocina industrial, etc.), usa terminología correcta del oficio.
-    7. ANTI-ACCESORIOS: Si busca producto principal caro (consola, laptop, TV, cámara), excluye accesorios:
-       "-funda -case -protector -cable -cargador" (SALVO que pida accesorios).
-    8. alternativeQueries (CRUCIAL para cobertura): Genera 3 variaciones de alta calidad:
-       - Variación 1: Sinónimos y términos alternativos (ej: "audífonos inalámbricos" → "auriculares bluetooth")
-       - Variación 2: Modelo/marca alternativa del mismo rango (ej: "AirPods" → "Galaxy Buds")
-       - Variación 3: Variación con nombre comercial popular en México (ej: "bocina bluetooth" → "parlante inalámbrico JBL")
-       NUNCA incluyas "site:" en alternativeQueries — los scrapers ya cubren cada tienda automáticamente.
-    9. CUPONES: Solo incluye cupones si estás 100% seguro de su vigencia a la fecha actual. Nunca inventes cupones.
-    10. MEXICANISMOS → BÚSQUEDA: Traduce automáticamente:
-       "bici" → "bicicleta", "refri" → "refrigerador", "compu" → "computadora laptop", "cel" → "celular smartphone",
-       "lap" → "laptop", "tele" → "televisión smart TV", "micro" → "horno de microondas", "aire" → "aire acondicionado minisplit",
-       "chamba" (servicios) → nombre técnico del servicio, "play" → "PlayStation PS5", "friega platos" → "lavavajillas".
-    11. PRECISIÓN BALANCEADA: 
-       - Máximo 4 keywords negativas total en searchQuery.
-       - Si el producto es genérico, prefiere la marca/modelo más popular/vendido en México.
-       - Prioriza encontrar RESULTADOS sobre ser demasiado específico.
+    TUS OBJETIVOS Y REGLAS CLAVE:
+    1. ESTRATEGIA DE BÚSQUEDA LONG-TAIL INTELIGENTE: Expande búsquedas vagas (ej. "laptop i7" -> "laptop intel core i7 16gb ram ssd 512gb"). Incluye "precio" o "comprar".
+    2. ACCIÓN INMEDIATA: Usa "search" si menciona cualquier producto/servicio. "search_service" para oficios locales (plomero, etc). "ask" SOLO si falta información crítica.
+    3. CONDICIÓN: "new" (nuevo) por defecto, salvo que diga usado/seminuevo.
+    4. CLASIFICACIÓN intent_type: producto, servicio_local, mayoreo, mayoreo_perecedero, ocio, otro.
+    5. ANTI-ACCESORIOS: Si busca algo principal caro (TV, celular, consola), añade "-funda -case -protector -cable".
+    6. alternativeQueries: 3 variaciones de altísima calidad (sinónimos, marca alterna, forma local de decirlo). NO USES "site:".
+    7. MEXICANISMOS: Traduce "refiri"->refrigerador, "cel"->celular, "compu"->computadora.
   
     Devuelve ESTRICTAMENTE un JSON validado.
   `;

@@ -131,7 +131,7 @@ exports.searchGoogleShopping = async (query, radius, lat, lng, intentType) => {
                 'elektra.com.mx': 'Elektra',
                 'costco.com.mx': 'Costco MX',
                 'sams.com.mx': "Sam's Club MX",
-                'oficedepot.com.mx': 'OfficeDepot MX'
+                'officedepot.com.mx': 'OfficeDepot MX'
             };
             const webMapped = webResults.map(r => {
                 const domain = (r.link.match(/https?:\/\/(?:www\.)?([^/]+)/) || [])[1] || '';

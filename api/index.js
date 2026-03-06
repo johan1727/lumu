@@ -51,7 +51,7 @@ app.use(cors({
         if (!origin) return callback(null, true);
         if (allowedOrigins.includes(origin)) return callback(null, true);
         // In development, allow localhost
-        if (process.env.NODE_ENV !== 'production' && origin && (origin.includes('localhost') || origin.includes('127.0.0.1'))) {
+        if (process.env.NODE_ENV === 'development' && origin && (origin.includes('localhost') || origin.includes('127.0.0.1'))) {
             return callback(null, true);
         }
         if (process.env.NODE_ENV === 'production') {
