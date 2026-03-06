@@ -79,26 +79,18 @@
             ]
         }
     ],
-    "routes": [
+    "rewrites": [
         {
-            "src": "/api/(.*)",
-            "dest": "/api/index.js"
+            "source": "/api/(.*)",
+            "destination": "/api/index.js"
         },
         {
-            "src": "/buscar/(.*)",
-            "dest": "/api/index.js"
+            "source": "/buscar/(.*)",
+            "destination": "/api/index.js"
         },
         {
-            "src": "/buscar",
-            "dest": "/api/index.js"
-        },
-        {
-            "src": "/",
-            "dest": "/public/index.html"
-        },
-        {
-            "src": "/(.*)",
-            "dest": "/public/$1"
+            "source": "/buscar",
+            "destination": "/api/index.js"
         }
     ]
 }
