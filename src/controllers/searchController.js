@@ -543,3 +543,57 @@ exports.bulkSearch = async (req, res) => {
         res.status(500).json({ error: 'Error del servidor en bulk search.' });
     }
 };
+
+exports.claimReward = async (req, res) => {
+    try {
+        const userId = req.userId || null;
+        const BONUS_SEARCHES = 3;
+
+        if (!supabase) {
+            return res.json({ success: true, bonus: BONUS_SEARCHES, msg: 'Modo local (sin Supabase)' });
+        }
+
+        if (userId) {
+            // Delete the 3 most recent searches for this user today
+            const todayStart = new Date();
+            todayStart.setHours(0, 0, 0, 0);
+
+            const { data: recentSearches } = await supabase
+                .from('searches')
+                .select('id')
+                .eq('user_id', userId)
+                .gte('created_at', todayStart.toISOString())
+                .order('created_at', { ascending: false })
+                .limit(BONUS_SEARCHES);
+
+            if (recentSearches && recentSearches.length > 0) {
+                const idsToDelete = recentSearches.map(s => s.id);
+                await supabase.from('searches').delete().in('id', idsToDelete);
+            }
+        } else {
+            // Anonymous user
+            const ip = req.headers['x-vercel-forwarded-for']?.split(',')[0]?.trim() || req.headers['x-real-ip'] || req.headers['x-forwarded-for']?.split(',').pop()?.trim() || req.ip || 'unknown';
+            const searchIpKey = `search:${ip}`;
+            const todayStart = new Date();
+            todayStart.setHours(0, 0, 0, 0);
+
+            const { data: recentLimits } = await supabase
+                .from('rate_limits')
+                .select('id')
+                .eq('ip', searchIpKey)
+                .gte('created_at', todayStart.toISOString())
+                .order('created_at', { ascending: false })
+                .limit(BONUS_SEARCHES);
+
+            if (recentLimits && recentLimits.length > 0) {
+                const idsToDelete = recentLimits.map(s => s.id);
+                await supabase.from('rate_limits').delete().in('id', idsToDelete);
+            }
+        }
+
+        return res.json({ success: true, bonus: BONUS_SEARCHES });
+    } catch (err) {
+        console.error('[Reward] Error:', err);
+        return res.status(500).json({ error: 'Error al reclamar recompensa' });
+    }
+};

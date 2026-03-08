@@ -43,6 +43,9 @@ router.delete('/price-alerts/:id', authMiddleware, requireAuth, priceAlertContro
 // Push notification subscription (requires auth)
 router.post('/push-subscribe', authMiddleware, requireAuth, priceAlertController.savePushSubscription);
 
+// Rewarded Ads: Claim bonus searches
+router.post('/claim-reward', authMiddleware, searchController.claimReward);
+
 // GET /api/config
 router.get('/config', (req, res) => {
     // Protección reforzada: solo frontend permitido por origen/host
@@ -54,9 +57,9 @@ router.get('/config', (req, res) => {
     // SECURITY FIX: Use strict URL comparison instead of includes() to prevent bypass
     // e.g., https://evil.com/lumu.dev would bypass includes() but not URL parsing
     let originHost = '';
-    try { originHost = new URL(origin).hostname; } catch {}
+    try { originHost = new URL(origin).hostname; } catch { }
     let refererHost = '';
-    try { refererHost = new URL(referer).hostname; } catch {}
+    try { refererHost = new URL(referer).hostname; } catch { }
     const allowedHosts = allowedOrigins.map(o => { try { return new URL(o).hostname; } catch { return ''; } }).filter(Boolean);
     const sameHostByOrigin = originHost && allowedHosts.includes(originHost);
     const sameHostByReferer = refererHost && allowedHosts.includes(refererHost);

@@ -1278,13 +1278,19 @@ async function initApp() {
                         const vipLink = stripePaymentLink || '#';
                         const vipUrl = vipLink !== '#' && currentUser ? `${vipLink}?client_reference_id=${encodeURIComponent(currentUser.id)}` : vipLink;
                         if (isPaywall) {
-                            addChatBubble('ai', `🔒 **Límite de búsquedas gratuitas alcanzado.** Hazte VIP para búsquedas ilimitadas y acceso a funciones premium.`, [], false);
+                            addChatBubble('ai', `🔒 **Límite de búsquedas gratuitas alcanzado.** Hazte VIP para búsquedas ilimitadas o mira un anuncio para 3 búsquedas gratis.`, [], false);
                             resultsContainer.innerHTML = `
                                 <div class="col-span-full flex flex-col items-center text-center py-12 px-6 bg-gradient-to-br from-amber-50 to-orange-50 rounded-3xl border border-amber-200">
                                     <div class="text-5xl mb-4">⚡</div>
-                                    <h3 class="text-xl font-black text-slate-800 mb-2">Hazte VIP</h3>
-                                    <p class="text-slate-600 font-medium mb-6 max-w-sm">Desbloquea búsquedas ilimitadas, sin anuncios y acceso B2B.</p>
-                                    <a href="${sanitize(vipUrl)}" target="_blank" class="bg-amber-500 hover:bg-amber-600 text-white px-8 py-3 rounded-2xl font-bold transition-all shadow-lg shadow-amber-500/20">Obtener VIP - $39 MXN/mes</a>
+                                    <h3 class="text-xl font-black text-slate-800 mb-2">Límite Alcanzado</h3>
+                                    <p class="text-slate-600 font-medium mb-6 max-w-sm">Desbloquea búsquedas ilimitadas con VIP o gana 3 búsquedas hoy patrocinadas por anuncios.</p>
+                                    <div class="flex flex-col gap-3 w-full max-w-xs">
+                                        <a href="${sanitize(vipUrl)}" target="_blank" class="w-full bg-amber-500 hover:bg-amber-600 text-white px-8 py-3.5 rounded-2xl font-bold transition-all shadow-lg shadow-amber-500/20">Obtener VIP - $39 MXN/mes</a>
+                                        <button onclick="window.currentAdIsForReward = true; window.openAdGateway('reward');" class="w-full bg-white hover:bg-slate-50 text-slate-700 border border-slate-200 px-8 py-3.5 rounded-2xl font-bold transition-all flex justify-center items-center gap-2">
+                                            <svg class="w-5 h-5 text-emerald-500" fill="currentColor" viewBox="0 0 24 24"><path d="M10 8v8l6-4-6-4zm9-5H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm0 16H5V5h14v14z"/></svg>
+                                            Ver anuncio (3 Gratis)
+                                        </button>
+                                    </div>
                                 </div>`;
                             resultsWrapper.classList.remove('hidden');
                         } else {
@@ -2703,48 +2709,95 @@ window.checkPriceAlerts = (products) => {
 
 // Quick-alert: create from product card (called from UI)
 window.createQuickAlert = async (productName, currentPrice, productUrl, storeName) => {
-    const sb = window.supabaseClient;
-    const user = window.currentUser;
     // Suggest 10% below current price as default target
     const suggestedPrice = Math.floor(currentPrice * 0.9);
-    const targetPrice = prompt(`¿A qué precio quieres que te avisemos?\nPrecio actual: $${currentPrice.toLocaleString('es-MX')}\n\nSugerimos: $${suggestedPrice.toLocaleString('es-MX')} (-10%)`, suggestedPrice);
-    if (!targetPrice || isNaN(targetPrice)) return;
 
-    if (sb && user) {
-        try {
-            const { data: session } = await sb.auth.getSession();
-            const token = session?.session?.access_token;
-            const res = await fetch('/api/price-alerts', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
-                body: JSON.stringify({ product_name: productName, target_price: parseFloat(targetPrice), product_url: productUrl, store_name: storeName })
-            });
-            const json = await res.json();
-            if (res.ok) {
-                // Show toast
-                const toast = document.createElement('div');
-                toast.className = 'fixed top-20 right-4 z-[200] bg-emerald-500 text-white px-5 py-3 rounded-2xl shadow-2xl font-bold text-sm fade-in';
-                toast.textContent = `🔔 Alerta creada: te avisaremos cuando baje a $${parseFloat(targetPrice).toLocaleString('es-MX')}`;
-                document.body.appendChild(toast);
-                setTimeout(() => toast.remove(), 4000);
-                if (btnPriceAlert) btnPriceAlert.classList.remove('hidden');
-            } else {
-                alert(json.error || 'Error al crear alerta');
+    // Remove existing modal if open
+    document.getElementById('quick-alert-modal')?.remove();
+
+    const modal = document.createElement('div');
+    modal.id = 'quick-alert-modal';
+    modal.className = 'fixed inset-0 z-[200] flex items-center justify-center fade-in';
+    modal.innerHTML = `
+        <div class="absolute inset-0 bg-slate-900/80 backdrop-blur-sm" onclick="document.getElementById('quick-alert-modal')?.remove()"></div>
+        <div class="relative z-10 bg-white rounded-3xl shadow-2xl p-6 md:p-8 max-w-md w-full mx-4 border border-slate-200">
+            <button onclick="document.getElementById('quick-alert-modal')?.remove()" class="absolute top-4 right-4 p-2 text-slate-400 hover:text-rose-500 bg-slate-100 hover:bg-rose-50 rounded-full transition-colors">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+            </button>
+            <div class="flex items-center gap-3 mb-5">
+                <div class="w-10 h-10 bg-emerald-100 text-emerald-600 rounded-xl flex items-center justify-center">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"/></svg>
+                </div>
+                <div>
+                    <h3 class="text-lg font-black text-slate-900">Crear Alerta de Precio</h3>
+                    <p class="text-xs text-slate-500">Te avisaremos cuando baje</p>
+                </div>
+            </div>
+            <p class="text-xs text-slate-600 mb-4 line-clamp-2 font-medium">${sanitize(productName)}</p>
+            
+            <div class="bg-slate-50 rounded-xl p-4 mb-5 border border-slate-100">
+                <p class="text-xs text-slate-500 mb-1">Precio actual: <strong class="text-slate-800">$${currentPrice.toLocaleString('es-MX')}</strong></p>
+                <div class="relative mt-2">
+                    <label class="block text-xs font-bold text-slate-700 mb-1">Tu precio meta:</label>
+                    <span class="absolute left-3 top-7 text-slate-400 font-bold">$</span>
+                    <input type="number" id="qa-target-price" value="${suggestedPrice}" min="1" class="w-full pl-7 pr-3 py-3 border border-slate-200 rounded-xl text-lg font-black text-emerald-700 focus:ring-2 focus:ring-emerald-300 focus:border-emerald-400 outline-none shadow-sm">
+                </div>
+            </div>
+            
+            <button id="qa-btn-save" class="w-full bg-emerald-500 hover:bg-emerald-600 text-white font-bold py-3.5 rounded-xl shadow-[0_4px_12px_rgba(16,185,129,0.2)] transition-all">
+                Activar Alerta
+            </button>
+        </div>
+    `;
+    document.body.appendChild(modal);
+
+    document.getElementById('qa-btn-save').addEventListener('click', async () => {
+        const inputVal = document.getElementById('qa-target-price').value;
+        const targetPrice = parseFloat(inputVal);
+        if (isNaN(targetPrice) || targetPrice <= 0) return;
+
+        // Limpiar el modal
+        document.getElementById('quick-alert-modal').remove();
+
+        const sb = window.supabaseClient;
+        const user = window.currentUser;
+
+        if (sb && user) {
+            try {
+                const { data: session } = await sb.auth.getSession();
+                const token = session?.session?.access_token;
+                const res = await fetch('/api/price-alerts', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+                    body: JSON.stringify({ product_name: productName, target_price: targetPrice, product_url: productUrl, store_name: storeName })
+                });
+                const json = await res.json();
+                if (res.ok) {
+                    showToastAlert(targetPrice);
+                } else {
+                    alert(json.error || 'Error al crear alerta');
+                }
+            } catch (err) {
+                console.error('[QuickAlert] Error:', err);
             }
-        } catch (err) {
-            console.error('[QuickAlert] Error:', err);
+        } else {
+            // No auth: save locally
+            const alerts = getLocalAlerts();
+            alerts.push({ product: productName, price: targetPrice });
+            saveLocalAlerts(alerts);
+            showToastAlert(targetPrice, true);
         }
-    } else {
-        // No auth: save locally
-        const alerts = getLocalAlerts();
-        alerts.push({ product: productName, price: parseFloat(targetPrice) });
-        saveLocalAlerts(alerts);
-        if (btnPriceAlert) btnPriceAlert.classList.remove('hidden');
+    });
+
+    function showToastAlert(price, isLocal = false) {
         const toast = document.createElement('div');
         toast.className = 'fixed top-20 right-4 z-[200] bg-emerald-500 text-white px-5 py-3 rounded-2xl shadow-2xl font-bold text-sm fade-in';
-        toast.textContent = `🔔 Alerta local creada. Inicia sesión para alertas push.`;
+        toast.textContent = isLocal
+            ? '🔔 Alerta local creada. Inicia sesión para alertas push.'
+            : `🔔 Alerta creada: te avisaremos cuando baje a $${price.toLocaleString('es-MX')}`;
         document.body.appendChild(toast);
         setTimeout(() => toast.remove(), 4000);
+        if (btnPriceAlert) btnPriceAlert.classList.remove('hidden');
     }
 };
 
@@ -2768,43 +2821,43 @@ window.openMarginCalculator = (costPrice, productName) => {
     modal.id = 'margin-calc-modal';
     modal.className = 'fixed inset-0 z-[200] flex items-center justify-center fade-in';
     modal.innerHTML = `
-        <div class="absolute inset-0 bg-slate-900/80 backdrop-blur-sm" onclick="document.getElementById('margin-calc-modal')?.remove()"></div>
-        <div class="relative z-10 bg-white rounded-3xl shadow-2xl p-6 md:p-8 max-w-md w-full mx-4 border border-slate-200">
-            <button onclick="document.getElementById('margin-calc-modal')?.remove()" class="absolute top-4 right-4 p-2 text-slate-400 hover:text-rose-500 bg-slate-100 hover:bg-rose-50 rounded-full transition-colors">
-                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
-            </button>
-            <div class="flex items-center gap-3 mb-5">
-                <div class="w-10 h-10 bg-blue-100 text-blue-600 rounded-xl flex items-center justify-center">
-                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 7h6m0 10v-3m-3 3h.01M9 17h.01M9 14h.01M12 14h.01M15 11h.01M12 11h.01M9 11h.01M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z"/></svg>
-                </div>
-                <div>
-                    <h3 class="text-lg font-black text-slate-900">Calculadora de Margen</h3>
-                    <p class="text-xs text-slate-500">Dropshipping / Reventa</p>
-                </div>
-            </div>
-            <p class="text-xs text-slate-600 mb-4 line-clamp-1 font-medium">${productName}</p>
-            <div class="space-y-3">
-                <div class="flex items-center gap-3">
-                    <label class="text-sm font-bold text-slate-700 w-28 flex-shrink-0">Costo</label>
-                    <div class="relative flex-1"><span class="absolute left-3 top-2.5 text-slate-400 text-sm">$</span><input type="number" id="mc-cost" value="${costPrice}" class="w-full pl-7 pr-3 py-2 border border-slate-200 rounded-xl text-sm font-bold text-slate-800 focus:ring-2 focus:ring-blue-300 focus:border-blue-400 outline-none" readonly></div>
-                </div>
-                <div class="flex items-center gap-3">
-                    <label class="text-sm font-bold text-slate-700 w-28 flex-shrink-0">Precio venta</label>
-                    <div class="relative flex-1"><span class="absolute left-3 top-2.5 text-slate-400 text-sm">$</span><input type="number" id="mc-sell" value="${suggestedSell}" min="1" class="w-full pl-7 pr-3 py-2 border border-slate-200 rounded-xl text-sm font-bold text-slate-800 focus:ring-2 focus:ring-blue-300 focus:border-blue-400 outline-none"></div>
-                </div>
-                <div class="flex items-center gap-3">
-                    <label class="text-sm font-bold text-slate-700 w-28 flex-shrink-0">Envío</label>
-                    <div class="relative flex-1"><span class="absolute left-3 top-2.5 text-slate-400 text-sm">$</span><input type="number" id="mc-shipping" value="${shippingDefault}" min="0" class="w-full pl-7 pr-3 py-2 border border-slate-200 rounded-xl text-sm font-bold text-slate-800 focus:ring-2 focus:ring-blue-300 focus:border-blue-400 outline-none"></div>
-                </div>
-                <div class="flex items-center gap-3">
-                    <label class="text-sm font-bold text-slate-700 w-28 flex-shrink-0">Comisión %</label>
-                    <div class="relative flex-1"><input type="number" id="mc-fee" value="${feeDefault}" min="0" max="100" step="0.5" class="w-full px-3 py-2 border border-slate-200 rounded-xl text-sm font-bold text-slate-800 focus:ring-2 focus:ring-blue-300 focus:border-blue-400 outline-none"><span class="absolute right-3 top-2.5 text-slate-400 text-sm">%</span></div>
-                </div>
-            </div>
-            <div id="mc-result" class="mt-5 p-4 bg-slate-50 rounded-2xl border border-slate-200"></div>
-            <p class="text-[10px] text-slate-400 mt-3 text-center">Comisiones comunes: MercadoLibre ~13%, Amazon ~15%, Shopify ~3.9%</p>
-        </div>
-    `;
+                < div class="absolute inset-0 bg-slate-900/80 backdrop-blur-sm" onclick = "document.getElementById('margin-calc-modal')?.remove()" ></div >
+                    <div class="relative z-10 bg-white rounded-3xl shadow-2xl p-6 md:p-8 max-w-md w-full mx-4 border border-slate-200">
+                        <button onclick="document.getElementById('margin-calc-modal')?.remove()" class="absolute top-4 right-4 p-2 text-slate-400 hover:text-rose-500 bg-slate-100 hover:bg-rose-50 rounded-full transition-colors">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" /></svg>
+                        </button>
+                        <div class="flex items-center gap-3 mb-5">
+                            <div class="w-10 h-10 bg-blue-100 text-blue-600 rounded-xl flex items-center justify-center">
+                                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 7h6m0 10v-3m-3 3h.01M9 17h.01M9 14h.01M12 14h.01M15 11h.01M12 11h.01M9 11h.01M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z" /></svg>
+                            </div>
+                            <div>
+                                <h3 class="text-lg font-black text-slate-900">Calculadora de Margen</h3>
+                                <p class="text-xs text-slate-500">Dropshipping / Reventa</p>
+                            </div>
+                        </div>
+                        <p class="text-xs text-slate-600 mb-4 line-clamp-1 font-medium">${productName}</p>
+                        <div class="space-y-3">
+                            <div class="flex items-center gap-3">
+                                <label class="text-sm font-bold text-slate-700 w-28 flex-shrink-0">Costo</label>
+                                <div class="relative flex-1"><span class="absolute left-3 top-2.5 text-slate-400 text-sm">$</span><input type="number" id="mc-cost" value="${costPrice}" class="w-full pl-7 pr-3 py-2 border border-slate-200 rounded-xl text-sm font-bold text-slate-800 focus:ring-2 focus:ring-blue-300 focus:border-blue-400 outline-none" readonly></div>
+                            </div>
+                            <div class="flex items-center gap-3">
+                                <label class="text-sm font-bold text-slate-700 w-28 flex-shrink-0">Precio venta</label>
+                                <div class="relative flex-1"><span class="absolute left-3 top-2.5 text-slate-400 text-sm">$</span><input type="number" id="mc-sell" value="${suggestedSell}" min="1" class="w-full pl-7 pr-3 py-2 border border-slate-200 rounded-xl text-sm font-bold text-slate-800 focus:ring-2 focus:ring-blue-300 focus:border-blue-400 outline-none"></div>
+                            </div>
+                            <div class="flex items-center gap-3">
+                                <label class="text-sm font-bold text-slate-700 w-28 flex-shrink-0">Envío</label>
+                                <div class="relative flex-1"><span class="absolute left-3 top-2.5 text-slate-400 text-sm">$</span><input type="number" id="mc-shipping" value="${shippingDefault}" min="0" class="w-full pl-7 pr-3 py-2 border border-slate-200 rounded-xl text-sm font-bold text-slate-800 focus:ring-2 focus:ring-blue-300 focus:border-blue-400 outline-none"></div>
+                            </div>
+                            <div class="flex items-center gap-3">
+                                <label class="text-sm font-bold text-slate-700 w-28 flex-shrink-0">Comisión %</label>
+                                <div class="relative flex-1"><input type="number" id="mc-fee" value="${feeDefault}" min="0" max="100" step="0.5" class="w-full px-3 py-2 border border-slate-200 rounded-xl text-sm font-bold text-slate-800 focus:ring-2 focus:ring-blue-300 focus:border-blue-400 outline-none"><span class="absolute right-3 top-2.5 text-slate-400 text-sm">%</span></div>
+                            </div>
+                        </div>
+                        <div id="mc-result" class="mt-5 p-4 bg-slate-50 rounded-2xl border border-slate-200"></div>
+                        <p class="text-[10px] text-slate-400 mt-3 text-center">Comisiones comunes: MercadoLibre ~13%, Amazon ~15%, Shopify ~3.9%</p>
+                    </div>
+        `;
     document.body.appendChild(modal);
 
     const recalc = () => {
@@ -2820,7 +2873,7 @@ window.openMarginCalculator = (costPrice, productName) => {
         const isPositive = profit > 0;
         const color = isPositive ? 'emerald' : 'rose';
         document.getElementById('mc-result').innerHTML = `
-            <div class="grid grid-cols-3 gap-3 text-center">
+            < div class="grid grid-cols-3 gap-3 text-center" >
                 <div>
                     <p class="text-[10px] text-slate-500 font-bold uppercase">Ganancia</p>
                     <p class="text-lg font-black text-${color}-600">$${profit.toFixed(0)}</p>
@@ -2833,7 +2886,7 @@ window.openMarginCalculator = (costPrice, productName) => {
                     <p class="text-[10px] text-slate-500 font-bold uppercase">ROI</p>
                     <p class="text-lg font-black text-${color}-600">${roi.toFixed(1)}%</p>
                 </div>
-            </div>
+            </div >
             <div class="mt-3 text-xs text-slate-500 space-y-1">
                 <div class="flex justify-between"><span>Costo producto</span><span class="font-bold">$${cost.toFixed(2)}</span></div>
                 <div class="flex justify-between"><span>+ Envío</span><span class="font-bold">$${shipping.toFixed(2)}</span></div>
@@ -2856,20 +2909,28 @@ window.openMarginCalculator = (costPrice, productName) => {
 
 window.currentAdIsForReward = false;
 
-window.openAdGateway = async function (targetUrlOriginal) {
-    window.currentAdIsForReward = false;
-    let targetUrl = targetUrlOriginal;
-    // Decodificar recursivamente por si viene doble-codificado
-    try {
-        let decoded = decodeURIComponent(targetUrl);
-        while (decoded !== targetUrl) {
-            targetUrl = decoded;
-            decoded = decodeURIComponent(targetUrl);
-        }
-    } catch (e) { console.warn('Decode error', e); }
+window.openAdGateway = async function (targetUrlOriginal, isReward = false) {
+    if (targetUrlOriginal === 'reward' || isReward === true) {
+        window.currentAdIsForReward = true;
+    } else {
+        window.currentAdIsForReward = false;
+    }
 
-    if (!targetUrl.startsWith('http://') && !targetUrl.startsWith('https://')) {
-        targetUrl = 'https://' + targetUrl;
+    let targetUrl = targetUrlOriginal;
+    if (!window.currentAdIsForReward) {
+        // Decodificar recursivamente por si viene doble-codificado solo si es una URL
+        try {
+            let decoded = decodeURIComponent(targetUrl);
+            while (decoded !== targetUrl) {
+                if (!targetUrl.startsWith('http')) break;
+                targetUrl = decoded;
+                decoded = decodeURIComponent(targetUrl);
+            }
+        } catch (e) { console.warn('Decode error', e); }
+
+        if (!targetUrl.startsWith('http://') && !targetUrl.startsWith('https://')) {
+            targetUrl = 'https://' + targetUrl;
+        }
     }
 
     // Track click for conversion analytics
@@ -2917,14 +2978,11 @@ window.openAdGateway = async function (targetUrlOriginal) {
         requestAd();
 
         // El botón se activa mediante eventos de IMA
-        btnSkipAd.onclick = () => {
-            window.adsWatchedCache[targetUrlOriginal] = true;
-            window.open(targetUrl, '_blank');
-            closeAdGateway();
-        };
+        btnSkipAd.onclick = null; // Removed generic handler, it is set in onAdComplete depending on ad type
     } else {
         // Fallback: 5s Countdown (si falla IMA o hay AdBlock)
         const countdownOverlay = document.getElementById('ad-countdown-overlay');
+    window.currentAdIsForReward = false;
         if (countdownOverlay) countdownOverlay.classList.remove('hidden');
 
         let timeLeft = 5;
@@ -3009,8 +3067,48 @@ function onAdComplete() {
         btnSkipAd.disabled = false;
         if (window.currentAdIsForReward) {
             btnSkipAd.innerHTML = '🎉 Reclamar 3 Búsquedas Extra';
+            btnSkipAd.onclick = async () => {
+                btnSkipAd.disabled = true;
+                btnSkipAd.innerHTML = '<span class="animate-pulse">Procesando...</span>';
+                try {
+                    const token = await (window.supabaseClient ? window.supabaseClient.auth.getSession().then(s => s.data?.session?.access_token) : Promise.resolve(null));
+                    const headers = { 'Content-Type': 'application/json' };
+                    if (token) headers['Authorization'] = `Bearer ${token}`;
+
+                    const res = await fetch('/api/claim-reward', { method: 'POST', headers });
+                    if (res.ok) {
+                        closeAdGateway();
+                        window.currentAdIsForReward = false;
+
+                        // Clear chat and results
+                        document.getElementById('chat-container').innerHTML = '';
+                        document.getElementById('results-grid').innerHTML = '';
+                        document.getElementById('results-container').innerHTML = '';
+
+                        const toast = document.createElement('div');
+                        toast.className = 'fixed top-20 right-4 z-[200] bg-emerald-500 text-white px-5 py-4 rounded-2xl shadow-2xl font-bold text-sm fade-in flex items-center gap-3';
+                        toast.innerHTML = `<span class="text-2xl">🎉</span> ¡Ganaste 3 búsquedas extra! Puedes continuar buscando.`;
+                        document.body.appendChild(toast);
+                        setTimeout(() => toast.remove(), 5000);
+
+                        document.getElementById('search-input').focus();
+                    } else {
+                        btnSkipAd.disabled = false;
+                        btnSkipAd.innerHTML = 'Error al reclamar. Reintentar';
+                    }
+                } catch (err) {
+                    console.error('Reward claim error:', err);
+                    btnSkipAd.disabled = false;
+                    btnSkipAd.innerHTML = 'Error al reclamar. Reintentar';
+                }
+            };
         } else {
             btnSkipAd.innerHTML = 'Ir a la Oferta →';
+            btnSkipAd.onclick = () => {
+                window.adsWatchedCache[targetUrlOriginal] = true;
+                window.open(targetUrl, '_blank');
+                closeAdGateway();
+            };
         }
         btnSkipAd.className = 'w-full text-white bg-primary hover:bg-emerald-500 shadow-[0_4px_15px_rgba(16,185,129,0.3)] hover:-translate-y-0.5 border border-transparent font-bold rounded-xl text-sm px-5 py-4 text-center transition-all cursor-pointer';
     }
@@ -3027,14 +3125,15 @@ function onAdError(adErrorEvent) {
 
 function startFallbackCountdown() {
     const countdownOverlay = document.getElementById('ad-countdown-overlay');
+    window.currentAdIsForReward = false;
     if (countdownOverlay) countdownOverlay.classList.remove('hidden');
 
-    let timeLeft = 30;
+    let timeLeft = 6; // Reducido de 30s a 6s para mejor UX
     if (adCountdownText) adCountdownText.innerText = timeLeft;
 
     if (btnSkipAd) {
         btnSkipAd.disabled = true;
-        btnSkipAd.innerHTML = '<span class="animate-pulse">Esperando patrocinador...</span>';
+        btnSkipAd.innerHTML = '<span class="animate-pulse">Cargando oferta...</span>';
     }
 
     if (adInterval) clearInterval(adInterval);
@@ -3095,9 +3194,19 @@ function initFeedback() {
 
         try {
             // Send feedback through the API (correct column mapping)
+            const headers = { 'Content-Type': 'application/json' };
+            if (window.supabaseClient && window.currentUser) {
+                try {
+                    const { data: { session } } = await window.supabaseClient.auth.getSession();
+                    if (session?.access_token) {
+                        headers['Authorization'] = `Bearer ${session.access_token} `;
+                    }
+                } catch (e) { }
+            }
+
             const response = await fetch('/api/feedback', {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                headers: headers,
                 body: JSON.stringify({
                     message: text,
                     user_id: window.currentUser ? window.currentUser.id : null,
@@ -3184,7 +3293,7 @@ async function processB2bQueries() {
             try {
                 const { data: { session } } = await window.supabaseClient.auth.getSession();
                 if (session?.access_token) {
-                    bulkHeaders['Authorization'] = `Bearer ${session.access_token}`;
+                    bulkHeaders['Authorization'] = `Bearer ${session.access_token} `;
                 }
             } catch (e) { /* continue without token */ }
         }
@@ -3203,15 +3312,15 @@ async function processB2bQueries() {
             if (data.upgrade_required) {
                 const planValue = 'b2b';
                 const baseB2bUrl = window.stripeB2bPaymentLink || window.stripePaymentLink || '#';
-                const stripeUrl = baseB2bUrl !== '#' ? `${baseB2bUrl}?client_reference_id=${encodeURIComponent(window.currentUser.id)}` : '#';
+                const stripeUrl = baseB2bUrl !== '#' ? `${baseB2bUrl}?client_reference_id = ${encodeURIComponent(window.currentUser.id)} ` : '#';
 
-                tbody.innerHTML = `<tr><td colspan="4" class="px-4 py-12 text-center text-amber-600 font-bold bg-amber-50">
-                    <p class="mb-4">⚡ Esta función es exclusiva del Plan Revendedor VIP.</p>
-                    <a href="${stripeUrl}" target="_blank" onclick="if(typeof confetti === 'function') confetti({ particleCount: 200, spread: 90, origin: { y: 0.6 } })" class="inline-block bg-amber-500 hover:bg-amber-600 text-white px-6 py-2 rounded-xl transition-all shadow-md">Obtener Plan B2B Ahora</a>
-                </td></tr>`;
+                tbody.innerHTML = `< tr > <td colspan="4" class="px-4 py-12 text-center text-amber-600 font-bold bg-amber-50">
+                <p class="mb-4">⚡ Esta función es exclusiva del Plan Revendedor VIP.</p>
+                <a href="${stripeUrl}" target="_blank" onclick="if(typeof confetti === 'function') confetti({ particleCount: 200, spread: 90, origin: { y: 0.6 } })" class="inline-block bg-amber-500 hover:bg-amber-600 text-white px-6 py-2 rounded-xl transition-all shadow-md">Obtener Plan B2B Ahora</a>
+            </td></tr > `;
                 showGlobalFeedback(data.error, 'error');
             } else {
-                tbody.innerHTML = `<tr><td colspan="4" class="px-4 py-12 text-center text-red-500 font-bold">Error: ${data.error || 'Fallo al procesar el lote.'}</td></tr>`;
+                tbody.innerHTML = `< tr > <td colspan="4" class="px-4 py-12 text-center text-red-500 font-bold">Error: ${data.error || 'Fallo al procesar el lote.'}</td></tr > `;
             }
             return;
         }
@@ -3222,17 +3331,17 @@ async function processB2bQueries() {
         data.resultados.forEach(res => {
             if (!res.encontrado && !res.mejor_oferta) {
                 tbody.innerHTML += `
-                    <tr class="bg-white hover:bg-slate-50 border-b">
+            < tr class="bg-white hover:bg-slate-50 border-b" >
                         <td class="px-4 py-3 font-medium text-slate-900">${sanitize(res.query_original)}</td>
                         <td class="px-4 py-3 text-slate-400 italic">No encontrado</td>
                         <td class="px-4 py-3">-</td>
                         <td class="px-4 py-3 text-center">-</td>
-                    </tr>
-                `;
+                    </tr >
+            `;
             } else {
                 const priceFormatted = new Intl.NumberFormat('es-MX', { style: 'currency', currency: 'MXN' }).format(res.mejor_oferta.precio || 0);
                 tbody.innerHTML += `
-                    <tr class="bg-white hover:bg-slate-50 border-b">
+            < tr class="bg-white hover:bg-slate-50 border-b" >
                         <td class="px-4 py-3 font-medium text-slate-900 truncate max-w-[200px]" title="${sanitize(res.query_original)}">${sanitize(res.query_original)}</td>
                         <td class="px-4 py-3 font-bold text-emerald-600">${priceFormatted}</td>
                         <td class="px-4 py-3" title="${sanitize(res.mejor_oferta.tienda)}">
@@ -3243,8 +3352,8 @@ async function processB2bQueries() {
                                 Comprar <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"></path></svg>
                             </a>
                         </td>
-                    </tr>
-                `;
+                    </tr >
+            `;
             }
         });
 
@@ -3254,7 +3363,7 @@ async function processB2bQueries() {
 
     } catch (err) {
         console.error("Error processB2bQueries:", err);
-        tbody.innerHTML = `<tr><td colspan="4" class="px-4 py-12 text-center text-red-500 font-bold">🚨 Error de conexión. Intenta de nuevo.</td></tr>`;
+        tbody.innerHTML = `< tr > <td colspan="4" class="px-4 py-12 text-center text-red-500 font-bold">🚨 Error de conexión. Intenta de nuevo.</td></tr > `;
     } finally {
         loader.classList.add('hidden');
     }
@@ -3269,13 +3378,13 @@ function exportB2bToCSV() {
     window.lastB2bData.forEach(row => {
         const query = (row.query_original || '').replace(/"/g, '""');
         if (!row.encontrado && !row.mejor_oferta) {
-            csvContent += `"${query}","No encontrado","","",""\n`;
+            csvContent += `"${query}", "No encontrado", "", "", ""\n`;
         } else {
             const title = (row.mejor_oferta.titulo || '').replace(/"/g, '""');
             const price = row.mejor_oferta.precio || 0;
             const store = (row.mejor_oferta.tienda || '').replace(/"/g, '""');
             const link = row.mejor_oferta.urlMonetizada || row.mejor_oferta.urlOriginal || '';
-            csvContent += `"${query}","${title}",${price},"${store}","${link}"\n`;
+            csvContent += `"${query}", "${title}", ${price}, "${store}", "${link}"\n`;
         }
     });
 
@@ -3381,14 +3490,14 @@ function initFavoritesHover() {
                     const safeImg = sanitize(prod.imagen || fav.product_image || "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='50' height='50' viewBox='0 0 50 50'%3E%3Crect width='50' height='50' fill='%23f1f5f9' rx='8'/%3E%3Ctext x='25' y='32' text-anchor='middle' font-size='18' fill='%2394a3b8'%3E📦%3C/text%3E%3C/svg%3E");
 
                     html += `
-                        <div class="p-3 flex items-center gap-3 hover:bg-slate-50 transition-colors cursor-pointer border-b border-slate-50 last:border-0 fav-preview-item" data-url="${encodeURI(safeUrl)}">
-                            <img src="${safeImg}" class="w-10 h-10 object-contain rounded-lg bg-white border border-slate-100 p-0.5" onerror="this.onerror=null; this.src='data:image/svg+xml,%3Csvg xmlns=\\'http://www.w3.org/2000/svg\\' width=\\'10\\' height=\\'10\\' viewBox=\\'0 0 10 10\\'%3E%3Crect width=\\'10\\' height=\\'10\\' fill=\\'%23f1f5f9\\'/%3E%3C/svg%3E'">
-                            <div class="overflow-hidden">
-                                <p class="text-[11px] font-bold text-slate-800 truncate">${safeTitle}</p>
-                                <p class="text-[10px] font-black text-emerald-600">${priceFormatted}</p>
-                            </div>
-                        </div>
-                    `;
+            < div class="p-3 flex items-center gap-3 hover:bg-slate-50 transition-colors cursor-pointer border-b border-slate-50 last:border-0 fav-preview-item" data - url="${encodeURI(safeUrl)}" >
+                <img src="${safeImg}" class="w-10 h-10 object-contain rounded-lg bg-white border border-slate-100 p-0.5" onerror="this.onerror=null; this.src='data:image/svg+xml,%3Csvg xmlns=\\'http://www.w3.org/2000/svg\\' width=\\'10\\' height=\\'10\\' viewBox=\\'0 0 10 10\\'%3E%3Crect width=\\'10\\' height=\\'10\\' fill=\\'%23f1f5f9\\'/%3E%3C/svg%3E'">
+                    <div class="overflow-hidden">
+                        <p class="text-[11px] font-bold text-slate-800 truncate">${safeTitle}</p>
+                        <p class="text-[10px] font-black text-emerald-600">${priceFormatted}</p>
+                    </div>
+                </div>
+        `;
                 });
                 html += '<div class="p-2 bg-slate-50 text-center"><button onclick="if(typeof openFavorites===\'function\') openFavorites()" class="text-[10px] font-black text-primary hover:underline">Ver todos los favoritos</button></div>';
                 preview.innerHTML = html;
@@ -3556,22 +3665,22 @@ function startInteractiveTutorial() {
         overlay = document.createElement('div');
         overlay.id = 'tutorial-overlay';
         overlay.innerHTML = `
-            <div id="tutorial-spotlight" class="tutorial-spotlight"></div>
-            <div id="tutorial-tooltip" class="tutorial-tooltip">
-                <div class="tutorial-tooltip-arrow"></div>
-                <div class="flex items-center gap-3 mb-3">
-                    <span id="tutorial-icon" class="text-3xl"></span>
-                    <h4 id="tutorial-title" class="text-lg font-black text-slate-900 dark:text-white"></h4>
-                </div>
-                <p id="tutorial-text" class="text-sm text-slate-600 dark:text-slate-300 leading-relaxed mb-5"></p>
-                <div class="flex items-center justify-between">
-                    <div id="tutorial-progress" class="flex gap-1.5"></div>
-                    <div class="flex gap-2">
-                        <button id="tutorial-skip" class="text-xs text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 font-bold px-3 py-2 rounded-lg transition-colors">Saltar</button>
-                        <button id="tutorial-next" class="text-xs bg-emerald-500 hover:bg-emerald-600 text-white font-bold px-5 py-2 rounded-xl transition-all shadow-lg shadow-emerald-500/20 active:scale-95">Siguiente →</button>
+            < div id = "tutorial-spotlight" class="tutorial-spotlight" ></div >
+                <div id="tutorial-tooltip" class="tutorial-tooltip">
+                    <div class="tutorial-tooltip-arrow"></div>
+                    <div class="flex items-center gap-3 mb-3">
+                        <span id="tutorial-icon" class="text-3xl"></span>
+                        <h4 id="tutorial-title" class="text-lg font-black text-slate-900 dark:text-white"></h4>
+                    </div>
+                    <p id="tutorial-text" class="text-sm text-slate-600 dark:text-slate-300 leading-relaxed mb-5"></p>
+                    <div class="flex items-center justify-between">
+                        <div id="tutorial-progress" class="flex gap-1.5"></div>
+                        <div class="flex gap-2">
+                            <button id="tutorial-skip" class="text-xs text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 font-bold px-3 py-2 rounded-lg transition-colors">Saltar</button>
+                            <button id="tutorial-next" class="text-xs bg-emerald-500 hover:bg-emerald-600 text-white font-bold px-5 py-2 rounded-xl transition-all shadow-lg shadow-emerald-500/20 active:scale-95">Siguiente →</button>
+                        </div>
                     </div>
                 </div>
-            </div>
         `;
         document.body.appendChild(overlay);
 
@@ -3622,7 +3731,7 @@ function showTutorialStep() {
         // Update progress dots
         const progressContainer = document.getElementById('tutorial-progress');
         progressContainer.innerHTML = tutorialSteps.map((_, i) =>
-            `<div class="w-2 h-2 rounded-full transition-colors ${i === tutorialStep ? 'bg-emerald-500' : i < tutorialStep ? 'bg-emerald-300' : 'bg-slate-200 dark:bg-slate-600'}"></div>`
+            `< div class="w-2 h-2 rounded-full transition-colors ${i === tutorialStep ? 'bg-emerald-500' : i < tutorialStep ? 'bg-emerald-300' : 'bg-slate-200 dark:bg-slate-600'}" ></div > `
         ).join('');
 
         // Update button text
