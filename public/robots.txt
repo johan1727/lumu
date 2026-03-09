@@ -1,9 +1,8 @@
 User-agent: *
 Allow: /
-Allow: /buscar
-Allow: /buscar/
 Disallow: /api/
-Disallow: /scraper-dashboard.html
 Disallow: /dropship-admin.html
+Disallow: /historial.html
+Disallow: /scraper-dashboard.html
 
 Sitemap: https://lumu.dev/sitemap.xml
