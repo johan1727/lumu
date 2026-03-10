@@ -2982,7 +2982,7 @@ window.openAdGateway = async function (targetUrlOriginal, isReward = false) {
     } else {
         // Fallback: 5s Countdown (si falla IMA o hay AdBlock)
         const countdownOverlay = document.getElementById('ad-countdown-overlay');
-    window.currentAdIsForReward = false;
+        window.currentAdIsForReward = false;
         if (countdownOverlay) countdownOverlay.classList.remove('hidden');
 
         let timeLeft = 5;
@@ -3665,29 +3665,31 @@ function startInteractiveTutorial() {
         overlay = document.createElement('div');
         overlay.id = 'tutorial-overlay';
         overlay.innerHTML = `
-            < div id = "tutorial-spotlight" class="tutorial-spotlight" ></div >
-                <div id="tutorial-tooltip" class="tutorial-tooltip">
-                    <div class="tutorial-tooltip-arrow"></div>
-                    <div class="flex items-center gap-3 mb-3">
-                        <span id="tutorial-icon" class="text-3xl"></span>
-                        <h4 id="tutorial-title" class="text-lg font-black text-slate-900 dark:text-white"></h4>
-                    </div>
-                    <p id="tutorial-text" class="text-sm text-slate-600 dark:text-slate-300 leading-relaxed mb-5"></p>
-                    <div class="flex items-center justify-between">
-                        <div id="tutorial-progress" class="flex gap-1.5"></div>
-                        <div class="flex gap-2">
-                            <button id="tutorial-skip" class="text-xs text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 font-bold px-3 py-2 rounded-lg transition-colors">Saltar</button>
-                            <button id="tutorial-next" class="text-xs bg-emerald-500 hover:bg-emerald-600 text-white font-bold px-5 py-2 rounded-xl transition-all shadow-lg shadow-emerald-500/20 active:scale-95">Siguiente →</button>
-                        </div>
+            <div id="tutorial-spotlight" class="tutorial-spotlight"></div>
+            <div id="tutorial-tooltip" class="tutorial-tooltip">
+                <div class="tutorial-tooltip-arrow"></div>
+                <div class="flex items-center gap-3 mb-3">
+                    <span id="tutorial-icon" class="text-3xl"></span>
+                    <h4 id="tutorial-title" class="text-lg font-black text-slate-900 dark:text-white"></h4>
+                </div>
+                <p id="tutorial-text" class="text-sm text-slate-600 dark:text-slate-300 leading-relaxed mb-5"></p>
+                <div class="flex items-center justify-between">
+                    <div id="tutorial-progress" class="flex gap-1.5"></div>
+                    <div class="flex gap-2">
+                        <button id="tutorial-skip" class="text-xs text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 font-bold px-3 py-2 rounded-lg transition-colors">Saltar</button>
+                        <button id="tutorial-next" class="text-xs bg-emerald-500 hover:bg-emerald-600 text-white font-bold px-5 py-2 rounded-xl transition-all shadow-lg shadow-emerald-500/20 active:scale-95">Siguiente →</button>
                     </div>
                 </div>
+            </div>
         `;
         document.body.appendChild(overlay);
 
         document.getElementById('tutorial-next').addEventListener('click', nextTutorialStep);
         document.getElementById('tutorial-skip').addEventListener('click', endTutorial);
         overlay.addEventListener('click', (e) => {
-            if (e.target === overlay) endTutorial();
+            if (e.target === overlay || e.target.id === 'tutorial-spotlight') {
+                endTutorial();
+            }
         });
     }
 
