@@ -3406,9 +3406,9 @@ function exportB2bToCSV() {
 const onboardingSteps = [];
 function updateOnboarding() { }
 function closeOnboarding(skipTutorial) {
-    if (!skipTutorial && !localStorage.getItem('lumu_tutorial_done')) {
-        setTimeout(() => startInteractiveTutorial(), 600);
-    }
+    // Only close onboarding modal if it exists.
+    // We remove the recursive call to startInteractiveTutorial here to avoid infinite loops,
+    // since the app logic already handles launching the tutorial separately.
 }
 
 function toggleMobileMenu(open) {
@@ -3654,7 +3654,7 @@ const tutorialSteps = [
 ];
 
 function startInteractiveTutorial() {
-    // Close the onboarding modal first
+    // Close the onboarding modal first (recursivity fixed)
     closeOnboarding();
     tutorialActive = true;
     tutorialStep = 0;
@@ -3733,7 +3733,7 @@ function showTutorialStep() {
         // Update progress dots
         const progressContainer = document.getElementById('tutorial-progress');
         progressContainer.innerHTML = tutorialSteps.map((_, i) =>
-            `< div class="w-2 h-2 rounded-full transition-colors ${i === tutorialStep ? 'bg-emerald-500' : i < tutorialStep ? 'bg-emerald-300' : 'bg-slate-200 dark:bg-slate-600'}" ></div > `
+            `<div class="w-2 h-2 rounded-full transition-colors ${i === tutorialStep ? 'bg-emerald-500' : i < tutorialStep ? 'bg-emerald-300' : 'bg-slate-200 dark:bg-slate-600'}"></div>`
         ).join('');
 
         // Update button text
@@ -3788,6 +3788,12 @@ function nextTutorialStep() {
 function endTutorial() {
     tutorialActive = false;
     const overlay = document.getElementById('tutorial-overlay');
-    if (overlay) overlay.classList.remove('active');
+    if (overlay) {
+        overlay.classList.remove('active');
+        // Remove slightly after fade out animation
+        setTimeout(() => {
+            if (overlay.parentNode) overlay.parentNode.removeChild(overlay);
+        }, 300);
+    }
     localStorage.setItem('lumu_tutorial_done', 'true');
 }
