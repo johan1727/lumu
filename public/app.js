@@ -30,8 +30,6 @@ let searchForm, searchInput, searchButton, errorMessage;
 let chatContainer, resultsWrapper, resultsGrid, resultsContainer;
 let adModal, adCountdownText, btnSkipAd;
 let b2bModal, closeB2bModal, b2bBackdrop, navB2b, btnProcessB2b, btnExportB2b;
-let welcomeModal, btnOnboardingNext, btnOnboardingSkip, onboardingContent, stepDots; // Keep declarations so strict mode won't break on missing vars, though we won't use them.
-let iconMoon, iconSun, html;
 let mobileMenuDrawer, mobileMenuBackdrop, mobileMenuPanel, btnMobileMenu, btnCloseMobileMenu, mobileAuthContainer;
 let adsLoader, adsManager, adsDone = false, adContainer, adDisplayContainer;
 let imageUpload, btnAttachImage, imagePreviewContainer, imagePreview, btnRemoveImage;
