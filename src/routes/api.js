@@ -5,6 +5,7 @@ const { validateBody } = require('../middleware/validateRequest');
 const authMiddleware = require('../middleware/authMiddleware');
 const { requireAuth } = require('../middleware/authMiddleware');
 const { searchProductSchema, bulkSearchSchema, visionSchema, memorySchema, feedbackSchema, trackEventSchema } = require('../schemas/searchSchemas');
+const imageProxy = require('../controllers/imageProxy');
 
 const memoryController = require('../controllers/memoryController');
 const feedbackController = require('../controllers/feedbackController');
@@ -12,7 +13,11 @@ const priceAlertController = require('../controllers/priceAlertController');
 const dropshipController = require('../controllers/dropshipController');
 const analyticsController = require('../controllers/analyticsController');
 const priceHistoryController = require('../controllers/priceHistoryController');
+const autocompleteController = require('../controllers/autocompleteController');
 const supplierChecker = require('../services/supplierChecker');
+
+// Image Proxy route to bypass CORS for product images
+router.get('/img-proxy', imageProxy.proxyImage);
 
 // POST /api/track — Conversion analytics (public, lightweight, validated)
 router.post('/track', authMiddleware, validateBody(trackEventSchema), analyticsController.trackEvent);
@@ -25,6 +30,9 @@ router.post('/buscar', authMiddleware, validateBody(searchProductSchema), search
 
 // POST /api/vision (IA identifica producto de una imagen)
 router.post('/vision', validateBody(visionSchema), searchController.analyzeImage);
+
+// GET /api/autocomplete (Fase 6: Auto-completar inteligente)
+router.get('/autocomplete', autocompleteController.getSuggestions);
 
 // POST /api/bulk-search (B2B Plan Revendedor)
 router.post('/bulk-search', authMiddleware, requireAuth, validateBody(bulkSearchSchema), searchController.bulkSearch);
@@ -114,6 +122,9 @@ router.get('/scraper-health', (req, res) => {
             : '🟢 Todos los scrapers parecen funcionar correctamente.'
     });
 });
+
+// NUEVO: Fase 6 - Lumu Coins endpoint
+router.get('/me/coins', authMiddleware, searchController.getCoins);
 
 // ============================================================
 // Admin Routes (private — requires ADMIN_API_KEY + allowed email)

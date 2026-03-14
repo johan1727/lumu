@@ -1,7 +1,16 @@
 const supabase = require('../config/supabase');
+const Redis = require('ioredis');
+
+// --- Configuración Redis Opcional ---
+const redisClient = process.env.REDIS_URL ? new Redis(process.env.REDIS_URL) : null;
+if (redisClient) {
+    redisClient.on('error', (err) => console.error('[Redis Error]', err.message));
+    redisClient.on('connect', () => console.log('🟢 Redis conectado exitosamente para caché ultrarrápida'));
+}
 
 /**
  * Normaliza query para cache: lowercase, quita acentos, ordena palabras, quita negativos
+ * FIX: Mejorar normalización para colisiones como "playstation 5" vs "play station 5"
  */
 const normalizeQuery = (query) => {
     return query
@@ -10,9 +19,16 @@ const normalizeQuery = (query) => {
         .normalize('NFD').replace(/[\u0300-\u036f]/g, '') // quita acentos
         .replace(/\s+-\w+/g, '')                          // quita -filtros negativos
         .replace(/[^a-z0-9\s]/g, '')                      // quita caracteres especiales
+        // FIX: Normalizar espacios entre palabras compuestas comunes
+        .replace(/playstation/g, 'play station')
+        .replace(/xboxone/g, 'xbox one')
+        .replace(/macbook/g, 'mac book')
+        .replace(/airpods/g, 'air pods')
+        .replace(/iphone(\d+)/g, 'iphone $1')
+        .replace(/samsung(\w+)/g, 'samsung $1')
         .split(/\s+/)
         .filter(w => w.length > 1)                         // quita palabras de 1 letra
-        .sort()                                            // ordena alfabéticamente para "audifonos bluetooth" == "bluetooth audifonos"
+        .sort()                                            // ordena alfabéticamente
         .join(' ');
 };
 
@@ -43,28 +59,65 @@ const normalizeProductUrl = (url) => {
 /**
  * In-memory LRU cache layer (avoids Supabase round-trips for hot queries)
  * Max 500 entries, auto-evicts oldest. Persists across requests in same serverless instance.
+ * FIX: Agregar límite por instancia serverless y TTL más agresivo
  */
 const RAM_CACHE_MAX = 500;
-const RAM_CACHE_TTL_MS = 2 * 60 * 60 * 1000; // 2 hours in-memory (was 30 min)
+const RAM_CACHE_TTL_MS = 30 * 60 * 1000; // 30 minutos (reducido de 2h)
 const _ramCache = new Map();
+const _ramCacheAccessTimes = new Map(); // Para LRU tracking
 
 function ramCacheGet(key) {
     const entry = _ramCache.get(key);
     if (!entry) return null;
-    if (Date.now() - entry.ts > RAM_CACHE_TTL_MS) {
+    
+    const now = Date.now();
+    if (now - entry.ts > RAM_CACHE_TTL_MS) {
         _ramCache.delete(key);
+        _ramCacheAccessTimes.delete(key);
         return null;
     }
+    
+    // Update access time for LRU
+    _ramCacheAccessTimes.set(key, now);
     return entry.data;
 }
 
 function ramCacheSet(key, data) {
-    // Evict oldest if full
+    const now = Date.now();
+    
+    // Evict oldest if full (LRU eviction)
     if (_ramCache.size >= RAM_CACHE_MAX) {
-        const oldestKey = _ramCache.keys().next().value;
-        _ramCache.delete(oldestKey);
+        let oldestKey = null;
+        let oldestTime = Infinity;
+        
+        for (const [k, accessTime] of _ramCacheAccessTimes.entries()) {
+            if (accessTime < oldestTime) {
+                oldestTime = accessTime;
+                oldestKey = k;
+            }
+        }
+        
+        if (oldestKey) {
+            _ramCache.delete(oldestKey);
+            _ramCacheAccessTimes.delete(oldestKey);
+        }
     }
-    _ramCache.set(key, { data, ts: Date.now() });
+    
+    _ramCache.set(key, { data, ts: now });
+    _ramCacheAccessTimes.set(key, now);
+}
+
+// Periodic cleanup (10% de probabilidad en cada set)
+function ramCacheCleanup() {
+    if (Math.random() < 0.1) {
+        const now = Date.now();
+        for (const [key, entry] of _ramCache.entries()) {
+            if (now - entry.ts > RAM_CACHE_TTL_MS) {
+                _ramCache.delete(key);
+                _ramCacheAccessTimes.delete(key);
+            }
+        }
+    }
 }
 
 /**
@@ -80,7 +133,22 @@ exports.getCachedResults = async (query, radius, lat, lng) => {
         return ramHit;
     }
 
-    // 2. Check Supabase cache
+    // 1.5 Check Redis Cache (Ultra-fast distributed cache)
+    if (redisClient) {
+        try {
+            const redisHitText = await redisClient.get(`lumu:search:${queryKey}`);
+            if (redisHitText) {
+                console.log(`[Cache Redis Hit] Resultados ultrarrápidos para: ${queryKey}`);
+                const redisData = JSON.parse(redisHitText);
+                ramCacheSet(queryKey, redisData); // Warm local RAM
+                return redisData;
+            }
+        } catch (e) {
+            console.error('[Redis Get Error]:', e.message);
+        }
+    }
+
+    // 2. Check Supabase cache (Fallback distribuido)
     if (!supabase) return null;
 
     try {
@@ -128,8 +196,17 @@ exports.saveToCache = async (query, radius, lat, lng, results) => {
 
     const queryKey = generateCacheKey(query, radius, lat, lng);
 
-    // Always warm RAM cache immediately (even if Supabase save fails)
+    // Always warm RAM cache immediately (even if saves fail)
     ramCacheSet(queryKey, results);
+
+    // Save to Redis if available (TTL: 24 hours = 86400s)
+    if (redisClient) {
+        try {
+            await redisClient.set(`lumu:search:${queryKey}`, JSON.stringify(results), 'EX', 86400);
+        } catch(e) {
+            console.error('[Redis Set Error]:', e.message);
+        }
+    }
 
     try {
         const { error } = await supabase

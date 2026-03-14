@@ -22,7 +22,8 @@ const chatMessageSchema = z.object({
 
 const searchProductSchema = baseSearchSchema.extend({
     chatHistory: z.array(chatMessageSchema).max(30).optional(),
-    skipLLM: z.boolean().optional()
+    skipLLM: z.boolean().optional(),
+    safeStoresOnly: z.boolean().optional().default(false)
 });
 
 const bulkSearchSchema = z.object({

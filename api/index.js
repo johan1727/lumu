@@ -30,7 +30,8 @@ app.use(helmet({
         directives: {
             defaultSrc: ["'self'"],
             // SECURITY FIX #6: Removed 'unsafe-eval'. 'unsafe-inline' kept for AdSense/inline styles.
-            scriptSrc: ["'self'", "'unsafe-inline'", "https://pagead2.googlesyndication.com", "https://cdn.jsdelivr.net", "https://js.stripe.com", "https://imasdk.googleapis.com", "https://accounts.google.com", "https://apis.google.com", "https://*.supabase.co", "https://www.googletagmanager.com", "https://ep1.adtrafficquality.google"],
+            scriptSrc: ["'self'", "'unsafe-inline'", "'unsafe-hashes'", "https://pagead2.googlesyndication.com", "https://cdn.jsdelivr.net", "https://js.stripe.com", "https://imasdk.googleapis.com", "https://accounts.google.com", "https://apis.google.com", "https://*.supabase.co", "https://www.googletagmanager.com", "https://ep1.adtrafficquality.google"],
+            scriptSrcAttr: ["'unsafe-inline'"],
             styleSrc: ["'self'", "'unsafe-inline'", "https://cdn.jsdelivr.net", "https://fonts.googleapis.com", "https://accounts.google.com"],
             imgSrc: ["'self'", "data:", "https:", "blob:"],
             connectSrc: ["'self'", "https://*.supabase.co", "https://generativelanguage.googleapis.com", "https://google.serper.dev", "https://api.stripe.com", "https://pagead2.googlesyndication.com", "https://imasdk.googleapis.com", "https://ep1.adtrafficquality.google", "https://*.googlesyndication.com"],
@@ -50,8 +51,8 @@ app.use(cors({
     origin: (origin, callback) => {
         if (!origin) return callback(null, true);
         if (allowedOrigins.includes(origin)) return callback(null, true);
-        // In development, allow localhost
-        if (process.env.NODE_ENV === 'development' && origin && (origin.includes('localhost') || origin.includes('127.0.0.1'))) {
+        // In development or local, allow localhost
+        if (process.env.NODE_ENV !== 'production' && origin && (origin.includes('localhost') || origin.includes('127.0.0.1'))) {
             return callback(null, true);
         }
         if (process.env.NODE_ENV === 'production') {
@@ -182,8 +183,12 @@ app.use((req, res) => {
 
 // Manejo global de errores
 app.use((err, req, res, next) => {
-    console.error('Error no manejado:', err.stack);
-    res.status(500).json({ error: 'Error interno del servidor.' });
+    console.error(`[Global Error] ${req.method} ${req.url}:`, err);
+    const isDev = process.env.NODE_ENV !== 'production';
+    res.status(500).json({ 
+        error: 'Ocurrió un problema inesperado. Asegúrate de configurar las variables de entorno si estás en local.',
+        ...(isDev && { rawError: err, errString: String(err) })
+    });
 });
 
 if (require.main === module) {

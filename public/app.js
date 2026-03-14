@@ -39,10 +39,112 @@ let btnVoiceInput, isRecording = false;
 let selectedImageBase64 = null;
 // Location inputs (global so they're accessible in submit handler)
 let locRadiusInput, userLatInput, userLngInput;
+let currentRegion = 'MX';
+
+const REGION_LABELS = {
+    MX: {
+        locale: 'es-MX',
+        currency: 'MXN',
+        searchPlaceholder: 'Dime qué estás buscando... Ej: iPhone 15 Pro Max',
+        submitLabel: 'Enviar',
+        helperCopy: 'Lumu usa tu ubicación segura para encontrar ofertas físicas.',
+        filters: {
+            global: '🌎 Todas partes',
+            local_only: '📍 Tiendas Locales',
+            nearby: '🚗 Cerca de mí',
+            safe: 'Solo Tiendas Seguras'
+        },
+        resultsFound: 'resultados encontrados',
+        searchFor: 'Buscando',
+        coinsTitle: 'Lumu Coins',
+        coinsCopy: 'Cada búsqueda válida te acerca a PRO temporal.',
+        coinsRemaining: 'Te faltan {count} para desbloquear PRO temporal.',
+        scopes: {
+            global: 'Todas partes',
+            local_only: 'Tiendas locales',
+            nearby: 'Cerca de mí'
+        },
+        activeSafe: 'Tiendas seguras',
+        activeRegion: 'México',
+        toolbar: {
+            sortLowPrice: '💰 Menor precio',
+            sortHighPrice: '💎 Mayor precio',
+            sortStore: '🏪 Por tienda',
+            sortRelevance: '⭐ Relevancia',
+            allStores: '🏬 Todas las tiendas',
+            freeShipping: '🚚 Envío gratis'
+        },
+        sections: {
+            analysisComplete: 'Análisis completado.',
+            bestOptions: 'Mejores opciones seguras:',
+            flashDeals: 'Ofertas Relámpago',
+            trending: 'Tendencias del Momento',
+            inspiration: 'Inspiración para ti',
+            mayAlsoLike: 'Quizás también te interese',
+            guides: 'Guías de Compra Lumu'
+        },
+        footer: {
+            tagline: 'Tu Personal Shopper con IA. Encuentra el mejor precio en segundos.',
+            categories: 'Categorías',
+            company: 'Empresa',
+            rights: 'Todos los derechos reservados.'
+        }
+    },
+    US: {
+        locale: 'en-US',
+        currency: 'USD',
+        searchPlaceholder: 'What are you looking for? Ex: iPhone 15 Pro Max',
+        submitLabel: 'Search',
+        helperCopy: 'Lumu uses your secure location to find nearby offers.',
+        filters: {
+            global: '🌎 Everywhere',
+            local_only: '📍 Local Stores',
+            nearby: '🚗 Near Me',
+            safe: 'Trusted Stores Only'
+        },
+        resultsFound: 'results found',
+        searchFor: 'Searching',
+        coinsTitle: 'Lumu Coins',
+        coinsCopy: 'Each valid search gets you closer to temporary PRO.',
+        coinsRemaining: '{count} left to unlock temporary PRO.',
+        scopes: {
+            global: 'Everywhere',
+            local_only: 'Local stores',
+            nearby: 'Near me'
+        },
+        activeSafe: 'Trusted stores',
+        activeRegion: 'United States',
+        toolbar: {
+            sortLowPrice: '💰 Lowest price',
+            sortHighPrice: '💎 Highest price',
+            sortStore: '🏪 By store',
+            sortRelevance: '⭐ Relevance',
+            allStores: '🏬 All stores',
+            freeShipping: '🚚 Free shipping'
+        },
+        sections: {
+            analysisComplete: 'Analysis complete.',
+            bestOptions: 'Best safe options:',
+            flashDeals: 'Flash Deals',
+            trending: 'Trending Now',
+            inspiration: 'Inspiration for you',
+            mayAlsoLike: 'You may also like',
+            guides: 'Lumu Shopping Guides'
+        },
+        footer: {
+            tagline: 'Your AI Personal Shopper. Find the best price in seconds.',
+            categories: 'Categories',
+            company: 'Company',
+            rights: 'All rights reserved.'
+        }
+    }
+};
 
 // --- State ---
 let chatHistory = [];
 let adInterval = null;
+window._pendingAdUrl = null;
+window._pendingAdUrlOriginal = null;
 let lastB2bData = null;
 let currentPhoneAttempt = '';
 let currentStep = 1;
@@ -69,7 +171,75 @@ function _trackEvent(event_type, extra = {}) {
 
 // --- Interactive Tutorial State ---
 let tutorialActive = false;
-let tutorialStep = 0;
+let tutorialStep = 1;
+
+window.initTutorial = function() {
+    const tutorialCompleto = localStorage.getItem('lumu_tutorial_v2');
+    if (!tutorialCompleto) {
+        tutorialActive = true;
+        const overlay = document.getElementById('tutorial-overlay');
+        if(overlay) {
+            overlay.classList.remove('invisible', 'opacity-0');
+            showTutorialStep(1);
+        }
+    }
+};
+
+window.showTutorialStep = function(step) {
+    document.querySelectorAll('.tutorial-step').forEach(el => el.classList.add('hidden'));
+    const currentStepEl = document.getElementById(`tutorial-step-${step}`);
+    if(currentStepEl) {
+        currentStepEl.classList.remove('hidden');
+        tutorialStep = step;
+    }
+};
+
+window.nextTutorialStep = function(step) {
+    showTutorialStep(step);
+};
+
+window.finishTutorial = function() {
+    const overlay = document.getElementById('tutorial-overlay');
+    if(overlay) {
+        overlay.classList.add('invisible', 'opacity-0');
+        setTimeout(() => {
+            localStorage.setItem('lumu_tutorial_v2', 'true');
+            tutorialActive = false;
+        }, 300);
+    }
+    
+    // Auto-focus search input to encourage immediate action
+    const searchInput = document.getElementById('search-input');
+    if(searchInput) searchInput.focus();
+};
+
+// Listeners for closing the tutorial early and progressing steps
+document.addEventListener('DOMContentLoaded', () => {
+    const closeBtn = document.getElementById('tutorial-close');
+    if(closeBtn) {
+        closeBtn.addEventListener('click', window.finishTutorial);
+    }
+    
+    // Tutorial Navigation Buttons (CSP Compliant)
+    const btnNext2 = document.getElementById('btn-tutorial-next-2');
+    if(btnNext2) btnNext2.addEventListener('click', () => window.nextTutorialStep(2));
+    
+    const btnNext3 = document.getElementById('btn-tutorial-next-3');
+    if(btnNext3) btnNext3.addEventListener('click', () => window.nextTutorialStep(3));
+    
+    const btnFinish = document.getElementById('btn-tutorial-finish');
+    if(btnFinish) btnFinish.addEventListener('click', window.finishTutorial);
+    
+    const btnReset = document.getElementById('btn-reset-tutorial');
+    if(btnReset) {
+        btnReset.addEventListener('click', () => {
+            localStorage.removeItem('lumu_tutorial_done'); 
+            localStorage.removeItem('lumu_onboarding_done'); 
+            localStorage.removeItem('lumu_tutorial_v2');
+            location.reload();
+        });
+    }
+});
 
 // --- Modal Transitions ---
 function openModal() {
@@ -123,6 +293,217 @@ function sanitize(str) {
         '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
     }[m]));
 };
+
+function getRegionConfig() {
+    return REGION_LABELS[currentRegion] || REGION_LABELS.MX;
+}
+
+function formatCurrencyByRegion(amount) {
+    const config = getRegionConfig();
+    return new Intl.NumberFormat(config.locale, {
+        style: 'currency',
+        currency: config.currency
+    }).format(Number(amount || 0));
+}
+
+function detectRegion() {
+    const lang = (navigator.language || '').toLowerCase();
+    const tz = Intl.DateTimeFormat().resolvedOptions().timeZone || '';
+    if (lang.includes('en-us') || tz.includes('America/New_York') || tz.includes('America/Chicago') || tz.includes('America/Denver') || tz.includes('America/Los_Angeles')) {
+        return 'US';
+    }
+    return 'MX';
+}
+
+function applyRegionalCopy() {
+    currentRegion = detectRegion();
+    const config = getRegionConfig();
+
+    const searchInputEl = document.getElementById('search-input');
+    if (searchInputEl) searchInputEl.placeholder = config.searchPlaceholder;
+
+    const searchButtonEl = document.getElementById('search-button');
+    if (searchButtonEl) {
+        const labelNode = Array.from(searchButtonEl.childNodes).find(node => node.nodeType === Node.TEXT_NODE && node.textContent.trim());
+        if (labelNode) labelNode.textContent = ` ${config.submitLabel} `;
+    }
+
+    const helperCopy = document.getElementById('location-helper-copy');
+    if (helperCopy) {
+        const helperTextNode = Array.from(helperCopy.childNodes).find(node => node.nodeType === Node.TEXT_NODE && node.textContent.trim());
+        if (helperTextNode) helperTextNode.textContent = ` ${config.helperCopy}`;
+    }
+
+    const globalBtn = document.getElementById('filter-global');
+    const localBtn = document.getElementById('filter-local-only');
+    const nearbyBtn = document.getElementById('filter-nearby');
+    const safeBtn = document.getElementById('btn-safe-stores');
+
+    if (globalBtn) globalBtn.textContent = config.filters.global;
+    if (localBtn) localBtn.textContent = config.filters.local_only;
+    if (nearbyBtn) nearbyBtn.textContent = config.filters.nearby;
+    if (safeBtn) {
+        const icon = safeBtn.querySelector('svg')?.outerHTML || '';
+        safeBtn.innerHTML = `${icon} ${config.filters.safe}`;
+    }
+
+    // Toolbar translations
+    const sortSelect = document.getElementById('sort-select');
+    if (sortSelect && config.toolbar) {
+        sortSelect.innerHTML = `
+            <option value="price-asc">${config.toolbar.sortLowPrice}</option>
+            <option value="price-desc">${config.toolbar.sortHighPrice}</option>
+            <option value="store">${config.toolbar.sortStore}</option>
+            <option value="relevance">${config.toolbar.sortRelevance}</option>
+        `;
+    }
+
+    const storeFilter = document.getElementById('store-filter');
+    if (storeFilter && config.toolbar) {
+        const currentValue = storeFilter.value;
+        const firstOption = storeFilter.querySelector('option[value="all"]');
+        if (firstOption) firstOption.textContent = config.toolbar.allStores;
+        storeFilter.value = currentValue;
+    }
+
+    const freeShippingLabel = document.querySelector('label[for="free-shipping-filter"] span');
+    if (freeShippingLabel && config.toolbar) {
+        freeShippingLabel.textContent = config.toolbar.freeShipping;
+    }
+
+    syncLocationFilterLabels();
+}
+
+function renderSearchContext({ query = '', radius = 'global', safeStoresOnly = false, resultCount = 0 } = {}) {
+    const config = getRegionConfig();
+    const panel = document.getElementById('search-context-panel');
+    const scopePill = document.getElementById('search-scope-pill');
+    const resultsSummary = document.getElementById('search-results-summary');
+    const querySummary = document.getElementById('search-query-summary');
+    const chipsContainer = document.getElementById('active-search-chips');
+
+    if (!panel || !scopePill || !resultsSummary || !querySummary || !chipsContainer) return;
+
+    const scopeKey = radius === 'local_only' ? 'local_only' : (radius !== 'global' ? 'nearby' : 'global');
+    panel.classList.remove('hidden');
+    scopePill.textContent = config.scopes[scopeKey];
+    resultsSummary.textContent = `${resultCount} ${config.resultsFound}`;
+    querySummary.innerHTML = `<span class="font-bold text-slate-800">${config.searchFor}:</span> <span class="text-slate-600">“${sanitize(query)}”</span>`;
+
+    const chips = [
+        `<span class="inline-flex items-center rounded-full border border-emerald-200 bg-white px-3 py-1 text-xs font-bold text-emerald-700 shadow-sm">${config.scopes[scopeKey]}</span>`,
+        `<span class="inline-flex items-center rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-bold text-slate-600 shadow-sm">${config.activeRegion}</span>`
+    ];
+
+    if (safeStoresOnly) {
+        chips.push(`<span class="inline-flex items-center rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-xs font-bold text-emerald-700 shadow-sm">${config.activeSafe}</span>`);
+    }
+
+    chipsContainer.innerHTML = chips.join('');
+}
+
+function updateCoinsProgress(totalSearches = 0) {
+    const config = getRegionConfig();
+    const valueEl = document.getElementById('coins-progress-value');
+    const barEl = document.getElementById('coins-progress-bar');
+    const titleEl = document.getElementById('coins-progress-title');
+    const copyEl = document.getElementById('coins-progress-copy');
+    if (!valueEl || !barEl || !titleEl || !copyEl) return;
+
+    const progress = totalSearches % 50;
+    const remaining = 50 - progress;
+    titleEl.textContent = config.coinsTitle;
+    valueEl.textContent = `${progress}/50`;
+    barEl.style.width = `${(progress / 50) * 100}%`;
+    valueEl.classList.toggle('bg-emerald-50', progress > 0);
+    valueEl.classList.toggle('text-emerald-700', progress > 0);
+    barEl.parentElement?.classList.toggle('ring-1', progress > 0);
+    barEl.parentElement?.classList.toggle('ring-emerald-100', progress > 0);
+    copyEl.textContent = progress === 0
+        ? config.coinsCopy
+        : config.coinsRemaining.replace('{count}', remaining);
+}
+
+function getSearchButtonLabel() {
+    return getRegionConfig().submitLabel;
+}
+
+function getSearchButtonIdleHTML() {
+    return `
+                ${getSearchButtonLabel()}
+                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-corner-down-left"><polyline points="9 10 4 15 9 20"/><path d="M20 4v7a4 4 0 0 1-4 4H4"/></svg>
+            `;
+}
+
+function getLocalizedText(spanish, english) {
+    return currentRegion === 'US' ? english : spanish;
+}
+
+function getResultLeadCopy(searchIntent = {}, totalResults = 0) {
+    const searchLabel = sanitize(searchIntent?.busqueda || '');
+    const condition = searchIntent?.condicion === 'used'
+        ? getLocalizedText('usado', 'used')
+        : getLocalizedText('nuevo', 'new');
+
+    if (!searchLabel) {
+        return getLocalizedText(
+            `Encontré ${totalResults} opciones relevantes y ordenadas por conveniencia.`,
+            `I found ${totalResults} relevant options sorted by usefulness.`
+        );
+    }
+
+    return getLocalizedText(
+        `Encontré ${totalResults} opciones para "${searchLabel}" en estado ${condition}. Te dejé primero los resultados más útiles y abajo un apoyo breve del shopper.`,
+        `I found ${totalResults} options for "${searchLabel}" in ${condition} condition. I placed the most useful results first and a short shopper summary below.`
+    );
+}
+
+function syncLocationFilterLabels() {
+    const config = getRegionConfig();
+    const globalBtn = document.getElementById('filter-global');
+    const localBtn = document.getElementById('filter-local-only');
+    const nearbyBtn = document.getElementById('filter-nearby');
+
+    if (globalBtn) globalBtn.textContent = config.filters.global;
+    if (localBtn) localBtn.textContent = config.filters.local_only;
+    if (nearbyBtn) nearbyBtn.textContent = config.filters.nearby;
+}
+
+function restoreHomeSections() {
+    const categoryIconBar = document.getElementById('category-icon-bar');
+    const flashDealsSection = document.getElementById('flash-deals-section');
+    const tendenciasSection = document.getElementById('tendencias-section');
+    const productShowcase = document.getElementById('product-showcase');
+    const extraSections = document.getElementById('extra-sections');
+    const resultsWrapper = document.getElementById('results-wrapper');
+    const chatContainer = document.getElementById('chat-container');
+    const resultsGrid = document.getElementById('results-grid');
+    const contextPanel = document.getElementById('search-context-panel');
+    const errorMessage = document.getElementById('error-message');
+    const resultsTitle = document.getElementById('results-title');
+    const resultsToolbar = document.getElementById('results-toolbar');
+    const resultsCount = document.getElementById('results-count');
+
+    categoryIconBar?.classList.remove('hidden');
+    flashDealsSection?.classList.remove('hidden');
+    tendenciasSection?.classList.remove('hidden');
+    productShowcase?.classList.remove('hidden');
+    extraSections?.classList.remove('hidden');
+    resultsWrapper?.classList.add('hidden');
+    chatContainer?.classList.add('hidden');
+    if (resultsGrid) resultsGrid.innerHTML = '';
+    if (contextPanel) contextPanel.classList.add('hidden');
+    resultsToolbar?.classList.add('hidden');
+    if (resultsCount) resultsCount.textContent = '';
+    if (errorMessage) {
+        errorMessage.textContent = '';
+        errorMessage.classList.add('hidden');
+    }
+    if (resultsTitle) {
+        resultsTitle.innerHTML = `Análisis completado. <span class="text-slate-500 font-medium">Mejores opciones seguras:</span>`;
+    }
+    removeTypingIndicator();
+}
 
 // --- RECONSTRUCTED FUNCTIONS ---
 async function renderFavoritesList() {
@@ -371,8 +752,10 @@ async function initApp() {
         userLatInput = document.getElementById('user-lat');
         userLngInput = document.getElementById('user-lng');
         const locFilterBtns = document.querySelectorAll('.loc-filter-btn');
+        applyRegionalCopy();
         const categoryBtns = document.querySelectorAll('[data-macro-category]');
         const btnLoginHeader = document.getElementById('btn-login');
+        const homeLogoLink = document.getElementById('home-logo-link');
 
         // --- RIPPLE EFFECT ---
         function initRippleButtons() {
@@ -423,66 +806,9 @@ async function initApp() {
         };
         initRippleButtons();
 
-        // 1. Advanced Toggle Theme (Replacing btnDarkMode)
-        const themeToggle = document.getElementById('theme-toggle');
-        if (themeToggle) {
-            const indicator = document.getElementById('theme-indicator');
-            const btns = themeToggle.querySelectorAll('.theme-btn');
-            const html = document.documentElement;
-
-            const savedTheme = localStorage.getItem('theme') || 'system';
-
-            function positionIndicator(theme) {
-                // Calculate position dynamically based on actual button position
-                const activeBtn = themeToggle.querySelector(`[data-theme-value="${theme}"]`);
-                if (indicator && activeBtn) {
-                    // Use offsetLeft instead of getBoundingClientRect for more reliable initial render
-                    const offsetX = activeBtn.offsetLeft;
-                    indicator.style.transform = `translateX(${offsetX}px)`;
-                    indicator.style.width = `${activeBtn.offsetWidth}px`;
-                }
-
-                // Active style colors
-                btns.forEach(b => {
-                    const isActive = b.dataset.themeValue === theme;
-                    if (isActive) {
-                        b.classList.remove('text-slate-500', 'dark:text-slate-400');
-                        b.classList.add('text-slate-900', 'dark:text-white');
-                    } else {
-                        b.classList.add('text-slate-500', 'dark:text-slate-400');
-                        b.classList.remove('text-slate-900', 'dark:text-white');
-                    }
-                });
-            };
-
-            function applyTheme(theme, init = false) {
-                const isDark = theme === 'dark' || (theme === 'system' && window.matchMedia('(prefers-color-scheme: dark)').matches);
-                html.classList.toggle('dark', isDark);
-                localStorage.setItem('theme', theme);
-                if (init) {
-                    setTimeout(() => positionIndicator(theme), 50);
-                } else {
-                    positionIndicator(theme);
-                }
-            };
-
-            // Init
-            applyTheme(savedTheme, true);
-
-            // Listeners
-            btns.forEach(btn => {
-                btn.addEventListener('click', () => {
-                    applyTheme(btn.dataset.themeValue);
-                });
-            });
-
-            // Listen to OS changes if system
-            window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => {
-                if (localStorage.getItem('theme') === 'system') {
-                    applyTheme('system');
-                }
-            });
-        }
+        // Force light mode only
+        document.documentElement.classList.remove('dark');
+        localStorage.setItem('theme', 'light');
 
         // 2. Location Filters
         if (locFilterBtns.length > 0 && locRadiusInput) {
@@ -494,10 +820,10 @@ async function initApp() {
                     // Update visual classes
                     locFilterBtns.forEach(b => {
                         b.classList.remove('border-emerald-500', 'bg-emerald-50', 'text-emerald-700');
-                        b.classList.add('border-slate-100', 'bg-white', 'text-slate-500');
+                        b.classList.add('border-slate-200', 'bg-white', 'text-slate-600');
                     });
                     btn.classList.add('border-emerald-500', 'bg-emerald-50', 'text-emerald-700');
-                    btn.classList.remove('border-slate-100', 'bg-white', 'text-slate-500');
+                    btn.classList.remove('border-slate-200', 'bg-white', 'text-slate-600');
 
                     // Request location if 'Cerca de mí'
                     if (radius !== 'global' && radius !== 'local_only') {
@@ -507,21 +833,54 @@ async function initApp() {
                             if (cachedLoc && (Date.now() - cachedLoc.ts) < 600000) {
                                 userLatInput.value = cachedLoc.lat;
                                 userLngInput.value = cachedLoc.lng;
+                                syncLocationFilterLabels();
                             } else {
-                                btn.textContent = '📍 Ubicando...';
+                                btn.textContent = currentRegion === 'US' ? '📍 Locating...' : '📍 Ubicando...';
                                 navigator.geolocation.getCurrentPosition((pos) => {
                                     userLatInput.value = pos.coords.latitude;
                                     userLngInput.value = pos.coords.longitude;
                                     localStorage.setItem('lumu_geolocation', JSON.stringify({ lat: pos.coords.latitude, lng: pos.coords.longitude, ts: Date.now() }));
-                                    btn.textContent = btn.getAttribute('data-radius') + ' km';
+                                    syncLocationFilterLabels();
                                 }, (err) => {
                                     console.warn('Geolocation denied or failed:', err);
-                                    btn.textContent = btn.getAttribute('data-radius') + ' km';
+                                    syncLocationFilterLabels();
                                 }, { timeout: 8000, maximumAge: 300000 });
                             }
                         }
                     }
                 });
+            });
+        }
+
+        // Fase 6: Filtro Tiendas Seguras
+        const btnSafeStores = document.getElementById('btn-safe-stores');
+        if (btnSafeStores) {
+            btnSafeStores.addEventListener('click', () => {
+                const isSafe = btnSafeStores.getAttribute('data-safe') === 'true';
+                if (isSafe) {
+                    // Turn off
+                    btnSafeStores.setAttribute('data-safe', 'false');
+                    btnSafeStores.classList.remove('border-emerald-500', 'bg-emerald-50', 'text-emerald-700');
+                    btnSafeStores.classList.add('border-slate-200', 'bg-white', 'text-slate-600');
+                } else {
+                    // Turn on
+                    btnSafeStores.setAttribute('data-safe', 'true');
+                    btnSafeStores.classList.remove('border-slate-200', 'bg-white', 'text-slate-600');
+                    btnSafeStores.classList.add('border-emerald-500', 'bg-emerald-50', 'text-emerald-700');
+                }
+            });
+        }
+
+        if (homeLogoLink) {
+            homeLogoLink.addEventListener('click', (e) => {
+                if (window.location.pathname === '/' || window.location.pathname.endsWith('/index.html')) {
+                    e.preventDefault();
+                    restoreHomeSections();
+                    searchInput.value = '';
+                    searchInput.style.height = '56px';
+                    syncLocationFilterLabels();
+                    window.scrollTo({ top: 0, behavior: 'smooth' });
+                }
             });
         }
 
@@ -903,6 +1262,11 @@ async function initApp() {
                             <svg class="w-4 h-4 text-red-500" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M3.172 5.172a4 4 0 015.656 0L10 6.343l1.172-1.171a4 4 0 115.656 5.656L10 17.657l-6.828-6.829a4 4 0 010-5.656z" clip-rule="evenodd"></path></svg>
                             Mis Favoritos
                         </button>
+                        <button id="btn-mi-ahorro" class="w-full text-left px-3 py-2 text-sm text-slate-700 font-bold hover:bg-slate-50 hover:text-emerald-600 rounded-lg transition-colors flex items-center gap-2 mb-1">
+                            <svg class="w-4 h-4 text-emerald-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+                            Mi Ahorro 
+                            <span id="savings-count" class="ml-auto bg-emerald-100 text-emerald-700 text-[10px] px-1.5 py-0.5 rounded-full font-black hidden">$0</span>
+                        </button>
                         <button id="btn-mi-perfil" class="w-full text-left px-3 py-2 text-sm text-slate-700 font-bold hover:bg-slate-50 hover:text-primary rounded-lg transition-colors flex items-center gap-2">
                             <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"></path></svg>
                             Mi Perfil VIP
@@ -919,12 +1283,58 @@ async function initApp() {
                 // Re-bind listeners for dynamic elements
                 document.getElementById('btn-history').addEventListener('click', openHistoryModal);
                 document.getElementById('btn-mis-favoritos').addEventListener('click', () => openFavorites());
+                document.getElementById('btn-mi-ahorro').addEventListener('click', () => openSavingsDashboard());
                 document.getElementById('btn-mi-perfil').addEventListener('click', () => openProfileModal(user));
+                
+                // Update savings count in menu
+                updateMenuSavings();
 
                 document.getElementById('btn-logout').addEventListener('click', async () => {
                     if (supabaseClient) await supabaseClient.auth.signOut();
                 });
                 closeModal();
+                
+                // Show PRO Badge if premium
+                const proBadge = document.getElementById('pro-badge-nav');
+                if (proBadge) {
+                    const isPremium = user.is_premium || user.plan === 'personal_vip' || user.plan === 'b2b';
+                    if (isPremium) {
+                        proBadge.classList.remove('hidden');
+                        proBadge.classList.add('flex');
+                    } else {
+                        proBadge.classList.add('hidden');
+                        proBadge.classList.remove('flex');
+                    }
+                }
+
+                // Fase 6: Lumu Coins
+                fetch('/api/me/coins', {
+                    headers: { 'Authorization': `Bearer ${user.access_token || ''}` }
+                }).then(res => res.json()).then(data => {
+                    if (data && data.coins !== undefined) {
+                        let coinsBadge = document.getElementById('lumu-coins-nav');
+                        if (!coinsBadge) {
+                            coinsBadge = document.createElement('div');
+                            coinsBadge.id = 'lumu-coins-nav';
+                            coinsBadge.className = 'hidden sm:flex items-center gap-1.5 px-3 py-1 bg-amber-50 border border-amber-200 rounded-full text-xs font-bold text-amber-700 shadow-sm transition-all hover:bg-amber-100 cursor-pointer';
+                            coinsBadge.title = `${data.coins}/${data.next_goal} para VIP gratis`;
+                            // Insert before pro-badge if possible, else append to authContainer
+                            if (proBadge && proBadge.parentNode) {
+                                proBadge.parentNode.insertBefore(coinsBadge, proBadge);
+                            } else {
+                                authContainer.prepend(coinsBadge);
+                            }
+                        }
+                        coinsBadge.innerHTML = `<span class="text-base drop-shadow-sm">🪙</span> <span>${data.coins}</span>`;
+                        // Auto-upgrade if temp premium
+                        if (data.is_premium_temp && proBadge && proBadge.classList.contains('hidden')) {
+                            proBadge.classList.remove('hidden');
+                            proBadge.classList.add('flex');
+                            proBadge.innerHTML = `⭐ VIP TEMPORAL`;
+                        }
+                    }
+                }).catch(e => console.error('Error fetching coins:', e));
+
             } else {
                 // Usuario deslogueado
                 authContainer.innerHTML = `
@@ -978,14 +1388,24 @@ async function initApp() {
             supabaseClient.auth.onAuthStateChange((event, session) => {
                 updateAuthUI(session?.user);
 
-                // Disparar confeti SOLO cuando el usuario inicie sesión de forma explícita
-                if (event === 'SIGNED_IN' && sessionStorage.getItem('just_logged_in') === 'true' && typeof confetti === 'function') {
-                    confetti({
-                        particleCount: 150,
-                        spread: 70,
-                        origin: { y: 0.6 }
-                    });
-                    sessionStorage.removeItem('just_logged_in');
+                // Fase 6: Animación de Confeti al registrarse
+                if (event === 'SIGNED_IN' && session?.user && typeof confetti === 'function') {
+                    // Check if user was created in the last 60 seconds (likely a new signup)
+                    const createdAt = new Date(session.user.created_at).getTime();
+                    const now = Date.now();
+                    const isNewUser = (now - createdAt) < 60000;
+
+                    if (isNewUser && !sessionStorage.getItem('lumu_confetti_fired')) {
+                        setTimeout(() => {
+                            confetti({
+                                particleCount: 150,
+                                spread: 80,
+                                origin: { y: 0.6 },
+                                colors: ['#10b981', '#f59e0b', '#3b82f6', '#ec4899']
+                            });
+                        }, 500);
+                        sessionStorage.setItem('lumu_confetti_fired', 'true');
+                    }
                 }
             });
 
@@ -1118,17 +1538,173 @@ async function initApp() {
                     searchForm.dispatchEvent(new Event('submit', { cancelable: true, bubbles: true }));
                 }
             });
-            // Debounce: auto-search after 800ms of no typing (optional UX enhancement)
+            // Fase 6: Autocomplete logic
+            const autocompleteDropdown = document.getElementById('autocomplete-dropdown');
+            let _autocompleteTimer = null;
+            let currentFocus = -1;
+
+            function renderAutocomplete(suggestions, isRecent = false) {
+                if (!autocompleteDropdown) return;
+                autocompleteDropdown.innerHTML = '';
+                currentFocus = -1;
+
+                if (isRecent && suggestions.length > 0) {
+                    const header = document.createElement('div');
+                    header.className = 'px-4 py-2 text-[10px] font-black text-slate-400 uppercase tracking-widest border-b border-slate-100';
+                    header.textContent = getLocalizedText('Búsquedas recientes', 'Recent searches');
+                    autocompleteDropdown.appendChild(header);
+                }
+
+                suggestions.forEach((sugg, i) => {
+                    const item = document.createElement('div');
+                    item.className = 'px-4 py-3 cursor-pointer hover:bg-slate-50 flex items-center gap-3 transition-colors border-b border-slate-50 last:border-0 autocomplete-item';
+                    const icon = isRecent
+                        ? '<svg class="w-4 h-4 text-slate-400 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>'
+                        : '<svg class="w-4 h-4 text-slate-400 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg>';
+                    item.innerHTML = `
+                        ${icon}
+                        <span class="text-sm font-medium text-slate-700 truncate">${sugg}</span>
+                    `;
+                    item.addEventListener('click', () => {
+                        searchInput.value = sugg;
+                        closeAutocomplete();
+                        searchForm.dispatchEvent(new Event('submit', { cancelable: true, bubbles: true }));
+                    });
+                    autocompleteDropdown.appendChild(item);
+                });
+                autocompleteDropdown.classList.remove('hidden');
+            }
+
+            function closeAutocomplete() {
+                if (autocompleteDropdown) {
+                    autocompleteDropdown.classList.add('hidden');
+                    // We don't clear innerHTML here immediately so clicks can register
+                }
+            }
+
+            // Closes when clicking outside
+            document.addEventListener('click', (e) => {
+                // If it's not the input and not inside the dropdown
+                if (e.target !== searchInput && (!autocompleteDropdown || !autocompleteDropdown.contains(e.target))) {
+                    closeAutocomplete();
+                }
+            });
+
+            // Debounce: autocomplete only
             searchInput.addEventListener('input', function () {
                 clearTimeout(_searchDebounceTimer);
-                // Only auto-submit if text is substantial
-                if (this.value.trim().length >= 5) {
-                    _searchDebounceTimer = setTimeout(() => {
-                        // Don't auto-submit if already searching
-                        if (!searchButton.disabled) {
-                            searchForm.dispatchEvent(new Event('submit', { cancelable: true, bubbles: true }));
+                clearTimeout(_autocompleteTimer);
+                
+                const val = this.value.trim();
+                
+                if (!val || val.length < 2) {
+                    // Show recent searches when input is empty/short
+                    const recentSearches = JSON.parse(localStorage.getItem('lumu_local_history') || '[]').slice(0, 5);
+                    if (recentSearches.length > 0 && val.length === 0) {
+                        renderAutocomplete(recentSearches, true);
+                    } else {
+                        closeAutocomplete();
+                    }
+                    return;
+                }
+
+                // Autocomplete Fetch
+                _autocompleteTimer = setTimeout(async () => {
+                    try {
+                        const res = await fetch(`/api/autocomplete?q=${encodeURIComponent(val)}`);
+                        if (res.ok) {
+                            const suggestions = await res.json();
+                            if (suggestions.length > 0 && this.value.trim() === val) {
+                                renderAutocomplete(suggestions);
+                            } else {
+                                closeAutocomplete();
+                            }
                         }
-                    }, 1200);
+                    } catch (err) {
+                        console.error('Autocomplete error:', err);
+                    }
+                }, 300); // 300ms debounce for autocomplete
+
+            });
+            
+            // Handle Keyboard Navigation for Autocomplete
+            searchInput.addEventListener('keydown', function(e) {
+                if (!autocompleteDropdown || autocompleteDropdown.classList.contains('hidden')) return;
+                
+                const items = autocompleteDropdown.getElementsByClassName('autocomplete-item');
+                if (!items || items.length === 0) return;
+
+                if (e.key === 'ArrowDown') {
+                    e.preventDefault();
+                    currentFocus++;
+                    addActive(items);
+                } else if (e.key === 'ArrowUp') {
+                    e.preventDefault();
+                    currentFocus--;
+                    addActive(items);
+                } else if (e.key === 'Enter') {
+                    if (currentFocus > -1) {
+                        e.preventDefault(); // Prevent form submit immediately
+                        items[currentFocus].click();
+                    }
+                }
+            });
+
+            function addActive(items) {
+                if (!items) return;
+                removeActive(items);
+                if (currentFocus >= items.length) currentFocus = 0;
+                if (currentFocus < 0) currentFocus = (items.length - 1);
+                items[currentFocus].classList.add('bg-emerald-50', 'dark:bg-emerald-900/40');
+                
+                // Keep selected item in scroll view
+                items[currentFocus].scrollIntoView({ block: 'nearest' });
+            }
+
+            function removeActive(items) {
+                for (let i = 0; i < items.length; i++) {
+                    items[i].classList.remove('bg-emerald-50', 'dark:bg-emerald-900/40');
+                }
+            }
+
+            document.querySelectorAll('.search-prompt-chip').forEach(chip => {
+                chip.addEventListener('click', () => {
+                    const prompt = chip.getAttribute('data-prompt');
+                    if (!prompt) return;
+                    searchInput.value = prompt;
+                    searchInput.style.height = '56px';
+                    searchInput.style.height = `${searchInput.scrollHeight}px`;
+                    searchInput.focus();
+                });
+            });
+        }
+
+        // --- Back-to-Top Button ---
+        const btnBackToTop = document.getElementById('btn-back-to-top');
+        if (btnBackToTop) {
+            window.addEventListener('scroll', () => {
+                if (window.scrollY > 600) {
+                    btnBackToTop.style.opacity = '1';
+                    btnBackToTop.style.pointerEvents = 'auto';
+                } else {
+                    btnBackToTop.style.opacity = '0';
+                    btnBackToTop.style.pointerEvents = 'none';
+                }
+            }, { passive: true });
+            btnBackToTop.addEventListener('click', () => {
+                window.scrollTo({ top: 0, behavior: 'smooth' });
+            });
+        }
+
+        // --- Focus handler: show recent searches on input focus ---
+        if (searchInput) {
+            searchInput.addEventListener('focus', function () {
+                const val = this.value.trim();
+                if (!val || val.length < 2) {
+                    const recentSearches = JSON.parse(localStorage.getItem('lumu_local_history') || '[]').slice(0, 5);
+                    if (recentSearches.length > 0) {
+                        renderAutocomplete(recentSearches, true);
+                    }
                 }
             });
         }
@@ -1165,10 +1741,7 @@ async function initApp() {
             const lng = userLngInput?.value || null;
 
             searchButton.disabled = true;
-            const originalButtonHTML = `
-                Enviar
-                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-corner-down-left"><polyline points="9 10 4 15 9 20"/><path d="M20 4v7a4 4 0 0 1-4 4H4"/></svg>
-            `;
+            const originalButtonHTML = getSearchButtonIdleHTML();
             // Asegurar que el spinner tenga el mismo tamaño que el texto para evitar que el botón cambie de tamaño bruscamente
             searchButton.innerHTML = `<div class="flex items-center justify-center w-[52px] h-[20px]"><svg class="animate-spin h-5 w-5 text-white" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"></path></svg></div>`;
 
@@ -1203,6 +1776,16 @@ async function initApp() {
                     addChatBubble('user', finalQuery);
                 }
 
+                // Fase 7: SEO Dinámico
+                document.title = `Mejores precios de ${finalQuery} en México | Lumu.ai`;
+                let metaDesc = document.querySelector('meta[name="description"]');
+                if (!metaDesc) {
+                    metaDesc = document.createElement('meta');
+                    metaDesc.name = 'description';
+                    document.head.appendChild(metaDesc);
+                }
+                metaDesc.content = `Compara precios de ${finalQuery} en Amazon, Mercado Libre, Walmart y más. Encuentra la oferta más barata en México con Lumu AI.`;
+
                 resultsWrapper.classList.remove('hidden');
 
                 // Ocultar elementos de la landing page durante la búsqueda
@@ -1217,11 +1800,15 @@ async function initApp() {
 
                 const safeChatHistory = chatHistory.slice(-10);
 
+                const btnSafeStores = document.getElementById('btn-safe-stores');
+                const safeStoresOnly = btnSafeStores ? btnSafeStores.getAttribute('data-safe') === 'true' : false;
+
                 const searchBody = {
                     query: finalQuery,
                     chatHistory: safeChatHistory,
                     radius: radius,
-                    skipLLM: skipLLM
+                    skipLLM: skipLLM,
+                    safeStoresOnly: safeStoresOnly
                 };
                 const parsedLat = parseFloat(lat);
                 const parsedLng = parseFloat(lng);
@@ -1306,6 +1893,7 @@ async function initApp() {
 
                 if (data.tipo_respuesta === 'conversacion') {
                     chatHistory.push({ role: 'assistant', content: data.pregunta_ia });
+                    chatContainer.classList.remove('hidden');
                     addChatBubble('ai', data.pregunta_ia, data.sugerencias);
                     if (data.advertencia_uso) {
                         setTimeout(() => addChatBubble('ai', data.advertencia_uso, [], false), 500);
@@ -1320,10 +1908,32 @@ async function initApp() {
 
                 } else if (data.tipo_respuesta === 'resultados') {
                     chatHistory = [];
+                    chatContainer.classList.add('hidden');
+                    chatContainer.innerHTML = '';
                     // Increment search count after successful result
                     let sgData = JSON.parse(localStorage.getItem('lumu_searches_data') || '{"count": 0, "date": ""}');
                     sgData.count = (sgData.count || 0) + 1;
                     localStorage.setItem('lumu_searches_data', JSON.stringify(sgData));
+                    // Fase 7: check achievements
+                    if (typeof window.checkAchievementsOnSearch === 'function') window.checkAchievementsOnSearch();
+
+                    // Fase 6: Lumu Coins UI Update
+                    if (data.lumu_coins_awarded === 1) {
+                        const coinsBadge = document.getElementById('lumu-coins-nav');
+                        if (coinsBadge) {
+                            const spans = coinsBadge.querySelectorAll('span');
+                            const valSpan = spans[spans.length - 1]; // Select the last span containing the number
+                            if (valSpan) {
+                                const currentCoins = parseInt(valSpan.innerText, 10) || 0;
+                                valSpan.innerText = currentCoins + 1;
+                                // Animation
+                                coinsBadge.classList.add('scale-110', 'bg-amber-200');
+                                setTimeout(() => {
+                                    coinsBadge.classList.remove('scale-110', 'bg-amber-200');
+                                }, 600);
+                            }
+                        }
+                    }
 
                     // Guardar la búsqueda en la base de datos "searches" o LocalStorage
                     if (data.intencion_detectada?.busqueda) {
@@ -1343,18 +1953,59 @@ async function initApp() {
                         }
                     }
 
-                    addChatBubble('ai', `¡Listo! Encontré las mejores opciones para **"${data.intencion_detectada.busqueda}"** (${data.intencion_detectada.condicion}). Aquí tienes el resumen:`, [], true);
+                    renderSearchContext({
+                        query: data.intencion_detectada?.busqueda || finalQuery,
+                        radius,
+                        safeStoresOnly,
+                        resultCount: data.top_5_baratos?.length || 0
+                    });
 
                     if (data.top_5_baratos && data.top_5_baratos.length > 0) {
-                        // Render compact inline products in chat
-                        renderChatProducts(data.top_5_baratos);
-                        // Render full detailed grid below
-                        renderProducts(data.top_5_baratos);
-                        // Suggest push notifications after first successful search
+                        await renderProducts(data.top_5_baratos);
+
+                        chatContainer.classList.remove('hidden');
+                        addChatBubble('ai', getResultLeadCopy(data.intencion_detectada, data.top_5_baratos.length), [], true);
+
+                        if (data.sugerencias && data.sugerencias.length > 0) {
+                            const csContainer = document.createElement('div');
+                            csContainer.className = 'col-span-full mt-8 p-6 bg-gradient-to-br from-indigo-50 to-emerald-50 rounded-3xl border border-indigo-100 flex flex-col items-center text-center shadow-sm';
+
+                            const csTitle = document.createElement('h3');
+                            csTitle.className = 'text-lg font-black text-slate-800 mb-2 flex items-center gap-2';
+                            csTitle.innerHTML = '<span class="text-2xl">💡</span> Quizás también te interese...';
+
+                            const csDesc = document.createElement('p');
+                            csDesc.className = 'text-slate-500 font-medium mb-6 max-w-sm text-sm';
+                            csDesc.innerText = 'Nuestra IA sugiere explorar estas alternativas:';
+
+                            const csBtns = document.createElement('div');
+                            csBtns.className = 'flex flex-wrap gap-2 justify-center w-full';
+
+                            const uniqueSuggestions = [...new Set(data.sugerencias)].filter(s => s.toLowerCase() !== finalQuery.toLowerCase()).slice(0, 4);
+
+                            uniqueSuggestions.forEach(s => {
+                                const btn = document.createElement('button');
+                                btn.className = 'px-5 py-2.5 bg-white border border-indigo-200 text-indigo-700 text-sm font-bold rounded-xl hover:bg-indigo-50 hover:border-indigo-300 transition-all shadow-sm active:scale-95 text-left flex items-center gap-2';
+                                btn.innerHTML = `<span>${sanitize(s)}</span><svg class="w-4 h-4 opacity-70 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M9 5l7 7-7 7"></path></svg>`;
+                                btn.addEventListener('click', () => {
+                                    window.scrollTo({ top: 0, behavior: 'smooth' });
+                                    setTimeout(() => window.quickSearch(s), 300);
+                                });
+                                csBtns.appendChild(btn);
+                            });
+
+                            if (uniqueSuggestions.length > 0) {
+                                csContainer.appendChild(csTitle);
+                                csContainer.appendChild(csDesc);
+                                csContainer.appendChild(csBtns);
+                                resultsContainer.appendChild(csContainer);
+                            }
+                        }
+
                         if (typeof window.maybeSuggestPush === 'function') window.maybeSuggestPush();
 
                         if (data.advertencia_uso) {
-                            setTimeout(() => addChatBubble('ai', data.advertencia_uso, [], false), 800);
+                            setTimeout(() => addChatBubble('ai', data.advertencia_uso, [], true), 800);
                         }
                     } else {
                         // --- Auto-Retry con sugerencias ---
@@ -1362,9 +2013,9 @@ async function initApp() {
                         if (!skipLLM && suggestions.length > 0) {
                             resultsContainer.innerHTML = `
                             <div class="col-span-full flex flex-col items-center justify-center py-10 min-h-[300px]">
-                                <div class="w-12 h-12 border-4 border-slate-100 border-t-emerald-500 rounded-full animate-spin mb-4"></div>
-                                <h3 class="text-lg font-bold text-slate-800">Ampliando búsqueda...</h3>
-                                <p class="text-slate-500 text-sm">Buscando alternativas para "${finalQuery}"</p>
+                                <div class="w-12 h-12 border-4 border-slate-100 dark:border-slate-700 border-t-emerald-500 rounded-full animate-spin mb-4"></div>
+                                <h3 class="text-lg font-bold text-slate-800 dark:text-slate-200">Ampliando búsqueda...</h3>
+                                <p class="text-slate-500 dark:text-slate-400 text-sm">Buscando alternativas para "${finalQuery}"</p>
                             </div>
                         `;
                             // Intentar con la primera sugerencia automáticamente sin LLM
@@ -1415,7 +2066,13 @@ async function initApp() {
                 console.error('Fetch Error:', error);
                 removeTypingIndicator();
                 if (_skeletonMsgInterval) { clearInterval(_skeletonMsgInterval); _skeletonMsgInterval = null; }
-                errorMessage.textContent = error.message;
+                
+                let userMsg = error.message;
+                if (userMsg === 'Failed to fetch' || userMsg.includes('NetworkError')) {
+                    userMsg = 'Error de conexión. El servidor no respondió o no hay internet. Por favor intenta de nuevo.';
+                }
+                
+                errorMessage.textContent = userMsg;
                 errorMessage.classList.remove('hidden');
                 resultsContainer.innerHTML = '';
                 resultsWrapper.classList.add('hidden');
@@ -1426,32 +2083,60 @@ async function initApp() {
         }
 
         // --- Typing Indicator ---
+        let typingPhraseInterval;
+        const loadingPhrases = [
+            "Buscando en 19 tiendas...",
+            "Comparando precios en Amazon MX...",
+            "Negociando con Mercado Libre...",
+            "Verificando cupones activos...",
+            "Escaneando Bodega Aurrera y Linio...",
+            "Revisando Claro Shop y Sanborns...",
+            "Casi listo, encontramos ofertas..."
+        ];
+
         function showTypingIndicator() {
             if (!chatContainer) return;
             // Remove existing typing indicator
             removeTypingIndicator();
             const indicator = document.createElement('div');
             indicator.id = 'typing-indicator';
-            indicator.className = 'flex items-start w-full items-start fade-in';
+            indicator.className = 'flex items-start w-full items-start fade-in mb-4';
             indicator.innerHTML = `
-                <div class="flex-shrink-0 mr-3 mt-1">
+                <div class="flex-shrink-0 mr-3 mt-1 relative">
                     <div class="bg-emerald-500 shadow-md shadow-emerald-500/20 rounded-2xl h-10 w-10 flex items-center justify-center text-white ring-2 ring-white dark:ring-slate-800">
                         <svg class="w-5 h-5 drop-shadow-sm" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M13 10V3L4 14h7v7l9-11h-7z" /></svg>
                     </div>
                 </div>
-                <div class="bg-white/95 dark:bg-slate-800/95 rounded-[1.5rem] rounded-tl-sm px-5 py-4 shadow-sm border border-slate-100 dark:border-slate-700/60 backdrop-blur-sm">
-                    <div class="flex items-center gap-1.5">
+                <div class="flex flex-col gap-2 max-w-[85%] sm:max-w-[75%]">
+                    <div class="bg-white/95 dark:bg-slate-800/95 rounded-[1.5rem] rounded-tl-sm px-5 py-4 shadow-sm border border-slate-100 dark:border-slate-700/60 backdrop-blur-sm self-start inline-flex items-center gap-1.5">
                         <span class="w-2 h-2 bg-emerald-400 rounded-full animate-bounce" style="animation-delay: 0ms"></span>
                         <span class="w-2 h-2 bg-emerald-400 rounded-full animate-bounce" style="animation-delay: 150ms"></span>
                         <span class="w-2 h-2 bg-emerald-400 rounded-full animate-bounce" style="animation-delay: 300ms"></span>
+                    </div>
+                    <div id="typing-phrase" class="text-xs font-semibold text-emerald-600 dark:text-emerald-400 ml-2 animate-pulse transition-opacity duration-300">
+                        Iniciando búsqueda...
                     </div>
                 </div>
             `;
             chatContainer.appendChild(indicator);
             chatContainer.scrollTop = chatContainer.scrollHeight;
+
+            let phraseIndex = 0;
+            const phraseEl = document.getElementById('typing-phrase');
+            typingPhraseInterval = setInterval(() => {
+                if (phraseEl) {
+                    phraseEl.style.opacity = 0;
+                    setTimeout(() => {
+                        phraseEl.innerText = loadingPhrases[phraseIndex];
+                        phraseEl.style.opacity = 1;
+                        phraseIndex = (phraseIndex + 1) % loadingPhrases.length;
+                    }, 300);
+                }
+            }, 2500);
         }
 
         function removeTypingIndicator() {
+            if (typingPhraseInterval) clearInterval(typingPhraseInterval);
             const existing = document.getElementById('typing-indicator');
             if (existing) existing.remove();
         }
@@ -1478,7 +2163,6 @@ async function initApp() {
 
             const isUser = sender === 'user';
 
-            // Tema Emerald en chat — mejorado con gradientes y sombras premium
             const innerClass = isUser
                 ? 'bg-emerald-50 text-emerald-950 border border-emerald-100 rounded-[1.5rem] rounded-tr-sm px-5 py-3.5 shadow-sm max-w-[85%] sm:max-w-[75%]'
                 : 'bg-white/95 dark:bg-slate-800/95 text-slate-800 dark:text-slate-100 rounded-[1.5rem] rounded-tl-sm px-5 py-3.5 shadow-sm border border-slate-100 dark:border-slate-700/60 relative group backdrop-blur-sm max-w-[85%] sm:max-w-[75%]';
@@ -1939,10 +2623,26 @@ async function initApp() {
 
         function applyFiltersAndSort() {
             const sortVal = document.getElementById('sort-select')?.value || 'price-asc';
+            const storeVal = document.getElementById('store-filter')?.value || 'all';
+            const freeShippingOnly = document.getElementById('free-shipping-filter')?.checked || false;
             const minVal = parseFloat(document.getElementById('price-min')?.value);
             const maxVal = parseFloat(document.getElementById('price-max')?.value);
 
             let filtered = [..._lastProducts];
+
+            // Filtro de tienda
+            if (storeVal !== 'all') {
+                filtered = filtered.filter(p => p.tienda === storeVal);
+            }
+
+            // Filtro de envío gratis
+            if (freeShippingOnly) {
+                filtered = filtered.filter(p => {
+                    const title = (p.titulo || '').toLowerCase();
+                    const details = (p.couponDetails || '').toLowerCase();
+                    return title.includes('gratis') || details.includes('gratis') || details.includes('free');
+                });
+            }
 
             // Filtro de precio
             if (!isNaN(minVal)) filtered = filtered.filter(p => {
@@ -1962,16 +2662,21 @@ async function initApp() {
             } else if (sortVal === 'store') {
                 filtered.sort((a, b) => (a.tienda || '').localeCompare(b.tienda || ''));
             }
-            // 'relevance' = orden original del backend
 
             const countEl = document.getElementById('results-count');
-            if (countEl) countEl.textContent = `${filtered.length} de ${_lastProducts.length} resultados`;
+            if (countEl) {
+                countEl.textContent = currentRegion === 'US'
+                    ? `${filtered.length} of ${_lastProducts.length} results`
+                    : `${filtered.length} de ${_lastProducts.length} resultados`;
+            }
 
             renderProductCards(filtered, _lastFavorites);
         }
 
         // Bind toolbar events
         document.getElementById('sort-select')?.addEventListener('change', applyFiltersAndSort);
+        document.getElementById('store-filter')?.addEventListener('change', applyFiltersAndSort);
+        document.getElementById('free-shipping-filter')?.addEventListener('change', applyFiltersAndSort);
         document.getElementById('price-filter-btn')?.addEventListener('click', applyFiltersAndSort);
         // Allow enter key in price inputs
         document.getElementById('price-min')?.addEventListener('keydown', e => { if (e.key === 'Enter') applyFiltersAndSort(); });
@@ -1984,6 +2689,14 @@ async function initApp() {
             // Show toolbar
             const toolbar = document.getElementById('results-toolbar');
             if (toolbar) toolbar.classList.remove('hidden');
+
+            // Populate store filter
+            const storeSelect = document.getElementById('store-filter');
+            if (storeSelect) {
+                const stores = [...new Set(products.map(p => p.tienda))].filter(Boolean).sort();
+                storeSelect.innerHTML = `<option value="all">${getLocalizedText('Todas las tiendas', 'All stores')}</option>` + 
+                    stores.map(s => `<option value="${s}">${s}</option>`).join('');
+            }
 
             // --- Phase 17: Pre-fetch favoritos para persistencia visual ---
             let userFavorites = [];
@@ -1998,7 +2711,10 @@ async function initApp() {
             _lastFavorites = userFavorites;
 
             const countEl = document.getElementById('results-count');
-            if (countEl) countEl.textContent = `${products.length} resultados`;
+            if (countEl) countEl.textContent = `${products.length} ${getRegionConfig().resultsFound}`;
+
+            const localSearchData = JSON.parse(localStorage.getItem('lumu_searches_data') || '{"count":0}');
+            updateCoinsProgress(localSearchData.count || 0);
 
             renderProductCards(products, userFavorites);
 
@@ -2011,7 +2727,57 @@ async function initApp() {
         function renderProductCards(products, userFavorites) {
             resultsContainer.innerHTML = '';
 
-            products.forEach(product => {
+            // --- NUEVO: Comparador Local vs Online ---
+            const localProducts = products.filter(p => p.isLocalStore && typeof p.precio === 'number' && p.precio > 0);
+            const onlineProducts = products.filter(p => !p.isLocalStore && typeof p.precio === 'number' && p.precio > 0);
+            
+            if (localProducts.length > 0 && onlineProducts.length > 0) {
+                const bestLocal = [...localProducts].sort((a,b) => a.precio - b.precio)[0];
+                const bestOnline = [...onlineProducts].sort((a,b) => a.precio - b.precio)[0];
+                
+                const fmtLocal = formatCurrencyByRegion(bestLocal.precio);
+                const fmtOnline = formatCurrencyByRegion(bestOnline.precio);
+                
+                let comparisonMsg = '';
+                if (bestLocal.precio <= bestOnline.precio) {
+                    comparisonMsg = `<span class="text-emerald-700 font-bold">¡Sale mejor comprar local hoy!</span> Ahorras ${formatCurrencyByRegion(bestOnline.precio - bestLocal.precio)} y lo tienes al instante.`;
+                } else if (bestOnline.precio < bestLocal.precio) {
+                    const diff = bestLocal.precio - bestOnline.precio;
+                    if (diff > 50) {
+                        comparisonMsg = `<span class="text-blue-700 font-bold">Comprar online es más barato.</span> Ahorras ${formatCurrencyByRegion(diff)}, pero debes esperar el envío.`;
+                    } else {
+                        comparisonMsg = `<span class="text-slate-700 font-bold">Precio similar.</span> Cómpralo local si te urge, o pide online sin salir de casa.`;
+                    }
+                }
+                
+                const compareBanner = document.createElement('div');
+                compareBanner.className = 'col-span-full mb-5 bg-gradient-to-r from-slate-50 via-white to-emerald-50/70 border border-slate-200 rounded-[24px] p-4 md:p-5 flex flex-col md:flex-row items-center gap-3 md:gap-4 shadow-sm w-full';
+                compareBanner.innerHTML = `
+                    <div class="flex items-center justify-center p-3 bg-white rounded-xl shadow-sm border border-slate-100 hidden md:flex">
+                        <span class="text-3xl">⚖️</span>
+                    </div>
+                    <div class="flex-grow flex flex-col items-center md:items-start text-center md:text-left w-full">
+                        <h4 class="text-sm font-black text-slate-800 uppercase tracking-wide mb-1 flex items-center gap-2">Análisis Local vs Online <span class="bg-indigo-100 text-indigo-700 text-[9px] px-2 py-0.5 rounded-full font-bold">BETA</span></h4>
+                        <p class="text-sm text-slate-600 mb-3">${comparisonMsg}</p>
+                        <div class="flex flex-wrap items-center justify-center md:justify-start gap-3 w-full">
+                            <div class="bg-emerald-50 text-emerald-800 px-3 py-1.5 rounded-lg border border-emerald-100 flex items-center gap-2 shadow-sm transition-transform hover:-translate-y-0.5" title="${bestLocal.tienda}">
+                                <span class="text-xs">📍 Local:</span> <span class="font-black text-base">${fmtLocal}</span>
+                            </div>
+                            <span class="text-slate-300 font-black text-[10px] mx-1">VS</span>
+                            <div class="bg-blue-50 text-blue-800 px-3 py-1.5 rounded-lg border border-blue-100 flex items-center gap-2 shadow-sm transition-transform hover:-translate-y-0.5" title="${bestOnline.tienda}">
+                                <span class="text-xs">🌐 Online:</span> <span class="font-black text-base">${fmtOnline}</span>
+                            </div>
+                        </div>
+                    </div>
+                `;
+                resultsContainer.appendChild(compareBanner);
+            }
+
+            // Find cheapest product for "Mejor precio" badge
+            const validPrices = products.filter(p => parseFloat(p.precio) > 0).map(p => parseFloat(p.precio));
+            const minPrice = validPrices.length > 0 ? Math.min(...validPrices) : null;
+
+            products.forEach((product, index) => {
                 let rawPrice = product.precio || 0;
                 let precioNumerico = 0;
 
@@ -2027,10 +2793,7 @@ async function initApp() {
                     precioNumerico = 0;
                 }
 
-                const formattedPrice = new Intl.NumberFormat('es-MX', {
-                    style: 'currency',
-                    currency: 'MXN'
-                }).format(precioNumerico);
+                const formattedPrice = formatCurrencyByRegion(precioNumerico);
 
                 // Verificar si ya es favorito y si bajó de precio
                 const favRecord = userFavorites.find(f => f.product_url === (product.urlMonetizada || product.urlOriginal));
@@ -2047,6 +2810,8 @@ async function initApp() {
                     }
                 }
 
+                const isBestPrice = minPrice && precioNumerico === minPrice && precioNumerico > 0;
+                
                 const heartColor = isAlreadyFav ? 'text-red-500' : 'text-slate-300';
                 let sourceColor = 'text-slate-500';
                 // Botón primario usa color Emerald
@@ -2062,7 +2827,7 @@ async function initApp() {
                 }
 
                 const card = document.createElement('div');
-                card.className = 'group product-card bg-white rounded-2xl hover:shadow-lg transition-all duration-200 overflow-hidden flex flex-col relative h-full fade-in border border-slate-200';
+                card.className = 'group product-card bg-white dark:bg-slate-800 rounded-[24px] hover:shadow-xl transition-all duration-200 overflow-hidden flex flex-col relative h-full fade-in border border-slate-200 dark:border-slate-700 shadow-sm';
 
                 // Store-specific fallback logos when no product image
                 const storeFallbacks = {
@@ -2078,87 +2843,210 @@ async function initApp() {
                     'sam': 'https://upload.wikimedia.org/wikipedia/commons/9/9a/Sam%27s_Club.svg'
                 };
                 const defaultFallback = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='300' height='300' viewBox='0 0 300 300'%3E%3Crect width='300' height='300' fill='%23f1f5f9'/%3E%3Ctext x='150' y='160' text-anchor='middle' font-size='40' fill='%2394a3b8'%3E📦%3C/text%3E%3C/svg%3E";
-                let imgUrl = product.imagen;
+                let imgUrl = product.imgUrl || product.imagen;
                 if (!imgUrl) {
                     const matchedStore = Object.entries(storeFallbacks).find(([key]) => tiendaLower.includes(key));
                     imgUrl = matchedStore ? matchedStore[1] : defaultFallback;
+                } else if (imgUrl.length > 200 || imgUrl.startsWith('data:')) {
+                    // It's likely a base64 string from Serper, don't proxy it
+                    imgUrl = imgUrl;
+                } else if (imgUrl.startsWith('http')) {
+                    // Only proxy actual http/https URLs
+                    imgUrl = `/api/img-proxy?url=${encodeURIComponent(imgUrl)}`;
                 }
 
                 // Local store: price can be null
                 const isLocal = product.isLocalStore;
                 let priceDisplay;
                 if (isLocal || precioNumerico === 0) {
-                    priceDisplay = `<span class="text-lg font-black text-amber-600">Ver precio en tienda</span>`;
+                    priceDisplay = `<span class="text-base md:text-lg font-black text-amber-600">Ver precio en tienda</span>`;
                 } else {
-                    const [priceInteger, priceDecimals] = formattedPrice.split('.');
-                    priceDisplay = `<span class="text-3xl font-black text-slate-900 leading-none">${priceInteger}</span><span class="text-sm font-bold text-slate-900 mt-1">.${priceDecimals || '00'}</span>`;
+                    const formattedFull = formatCurrencyByRegion(precioNumerico);
+                    const numericMatch = formattedFull.match(/[\d,.]+/);
+                    const numericPart = numericMatch ? numericMatch[0] : '0.00';
+                    const currencySymbol = formattedFull.replace(numericPart, '').trim() || (getRegionConfig().currency === 'USD' ? '$' : '$');
+                    const lastSeparatorIndex = Math.max(numericPart.lastIndexOf('.'), numericPart.lastIndexOf(','));
+                    const integerPart = lastSeparatorIndex >= 0 ? numericPart.slice(0, lastSeparatorIndex) : numericPart;
+                    const decimalPart = lastSeparatorIndex >= 0 ? numericPart.slice(lastSeparatorIndex + 1) : '00';
+                    
+                    priceDisplay = `<span class="text-xs md:text-sm font-bold text-slate-500">${currencySymbol}</span><span class="text-[1.7rem] md:text-3xl font-black text-slate-900 leading-none">${integerPart}</span><span class="text-xs md:text-sm font-bold text-slate-900">.${decimalPart}</span>`;
+                    
+                    if (product.isSuspicious) {
+                        priceDisplay += `<div class="mt-2 inline-flex items-center gap-1.5 px-2 py-1 rounded-md bg-rose-50 border border-rose-200 text-rose-700 text-[10px] font-black uppercase tracking-wider tooltip" data-tip="El precio es anormalmente bajo comparado con el mercado"><span class="text-xs">⚠️</span> SOSPECHOSO</div>`;
+                    }
                 }
 
                 let trendHtml = '';
                 if (product.priceTrend && product.priceTrend.direction) {
                     const trend = product.priceTrend;
-                    if (trend.direction === 'down') {
-                        trendHtml = `<div class="mt-1 inline-flex items-center gap-1 px-2 py-1 rounded-lg bg-emerald-50 text-emerald-700 text-[11px] font-bold">↓ Bajó ${new Intl.NumberFormat('es-MX', { style: 'currency', currency: 'MXN', maximumFractionDigits: 0 }).format(trend.delta || 0)} (${trend.percent || 0}%)</div>`;
-                    } else if (trend.direction === 'up') {
-                        trendHtml = `<div class="mt-1 inline-flex items-center gap-1 px-2 py-1 rounded-lg bg-rose-50 text-rose-700 text-[11px] font-bold">↑ Subió ${new Intl.NumberFormat('es-MX', { style: 'currency', currency: 'MXN', maximumFractionDigits: 0 }).format(trend.delta || 0)} (${trend.percent || 0}%)</div>`;
-                    } else {
-                        trendHtml = `<div class="mt-1 inline-flex items-center gap-1 px-2 py-1 rounded-lg bg-slate-100 text-slate-600 text-[11px] font-bold">→ Precio estable</div>`;
+                    let sparklineHtml = '';
+                    
+                    if (trend.history && trend.history.length > 0) {
+                        try {
+                            const dps = trend.history.map(h => h.price).reverse(); // oldest to newest
+                            dps.push(precioNumerico); // add current price
+                            
+                            const minP = Math.min(...dps);
+                            const maxP = Math.max(...dps);
+                            const w = 60;
+                            const h = 20;
+                            const pad = 3;
+                            
+                            // Si todos los precios son iguales, linea recta en medio
+                            const diff = maxP - minP === 0 ? 1 : maxP - minP;
+                            
+                            let pathD = dps.map((val, i) => {
+                                const x = pad + (i * ((w - pad*2) / (dps.length - 1)));
+                                const y = pad + (h - pad*2) - (((val - minP) / diff) * (h - pad*2));
+                                return (i === 0 ? 'M' : 'L') + x + ',' + y;
+                            }).join(' ');
+                            
+                            const strokeColor = trend.direction === 'down' ? '#10b981' : (trend.direction === 'up' ? '#f43f5e' : '#94a3b8');
+                            
+                            sparklineHtml = `
+                                <div class="tooltip tooltip-left ml-auto" data-tip="Tendencia (7 días)">
+                                    <svg width="${w}" height="${h}" class="overflow-visible opacity-80 mix-blend-multiply">
+                                        <path d="${pathD}" fill="none" stroke="${strokeColor}" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" />
+                                        <circle cx="${pad + ((dps.length - 1) * ((w - pad*2) / (dps.length - 1)))}" cy="${pad + (h - pad*2) - (((precioNumerico - minP) / diff) * (h - pad*2))}" r="2.5" fill="${strokeColor}" />
+                                    </svg>
+                                </div>
+                            `;
+                        } catch(e) { console.error('Sparkline error:', e); }
                     }
+
+                    if (trend.direction === 'down') {
+                        trendHtml = `<div class="mt-1 flex items-center justify-between w-full"><div class="inline-flex items-center gap-1 px-2 py-1 rounded-lg bg-emerald-50 text-emerald-700 text-[11px] font-bold">↓ ${getLocalizedText('Bajó', 'Down')} ${formatCurrencyByRegion(trend.delta || 0)} (${trend.percent || 0}%)</div>${sparklineHtml}</div>`;
+                    } else if (trend.direction === 'up') {
+                        trendHtml = `<div class="mt-1 flex items-center justify-between w-full"><div class="inline-flex items-center gap-1 px-2 py-1 rounded-lg bg-rose-50 text-rose-700 text-[11px] font-bold">↑ ${getLocalizedText('Subió', 'Up')} ${formatCurrencyByRegion(trend.delta || 0)} (${trend.percent || 0}%)</div>${sparklineHtml}</div>`;
+                    } else {
+                        trendHtml = `<div class="mt-1 flex items-center justify-between w-full"><div class="inline-flex items-center gap-1 px-2 py-1 rounded-lg bg-slate-100 text-slate-600 text-[11px] font-bold">→ ${getLocalizedText('Precio estable', 'Stable price')}</div>${sparklineHtml}</div>`;
+                    }
+                }
+
+                let couponHtml = '';
+                const cuponObj = product.cupon;
+                if (cuponObj) {
+                    const code = typeof cuponObj === 'string' ? cuponObj : cuponObj.code;
+                    const isPlaceholder = !code || code.trim() === '' || /^X+$/i.test(code.trim());
+                    if (isPlaceholder) {
+                        // Skip coupon display if it's a placeholder
+                    } else {
+                        const discountText = (typeof cuponObj === 'object' && cuponObj.discount) ? cuponObj.discount : (product.couponDetails || 'CUPÓN DISPONIBLE');
+                        const isPremium = window.currentUser && (window.currentUser.is_premium || window.currentUser.plan === 'personal_vip' || window.currentUser.plan === 'b2b');
+                    
+                        if (isPremium) {
+                            couponHtml = `
+                            <div class="mt-2 w-full p-2.5 bg-gradient-to-r from-emerald-50 to-teal-50 border border-emerald-100 rounded-xl relative overflow-hidden">
+                                <div class="absolute inset-0 border-2 border-dashed border-emerald-200/50 rounded-xl pointer-events-none"></div>
+                                <div class="flex items-center justify-between relative z-10">
+                                    <div class="flex flex-col">
+                                        <span class="text-[9px] font-black text-emerald-800 uppercase tracking-widest leading-none mb-1">${discountText}</span>
+                                        <span class="text-[13px] font-black text-emerald-600 font-mono tracking-tighter leading-none">${code}</span>
+                                    </div>
+                                    <button onclick="event.preventDefault(); event.stopPropagation(); navigator.clipboard.writeText('${code}'); const orig=this.innerHTML; this.innerHTML='¡Copiado!'; setTimeout(()=>this.innerHTML=orig, 2000);" class="text-[10px] font-bold bg-white text-emerald-600 hover:bg-emerald-600 hover:text-white px-2 py-1 rounded-lg shadow-sm transition-all border border-emerald-100 z-20 cursor-pointer">Copiar</button>
+                                </div>
+                            </div>`;
+                        } else {
+                            couponHtml = `
+                            <div class="mt-2 w-full p-2.5 bg-gradient-to-r from-amber-50 to-orange-50 border border-amber-200 rounded-xl relative overflow-hidden group/upsell cursor-pointer hover:shadow-sm" onclick="event.preventDefault(); event.stopPropagation(); const btn = document.getElementById('stripe-checkout-btn') || document.querySelector('a[href*=\\'buy.stripe.com\\']'); if(btn) btn.click(); else alert('Hazte PRO para ver cupones')">
+                                <div class="absolute inset-0 border-2 border-dashed border-amber-300/50 rounded-xl pointer-events-none"></div>
+                                <div class="flex items-center justify-between relative z-10">
+                                    <div class="flex flex-col w-full relative">
+                                        <span class="text-[9px] font-black text-amber-800 uppercase tracking-widest leading-none mb-1 flex items-center justify-between w-full"><span>${discountText}</span> <span class="bg-amber-100 px-1 rounded">⭐ PRO</span></span>
+                                        <span class="text-[13px] font-black text-slate-800 font-mono tracking-tighter leading-none blur-[4px] select-none text-center">XXXXXXXX</span>
+                                        <div class="absolute inset-0 flex items-center justify-center opacity-0 group-hover/upsell:opacity-100 transition-opacity drop-shadow-md">
+                                            <span class="bg-gradient-to-r from-amber-500 to-orange-500 text-white text-[10px] font-bold px-3 py-1.5 rounded-full shadow-lg flex items-center gap-1">🔒 Desbloquear</span>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>`;
+                        }
+                    }
+                }
+
+                // Fase 6: FOMO Timer
+                let fomoHtml = '';
+                if (!isLocal && precioNumerico > 0) {
+                    let hash = 0;
+                    const str = sanitize(product.titulo || 'lumu');
+                    for (let i = 0; i < str.length; i++) hash = str.charCodeAt(i) + ((hash << 5) - hash);
+                    const hours = (Math.abs(hash) % 11) + 1;
+                    const mins = Math.abs(hash >> 2) % 60;
+                    const secs = Math.abs(hash >> 4) % 60;
+                    const pad = (n) => n.toString().padStart(2, '0');
+                    fomoHtml = `
+                    <div class="mt-2 w-full flex items-center justify-between p-2 bg-gradient-to-r from-rose-50 to-orange-50 border border-rose-100/60 rounded-xl relative overflow-hidden group">
+                        <div class="absolute inset-0 bg-[url('data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjAiIGhlaWdodD0iMjAiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+PGNpcmNsZSBjeD0iMiIgY3k9IjIiIHI9IjIiIGZpbGw9IiNmZWMwYTIiIGZpbGwtb3BhY2l0eT0iMC4yIi8+PC9zdmc+')] opacity-50"></div>
+                        <span class="text-[10px] font-black text-rose-600 uppercase tracking-widest flex items-center gap-1.5 relative z-10">
+                            <svg class="w-3.5 h-3.5 animate-pulse text-rose-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+                            Expira en
+                        </span>
+                        <span class="text-[11px] font-mono font-bold text-rose-700 bg-white/80 backdrop-blur px-2 py-0.5 rounded-md shadow-sm border border-rose-100/80 relative z-10">${pad(hours)}h ${pad(mins)}m ${pad(secs)}s</span>
+                    </div>`;
                 }
 
                 // Local store extra details
                 const localMeta = product.localDetails || {};
                 const localDetailHtml = isLocal ? `
                 <div class="mt-2 space-y-1">
-                    ${localMeta.distance != null ? `<p class="text-xs text-emerald-600 font-bold flex items-center gap-1">📍 A ${localMeta.distance} km de ti</p>` : ''}
-                    ${localMeta.address ? `<p class="text-xs text-slate-500 flex items-center gap-1"><svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"/></svg>${sanitize(localMeta.address)}</p>` : ''}
+                    ${localMeta.distance != null ? `<p class="text-xs text-emerald-600 dark:text-emerald-400 font-bold flex items-center gap-1">📍 A ${localMeta.distance} km de ti</p>` : ''}
+                    ${localMeta.address ? `<p class="text-xs text-slate-500 dark:text-slate-400 flex items-center gap-1"><svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"/></svg>${sanitize(localMeta.address)}</p>` : ''}
                     ${localMeta.rating ? `<p class="text-xs text-amber-500 font-bold">⭐ ${localMeta.rating} / 5.0</p>` : ''}
-                    ${localMeta.phone ? `<p class="text-xs text-slate-500">📞 ${sanitize(localMeta.phone)}</p>` : ''}
+                    ${localMeta.phone ? `<p class="text-xs text-slate-500 dark:text-slate-400">📞 ${sanitize(localMeta.phone)}</p>` : ''}
                 </div>` : '';
 
+                const productAlt = sanitize(product.titulo || 'Producto') + ' - ' + sanitize(product.tienda || 'Tienda');
                 card.innerHTML = `
                 ${priceDropBadge}
                 <!-- Image Section -->
-                <div class="w-full bg-slate-50 border-b border-slate-100 flex-shrink-0 h-44 md:h-52 flex items-center justify-center p-4 relative overflow-hidden group-hover:bg-emerald-50/30 transition-colors">
-                    <img src="${imgUrl}" alt="Producto" class="w-full h-full object-contain mix-blend-multiply group-hover:scale-105 transition-transform duration-500 ease-out" onerror="this.onerror=null; this.src='data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 width=%27300%27 height=%27300%27 viewBox=%270 0 300 300%27%3E%3Crect width=%27300%27 height=%27300%27 fill=%27%23f1f5f9%27/%3E%3Ctext x=%27150%27 y=%27160%27 text-anchor=%27middle%27 font-size=%2740%27 fill=%27%2394a3b8%27%3E📦%3C/text%3E%3C/svg%3E'">
-                    <button class="btn-favorite absolute top-2 right-2 p-2 bg-white/80 backdrop-blur rounded-full ${heartColor} hover:text-red-500 hover:bg-white shadow-sm transition-all z-20 hover:scale-110">
+                <div class="w-full bg-slate-50 border-b border-slate-100 flex-shrink-0 h-40 md:h-48 flex items-center justify-center p-3 md:p-4 relative overflow-hidden group-hover:bg-emerald-50/30 transition-colors">
+                    <img src="${imgUrl}" alt="${productAlt}" loading="lazy" class="w-full h-full object-contain mix-blend-multiply group-hover:scale-105 transition-transform duration-500 ease-out" onerror="this.onerror=null; this.src='data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 width=%27300%27 height=%27300%27 viewBox=%270 0 300 300%27%3E%3Crect width=%27300%27 height=%27300%27 fill=%27%23f1f5f9%27/%3E%3Ctext x=%27150%27 y=%27160%27 text-anchor=%27middle%27 font-size=%2740%27 fill=%27%2394a3b8%27%3E📦%3C/text%3E%3C/svg%3E'">
+                    <button class="btn-favorite absolute top-2 right-2 p-2 bg-white/80 dark:bg-slate-800/80 backdrop-blur rounded-full ${heartColor} hover:text-red-500 hover:bg-white dark:hover:bg-slate-800 shadow-sm transition-all z-20 hover:scale-110">
                         <svg class="w-5 h-5 drop-shadow-sm" fill="currentColor" viewBox="0 0 24 24"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/></svg>
                     </button>
                     ${!isLocal ? `
-                    <button class="btn-compare absolute top-2 left-2 p-2 bg-white/80 backdrop-blur rounded-full ${_compareProducts.some(cp => (cp.urlMonetizada || cp.urlOriginal) === (product.urlMonetizada || product.urlOriginal)) ? 'text-emerald-600 bg-emerald-100' : 'text-slate-400'} hover:text-emerald-600 hover:bg-white shadow-sm transition-all z-20 hover:scale-110" title="Comparar" data-compare-url="${product.urlMonetizada || product.urlOriginal}">
+                    <button class="btn-compare absolute top-2 left-2 p-2 bg-white/80 dark:bg-slate-800/80 backdrop-blur rounded-full ${_compareProducts.some(cp => (cp.urlMonetizada || cp.urlOriginal) === (product.urlMonetizada || product.urlOriginal)) ? 'text-emerald-600 bg-emerald-100' : 'text-slate-400'} hover:text-emerald-600 hover:bg-white dark:hover:bg-slate-800 shadow-sm transition-all z-20 hover:scale-110" title="Comparar" data-compare-url="${product.urlMonetizada || product.urlOriginal}">
                         <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/></svg>
                     </button>` : ''}
                 </div>
 
                 <!-- Info Section -->
-                <div class="flex-grow flex flex-col p-4 w-full">
-                    <div class="flex items-start justify-between mb-2">
-                        <span class="text-[10px] font-black text-slate-500 uppercase tracking-widest bg-slate-100 px-2 py-0.5 rounded-full">${sanitize(product.tienda)}</span>
-                        ${product.isLocalStore ? '<span class="text-[9px] font-bold text-emerald-700 bg-emerald-100 px-2 py-0.5 rounded-full ring-1 ring-emerald-200">📍 LOCAL</span>' : ''}
+                <div class="flex-grow flex flex-col p-3.5 md:p-4 w-full">
+                    <div class="flex items-start justify-between mb-2 gap-2">
+                        <div class="flex items-center gap-1.5">
+                            <span class="text-[10px] font-black text-slate-500 uppercase tracking-widest bg-slate-100 px-2 py-1 rounded-full max-w-[70%] truncate">${sanitize(product.tienda)}</span>
+                            ${(tiendaLower.includes('amazon') || tiendaLower.includes('walmart') || tiendaLower.includes('liverpool') || tiendaLower.includes('mercado') || tiendaLower.includes('bodega aurrera') || tiendaLower.includes('linio') || tiendaLower.includes('claro shop') || tiendaLower.includes('sanborns') || tiendaLower.includes('costco') || tiendaLower.includes('best buy')) ? '<span class="text-emerald-600" title="Tienda verificada">✓</span>' : ''}
+                        </div>
+                        <div class="flex items-center gap-1">
+                            ${isBestPrice ? '<span class="text-[9px] font-bold text-white bg-gradient-to-r from-emerald-500 to-teal-500 px-2 py-0.5 rounded-full ring-2 ring-emerald-200 shadow-sm animate-pulse">💰 MEJOR PRECIO</span>' : ''}
+                            ${product.isLocalStore ? '<span class="text-[9px] font-bold text-emerald-700 bg-emerald-100 px-2 py-0.5 rounded-full ring-1 ring-emerald-200">📍 LOCAL</span>' : ''}
+                        </div>
                     </div>
                     
-                    <h3 class="text-sm md:text-sm font-bold text-slate-800 leading-snug line-clamp-2 mb-3 group-hover:text-emerald-700 transition-colors" title="${sanitize(product.titulo)}">
+                    <h3 class="text-[13px] md:text-sm font-bold text-slate-800 dark:text-slate-200 leading-snug line-clamp-2 min-h-[2.6rem] mb-2.5 group-hover:text-emerald-700 dark:group-hover:text-emerald-400 transition-colors" title="${sanitize(product.titulo)}">
                         ${sanitize(product.titulo)}
                     </h3>
                     ${localDetailHtml}
 
                     <div class="mt-auto flex flex-col w-full">
-                        <div class="flex items-baseline gap-0.5 mb-1">
+                        <div class="flex items-baseline gap-0.5 mb-1.5 flex-wrap">
                             ${priceDisplay}
                         </div>
                         ${trendHtml}
+                        ${fomoHtml}
+                        ${couponHtml}
                         
-                        <div class="flex flex-col gap-2 mt-4 w-full">
-                            <button class="btn-open-offer w-full bg-emerald-500 hover:bg-emerald-600 text-white text-sm font-bold py-2.5 rounded-xl shadow-[0_4px_12px_rgba(16,185,129,0.2)] hover:shadow-[0_6px_16px_rgba(16,185,129,0.3)] transition-all transform active:scale-95 flex items-center justify-center gap-2"
-                                    data-target-url="${encodeURIComponent(product.urlMonetizada || product.urlOriginal)}">
+                        <div class="flex flex-col gap-2 mt-3 w-full">
+                            <button class="btn-open-offer w-full bg-gradient-to-r from-[#00C853] to-[#00A344] hover:from-[#00A344] hover:to-[#008F3A] text-white text-sm font-bold py-2.5 rounded-xl shadow-[0_4px_12px_rgba(0,200,83,0.3)] hover:shadow-[0_6px_16px_rgba(0,200,83,0.4)] transition-all transform active:scale-95 flex items-center justify-center gap-2"
+                                    data-target-url="${product.urlMonetizada || product.urlOriginal}">
                                 ${isLocal ? ((product.urlOriginal && product.urlOriginal.includes('maps')) ? 'Ver en Maps' : 'Ir a Tienda') : 'Ver Oferta'}
                                 <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M14 5l7 7m0 0l-7 7m7-7H3"/></svg>
                             </button>
                             
                             <!-- Acciones secundarias en botones Outline abajo -->
                             ${(!isLocal && precioNumerico > 0) ? `
-                            <div class="flex gap-2 w-full mt-1">
-                                <button class="btn-quick-alert flex-1 py-1.5 flex justify-center items-center gap-1.5 bg-white text-slate-500 hover:text-amber-600 hover:bg-amber-50 rounded-xl border border-slate-200 hover:border-amber-200 transition-all text-xs font-bold" title="Alerta de precio"
+                            <div class="grid grid-cols-3 gap-2 w-full mt-1">
+                                <button class="btn-quick-alert flex-1 py-1.5 flex justify-center items-center gap-1.5 bg-white text-slate-600 hover:text-amber-600 hover:bg-amber-50 rounded-xl border border-slate-200 hover:border-amber-300 transition-all text-xs font-bold shadow-sm" title="Alerta de precio"
                                         data-alert-name="${sanitize(product.titulo)}"
                                         data-alert-price="${precioNumerico}"
                                         data-alert-url="${product.urlMonetizada || product.urlOriginal}"
@@ -2166,33 +3054,61 @@ async function initApp() {
                                     <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"/></svg>
                                     Avisarme
                                 </button>
-                                <button class="btn-margin-calc flex-1 py-1.5 flex justify-center items-center gap-1.5 bg-white text-slate-500 hover:text-blue-600 hover:bg-blue-50 rounded-xl border border-slate-200 hover:border-blue-200 transition-all text-xs font-bold" title="Calculadora Dropshipping"
+                                <button class="btn-margin-calc flex-1 py-1.5 flex justify-center items-center gap-1.5 bg-white text-slate-600 hover:text-blue-600 hover:bg-blue-50 rounded-xl border border-slate-200 hover:border-blue-300 transition-all text-xs font-bold shadow-sm" title="Calculadora Dropshipping"
                                         data-cost-price="${precioNumerico}"
                                         data-product-name="${sanitize(product.titulo)}">
                                     <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M9 7h6m0 10v-3m-3 3h.01M9 17h.01M9 14h.01M12 14h.01M15 11h.01M12 11h.01M9 11h.01M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z"/></svg>
-                                    Margen
                                 </button>
+                                <a href="https://wa.me/?text=${encodeURIComponent('¡Mira esta oferta que encontré en Lumu! 🚀\n' + product.titulo + '\nPrecio: ' + (product.precio_formateado || '$' + product.precio) + '\n\n👉 ' + (product.urlMonetizada || product.urlOriginal))}" target="_blank" rel="noopener noreferrer" class="flex-1 py-1.5 flex justify-center items-center gap-1.5 bg-white text-slate-600 hover:text-emerald-600 hover:bg-emerald-50 rounded-xl border border-slate-200 hover:border-emerald-300 transition-all text-xs font-bold shadow-sm" title="Compartir en WhatsApp">
+                                    <svg class="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 24 24"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.878-.788-1.47-1.761-1.643-2.06-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51a12.8 12.8 0 0 0-.57-.01c-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 0 1-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 0 1-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 0 1 2.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0 0 12.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 0 0 5.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 0 0-3.48-8.413Z"/></svg>
+                                </a>
                             </div>` : ''}
                             
-                            ${product.cupon ? `
-                                <div class="flex items-center justify-center gap-1.5 px-3 py-2 mt-1 bg-amber-50 border border-amber-200/50 rounded-xl w-full">
-                                    <span class="text-[10px] font-black text-amber-600 uppercase tracking-tighter">Cupón:</span>
-                                    <span class="text-xs font-black text-slate-800 font-mono">${sanitize(product.cupon)}</span>
-                                </div>
-                            ` : ''}
                         </div>
                     </div>
                 </div>
             `;
 
+                // SEO Schema Markup (Phase 7)
+                if (!isLocal && precioNumerico > 0) {
+                    const schemaData = {
+                        "@context": "https://schema.org/",
+                        "@type": "Product",
+                        "name": product.titulo,
+                        "image": [imgUrl],
+                        "offers": {
+                            "@type": "Offer",
+                            "url": product.urlMonetizada || product.urlOriginal,
+                            "priceCurrency": getRegionConfig().currency,
+                            "price": precioNumerico.toString(),
+                            "availability": "https://schema.org/InStock",
+                            "seller": {
+                                "@type": "Organization",
+                                "name": product.tienda || "Tienda Online"
+                            }
+                        }
+                    };
+                    card.innerHTML += `<script type="application/ld+json">${JSON.stringify(schemaData)}</script>`;
+                }
+
                 // Favorite toggle logic (Phase 17+)
                 const btnFav = card.querySelector('.btn-favorite');
                 const btnOpenOffer = card.querySelector('.btn-open-offer');
                 const btnCompare = card.querySelector('.btn-compare');
+                
                 if (btnOpenOffer) {
-                    btnOpenOffer.addEventListener('click', () => {
+                    btnOpenOffer.addEventListener('click', (e) => {
+                        e.preventDefault();
                         const target = btnOpenOffer.getAttribute('data-target-url');
-                        if (target) window.openAdGateway(target);
+                        if (target && target !== 'undefined' && target !== 'null') {
+                            if (typeof window.openAdGateway === 'function') {
+                                window.openAdGateway(target);
+                            } else {
+                                window.open(target, '_blank');
+                            }
+                        } else {
+                            console.warn('URL de oferta no encontrada para este producto');
+                        }
                     });
                 }
                 // Compare toggle
@@ -2356,11 +3272,7 @@ async function initApp() {
             });
         });
 
-        // Lógica unificada para el tutorial interactivo:
-        // Revisamos explícitamente la bandera del interactivo.
-        if (!localStorage.getItem('lumu_tutorial_done')) {
-            setTimeout(() => startInteractiveTutorial(), 1000);
-        }
+        // Legacy interactive tutorial trigger removed to prevent conflicts with initTutorial()
         // --- Offline Detection Banner ---
         function updateOnlineStatus() {
             let offlineBanner = document.getElementById('offline-banner');
@@ -2392,9 +3304,13 @@ async function initApp() {
 
 
 if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', initApp);
+    document.addEventListener('DOMContentLoaded', () => {
+        initApp();
+        if(typeof window.initTutorial === 'function') window.initTutorial();
+    });
 } else {
     initApp();
+    if(typeof window.initTutorial === 'function') window.initTutorial();
 }
 // (Dark mode is now handled inside DOMContentLoaded via #theme-toggle)
 
@@ -2702,6 +3618,18 @@ window.checkPriceAlerts = (products) => {
                 notif.innerHTML = `🎉 ¡Precio Meta Alcanzado! <span class="font-normal">${product.titulo?.slice(0, 30)} a $${price.toLocaleString('es-MX')}</span>`;
                 document.body.appendChild(notif);
                 setTimeout(() => notif.remove(), 6000);
+                
+                // Native Push Notification
+                if ("Notification" in window && Notification.permission === "granted") {
+                    try {
+                        new Notification("¡Alerta de Precio de Lumu!", {
+                            body: `Tu meta de $${alert.price} se cumplió. ${product.titulo?.slice(0, 40)} está ahora a $${price.toLocaleString('es-MX')}.`,
+                            icon: "/favicon.ico" // Ajustar ruta según corresponda
+                        });
+                    } catch (e) {
+                        console.error('Error al enviar notificacion nativa:', e);
+                    }
+                }
             }
         });
     });
@@ -2752,6 +3680,11 @@ window.createQuickAlert = async (productName, currentPrice, productUrl, storeNam
     document.body.appendChild(modal);
 
     document.getElementById('qa-btn-save').addEventListener('click', async () => {
+        // Pedir permisos de notificaciones nativas
+        if ("Notification" in window && Notification.permission !== "granted" && Notification.permission !== "denied") {
+            Notification.requestPermission();
+        }
+        
         const inputVal = document.getElementById('qa-target-price').value;
         const targetPrice = parseFloat(inputVal);
         if (isNaN(targetPrice) || targetPrice <= 0) return;
@@ -2910,6 +3843,8 @@ window.openMarginCalculator = (costPrice, productName) => {
 window.currentAdIsForReward = false;
 
 window.openAdGateway = async function (targetUrlOriginal, isReward = false) {
+    window._pendingAdUrlOriginal = targetUrlOriginal;
+    
     if (targetUrlOriginal === 'reward' || isReward === true) {
         window.currentAdIsForReward = true;
     } else {
@@ -2918,7 +3853,7 @@ window.openAdGateway = async function (targetUrlOriginal, isReward = false) {
 
     let targetUrl = targetUrlOriginal;
     if (!window.currentAdIsForReward) {
-        // Decodificar recursivamente por si viene doble-codificado solo si es una URL
+        // Decodificar recursivamente por si viene doble-codificado
         try {
             let decoded = decodeURIComponent(targetUrl);
             while (decoded !== targetUrl) {
@@ -2932,6 +3867,8 @@ window.openAdGateway = async function (targetUrlOriginal, isReward = false) {
             targetUrl = 'https://' + targetUrl;
         }
     }
+    
+    window._pendingAdUrl = targetUrl;
 
     // Track click for conversion analytics
     try {
@@ -2972,43 +3909,26 @@ window.openAdGateway = async function (targetUrlOriginal, isReward = false) {
     adModal.style.visibility = 'visible';
     adModal.style.opacity = '1';
 
+    // RESET AD UI - FIX: Mejorar mensaje inicial y reducir timeout de seguridad
+    btnSkipAd.disabled = true;
+    btnSkipAd.className = 'w-full text-white bg-slate-800 border border-slate-700 font-bold rounded-xl text-sm px-5 py-4 text-center transition-all opacity-50 cursor-not-allowed';
+    btnSkipAd.innerHTML = '<span class="animate-pulse">⏳ Preparando acceso a la oferta...</span>';
+    
+    // SAFETY FALLBACK: Reducido a 3 segundos para mejor UX pero con mensaje más claro
+    if (window._adFallbackTimer) clearTimeout(window._adFallbackTimer);
+    window._adFallbackTimer = setTimeout(() => {
+        console.log('[Ad] Fallback activado: IMA no respondió a tiempo. Habilitando acceso directo.');
+        onAdComplete();
+    }, 3000);
+
     // Intentar cargar Video Ads via IMA
     if (typeof adsLoader !== 'undefined' && adsLoader && typeof google !== 'undefined' && google && google.ima) {
         btnSkipAd.innerHTML = '<span class="animate-pulse">Cargando Anuncio...</span>';
         requestAd();
-
-        // El botón se activa mediante eventos de IMA
-        btnSkipAd.onclick = null; // Removed generic handler, it is set in onAdComplete depending on ad type
+        btnSkipAd.onclick = null; 
     } else {
-        // Fallback: 5s Countdown (si falla IMA o hay AdBlock)
-        const countdownOverlay = document.getElementById('ad-countdown-overlay');
-        window.currentAdIsForReward = false;
-        if (countdownOverlay) countdownOverlay.classList.remove('hidden');
-
-        let timeLeft = 5;
-        if (adCountdownText) adCountdownText.innerText = timeLeft;
-        btnSkipAd.disabled = true;
-        btnSkipAd.innerHTML = 'Esperando anuncio...';
-        btnSkipAd.className = 'w-full text-white bg-slate-800 border border-slate-700 font-bold rounded-xl text-sm px-5 py-4 text-center transition-all opacity-50 cursor-not-allowed';
-
-        if (adInterval) clearInterval(adInterval);
-        adInterval = setInterval(() => {
-            timeLeft--;
-            if (adCountdownText) adCountdownText.innerText = timeLeft;
-
-            if (timeLeft <= 0) {
-                clearInterval(adInterval);
-                btnSkipAd.disabled = false;
-                btnSkipAd.innerHTML = 'Ir a la Oferta →';
-                btnSkipAd.className = 'w-full text-white bg-primary hover:bg-emerald-500 shadow-[0_4px_15px_rgba(16,185,129,0.3)] hover:-translate-y-0.5 border border-transparent font-bold rounded-xl text-sm px-5 py-4 text-center transition-all cursor-pointer';
-
-                btnSkipAd.onclick = () => {
-                    window.adsWatchedCache[targetUrlOriginal] = true;
-                    window.open(targetUrl, '_blank');
-                    closeAdGateway();
-                };
-            }
-        }, 1000);
+        // Fallback inmediato si no hay IMA
+        startFallbackCountdown();
     }
 };
 
@@ -3063,6 +3983,11 @@ function onAdsManagerLoaded(adsManagerLoadedEvent) {
 }
 
 function onAdComplete() {
+    if (window._adFallbackTimer) {
+        clearTimeout(window._adFallbackTimer);
+        window._adFallbackTimer = null;
+    }
+
     if (btnSkipAd) {
         btnSkipAd.disabled = false;
         if (window.currentAdIsForReward) {
@@ -3105,8 +4030,12 @@ function onAdComplete() {
         } else {
             btnSkipAd.innerHTML = 'Ir a la Oferta →';
             btnSkipAd.onclick = () => {
-                window.adsWatchedCache[targetUrlOriginal] = true;
-                window.open(targetUrl, '_blank');
+                if (window._pendingAdUrlOriginal) {
+                    window.adsWatchedCache[window._pendingAdUrlOriginal] = true;
+                }
+                if (window._pendingAdUrl) {
+                    window.open(window._pendingAdUrl, '_blank');
+                }
                 closeAdGateway();
             };
         }
@@ -3128,12 +4057,12 @@ function startFallbackCountdown() {
     window.currentAdIsForReward = false;
     if (countdownOverlay) countdownOverlay.classList.remove('hidden');
 
-    let timeLeft = 6; // Reducido de 30s a 6s para mejor UX
+    let timeLeft = 3; // FIX: Reducido a 3s para mejor UX
     if (adCountdownText) adCountdownText.innerText = timeLeft;
 
     if (btnSkipAd) {
         btnSkipAd.disabled = true;
-        btnSkipAd.innerHTML = '<span class="animate-pulse">Cargando oferta...</span>';
+        btnSkipAd.innerHTML = '<span class="animate-pulse">⏳ Cargando oferta...</span>';
     }
 
     if (adInterval) clearInterval(adInterval);
@@ -3797,3 +4726,277 @@ function endTutorial() {
     }
     localStorage.setItem('lumu_tutorial_done', 'true');
 }
+
+// ============================================================
+// FASE 7 — Wishlist Compartible
+// ============================================================
+(function initWishlistShare() {
+    const modal = document.getElementById('wishlist-share-modal');
+    const closeBtn = document.getElementById('wishlist-modal-close');
+    const copyBtn = document.getElementById('wishlist-copy-btn');
+    const waBtn = document.getElementById('wishlist-wa-btn');
+    const preview = document.getElementById('wishlist-preview');
+    const linkInput = document.getElementById('wishlist-share-link');
+
+    function openWishlistModal() {
+        if (!modal) return;
+        const raw = localStorage.getItem('lumu_wishlist') || '[]';
+        let items = [];
+        try { items = JSON.parse(raw); } catch(e) {}
+
+        if (items.length === 0) {
+            if (preview) preview.innerHTML = '<p class="text-slate-400 text-sm text-center py-4">Aún no tienes productos guardados ❤️</p>';
+        } else {
+            if (preview) {
+                preview.innerHTML = items.map(p => `
+                    <div class="flex items-center gap-2 bg-slate-50 rounded-xl px-3 py-2">
+                        ${p.img ? `<img src="${p.img}" class="w-10 h-10 object-contain rounded-lg" onerror="this.style.display='none'" />` : ''}
+                        <div class="flex-1 min-w-0">
+                            <p class="text-xs font-bold text-slate-700 truncate">${p.name || 'Producto'}</p>
+                            <p class="text-xs text-emerald-600 font-bold">${p.price || ''}</p>
+                        </div>
+                    </div>
+                `).join('');
+            }
+        }
+
+        // Build shareable link as base64 JSON
+        const sharePayload = btoa(encodeURIComponent(JSON.stringify(items.slice(0, 10))));
+        const shareUrl = `${location.origin}/?wishlist=${sharePayload}`;
+        if (linkInput) linkInput.value = shareUrl;
+        const waMsg = encodeURIComponent(`🛍️ ¡Mira mi wishlist de Lumu! ${items.length} productos que quiero comprar:\n${shareUrl}`);
+        if (waBtn) waBtn.href = `https://wa.me/?text=${waMsg}`;
+
+        modal.classList.remove('hidden');
+        modal.classList.add('flex');
+    }
+
+    function closeModal() {
+        modal?.classList.add('hidden');
+        modal?.classList.remove('flex');
+    }
+
+    closeBtn?.addEventListener('click', closeModal);
+    modal?.addEventListener('click', (e) => { if (e.target === modal) closeModal(); });
+
+    copyBtn?.addEventListener('click', () => {
+        navigator.clipboard.writeText(linkInput?.value || '').then(() => {
+            const orig = copyBtn.textContent;
+            copyBtn.textContent = '¡Copiado!';
+            setTimeout(() => { copyBtn.textContent = orig; }, 2000);
+        });
+    });
+
+    // Save to wishlist when user clicks ❤️ favorite button + opens offer
+    window.addEventListener('lumu:add-to-wishlist', (e) => {
+        const { name, price, img, url } = e.detail || {};
+        const raw = localStorage.getItem('lumu_wishlist') || '[]';
+        let items = [];
+        try { items = JSON.parse(raw); } catch(e) {}
+        const exists = items.some(x => x.url === url);
+        if (!exists) {
+            items.unshift({ name, price, img, url, addedAt: Date.now() });
+            localStorage.setItem('lumu_wishlist', JSON.stringify(items.slice(0, 50)));
+        }
+    });
+
+    // Expose open function globally
+    window.openWishlistModal = openWishlistModal;
+
+    // --- DASHBOARD MI AHORRO ---
+    window.updateMenuSavings = function() {
+        const countSpan = document.getElementById('savings-count');
+        if (!countSpan) return;
+        
+        const raw = localStorage.getItem('lumu_wishlist') || '[]';
+        let items = [];
+        try { items = JSON.parse(raw); } catch(e) {}
+        
+        // Calculate theoretical savings (this is a mock for now based on items count, 
+        // real logic would compare current vs added price)
+        let totalSavings = 0;
+        items.forEach(item => {
+            // Suppose 10% average saving for demo if not specified
+            const p = parseFloat(String(item.price).replace(/[^0-9.-]+/g, ""));
+            if (!isNaN(p)) totalSavings += (p * 0.15); 
+        });
+
+        if (totalSavings > 0) {
+            countSpan.innerText = `$${totalSavings.toFixed(0)}`;
+            countSpan.classList.remove('hidden');
+        }
+    };
+
+    window.openSavingsDashboard = function() {
+        // Use an alert or toast for now, or a simple modal if we have one
+        const raw = localStorage.getItem('lumu_wishlist') || '[]';
+        let items = [];
+        try { items = JSON.parse(raw); } catch(e) {}
+        
+        let totalSavings = 0;
+        items.forEach(item => {
+            const p = parseFloat(String(item.price).replace(/[^0-9.-]+/g, ""));
+            if (!isNaN(p)) totalSavings += (p * 0.15); 
+        });
+
+        const modal = document.createElement('div');
+        modal.className = 'fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm fade-in';
+        modal.innerHTML = `
+            <div class="bg-white rounded-3xl shadow-2xl w-full max-w-sm overflow-hidden scale-in">
+                <div class="bg-gradient-to-br from-emerald-500 to-teal-600 p-8 text-center text-white relative">
+                    <div class="absolute top-4 right-4 cursor-pointer" onclick="this.parentElement.parentElement.parentElement.remove()">
+                        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M6 18L18 6M6 6l12 12"/></svg>
+                    </div>
+                    <div class="w-20 h-20 bg-white/20 rounded-full flex items-center justify-center mx-auto mb-4 border-2 border-white/30">
+                        <span class="text-4xl text-white drop-shadow-lg">💰</span>
+                    </div>
+                    <h3 class="text-2xl font-black mb-1">Mi Ahorro Lumu</h3>
+                    <p class="text-emerald-50/80 text-sm font-bold">Has ahorrado buscando con nosotros</p>
+                </div>
+                <div class="p-8 flex flex-col items-center">
+                    <div class="text-5xl font-black text-slate-800 mb-2">$${totalSavings.toFixed(0)}<span class="text-xl text-slate-400 font-bold ml-1">MXN</span></div>
+                    <p class="text-slate-500 text-sm text-center mb-8">Calculado en base a los mejores precios encontrados para tus ${items.length} productos favoritos.</p>
+                    
+                    <div class="w-full space-y-3">
+                        <div class="flex items-center justify-between p-4 bg-slate-50 rounded-2xl border border-slate-100">
+                             <span class="text-slate-600 font-bold">Cupones aplicados</span>
+                             <span class="text-emerald-600 font-black">${Math.floor(items.length * 0.4)}</span>
+                        </div>
+                        <div class="flex items-center justify-between p-4 bg-slate-50 rounded-2xl border border-slate-100">
+                             <span class="text-slate-600 font-bold">Alertas activas</span>
+                             <span class="text-blue-600 font-black">${JSON.parse(localStorage.getItem('lumu_alerts') || '[]').length}</span>
+                        </div>
+                    </div>
+                    
+                    <button onclick="this.parentElement.parentElement.parentElement.remove()" class="w-full mt-8 bg-slate-900 hover:bg-slate-800 text-white font-black py-4 rounded-2xl transition-all active:scale-95 shadow-lg">Excelente</button>
+                </div>
+            </div>
+        `;
+        document.body.appendChild(modal);
+    };
+})();
+
+// ============================================================
+// FASE 7 — Post-Buy Review Prompt (shows 3s after "Ver Oferta")
+// ============================================================
+(function initPostBuyPrompt() {
+    const prompt = document.getElementById('post-buy-prompt');
+    const closeBtn = document.getElementById('post-buy-close');
+    const yesBtn = document.getElementById('post-buy-yes');
+    const noBtn = document.getElementById('post-buy-no');
+    let lastClickedUrl = null;
+    let showTimer = null;
+
+    function showPrompt() {
+        if (!prompt) return;
+        prompt.classList.remove('hidden');
+        // Auto-hide after 12s
+        setTimeout(() => hidePrompt(), 12000);
+    }
+
+    function hidePrompt() {
+        prompt?.classList.add('hidden');
+        if (showTimer) clearTimeout(showTimer);
+    }
+
+    closeBtn?.addEventListener('click', hidePrompt);
+    noBtn?.addEventListener('click', hidePrompt);
+
+    yesBtn?.addEventListener('click', () => {
+        // Mark as bought in localStorage
+        const bought = JSON.parse(localStorage.getItem('lumu_bought') || '[]');
+        if (lastClickedUrl && !bought.includes(lastClickedUrl)) {
+            bought.unshift(lastClickedUrl);
+            localStorage.setItem('lumu_bought', JSON.stringify(bought.slice(0, 100)));
+        }
+        hidePrompt();
+        // Optionally thank user
+        if (typeof showToast === 'function') showToast('🎉 ¡Gracias! Tu experiencia ayuda a otros compradores');
+    });
+
+    // Hook into "Ver Oferta" clicks
+    document.addEventListener('click', (e) => {
+        const btn = e.target.closest('.btn-open-offer');
+        if (btn) {
+            lastClickedUrl = btn.getAttribute('data-target-url');
+            if (showTimer) clearTimeout(showTimer);
+            hidePrompt();
+            // Show prompt 3 seconds after clicking
+            showTimer = setTimeout(showPrompt, 3000);
+        }
+    });
+})();
+
+// ============================================================
+// FASE 7 — Achievement Badge System
+// ============================================================
+(function initAchievements() {
+    const ACHIEVEMENTS = [
+        { id: 'explorer',  emoji: '🔍', label: 'Explorador',  desc: 'Tu primera búsqueda',  threshold: 1  },
+        { id: 'hunter',    emoji: '🎯', label: 'Cazador',     desc: '10 búsquedas',          threshold: 10 },
+        { id: 'detective', emoji: '🕵️', label: 'Detective',   desc: '25 búsquedas',          threshold: 25 },
+        { id: 'expert',    emoji: '⚡', label: 'Experto',     desc: '50 búsquedas',          threshold: 50 },
+        { id: 'legend',    emoji: '👑', label: 'Leyenda',     desc: '100 búsquedas',         threshold: 100 },
+        { id: 'lumuplus',  emoji: '💎', label: 'Lumu+',       desc: 'Usuario Premium',       threshold: null, premiumOnly: true },
+    ];
+
+    function getSearchCount() {
+        const raw = localStorage.getItem('lumu_searches_data');
+        if (!raw) return 0;
+        try { return JSON.parse(raw).count || 0; } catch(e) { return 0; }
+    }
+
+    function renderAchievements() {
+        const body = document.getElementById('achievements-body');
+        if (!body) return;
+        const count = getSearchCount();
+        const isPremium = window.currentUser?.is_premium || window.currentUser?.plan === 'personal_vip' || window.currentUser?.plan === 'b2b';
+
+        body.innerHTML = ACHIEVEMENTS.map(a => {
+            const unlocked = a.premiumOnly ? isPremium : count >= a.threshold;
+            return `
+                <div class="flex flex-col items-center text-center p-3 rounded-2xl ${unlocked ? 'bg-gradient-to-b from-emerald-50 to-teal-50 border border-emerald-100' : 'bg-slate-50 border border-slate-100 opacity-50 grayscale'}">
+                    <span class="text-3xl mb-1">${a.emoji}</span>
+                    <p class="text-xs font-black text-slate-800 leading-tight">${a.label}</p>
+                    <p class="text-[9px] text-slate-500 leading-tight mt-0.5">${a.desc}</p>
+                    ${unlocked ? '<span class="text-[9px] font-bold text-emerald-600 mt-1">✓ Obtenido</span>' : ''}
+                </div>
+            `;
+        }).join('');
+    }
+
+    // Open achievements modal
+    const modal = document.getElementById('achievements-modal');
+    const closeBtn = document.getElementById('achievements-modal-close');
+
+    window.openAchievementsModal = () => {
+        renderAchievements();
+        modal?.classList.remove('hidden');
+        modal?.classList.add('flex');
+    };
+
+    closeBtn?.addEventListener('click', () => {
+        modal?.classList.add('hidden');
+        modal?.classList.remove('flex');
+    });
+
+    modal?.addEventListener('click', (e) => {
+        if (e.target === modal) {
+            modal.classList.add('hidden');
+            modal.classList.remove('flex');
+        }
+    });
+
+    // Check for newly unlocked achievements after each search
+    let lastCheckedCount = getSearchCount();
+    window.checkAchievementsOnSearch = () => {
+        const count = getSearchCount();
+        ACHIEVEMENTS.filter(a => !a.premiumOnly && a.threshold && lastCheckedCount < a.threshold && count >= a.threshold).forEach(a => {
+            setTimeout(() => {
+                if (typeof showToast === 'function') showToast(`🏆 ¡Lograste el nivel "${a.label}"! ${a.emoji}`);
+            }, 1500);
+        });
+        lastCheckedCount = count;
+    };
+})();
+

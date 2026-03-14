@@ -112,13 +112,20 @@ ${extraContext}`;
     "${sanitizedText}"
 
     TUS OBJETIVOS Y REGLAS CLAVE:
-    1. ESTRATEGIA DE BÚSQUEDA LONG-TAIL INTELIGENTE: Expande búsquedas vagas (ej. "laptop i7" -> "laptop intel core i7 16gb ram ssd 512gb"). Incluye "precio" o "comprar".
-    2. ACCIÓN INMEDIATA: Usa "search" si menciona cualquier producto/servicio. "search_service" para oficios locales (plomero, etc). "ask" SOLO si falta información crítica.
+    1. ESTRATEGIA DE BÚSQUEDA LONG-TAIL INTELIGENTE: Expande búsquedas vagas (ej. "laptop i7" -> "laptop intel core i7 16gb ram ssd 512gb"). Incluye marca, modelo, capacidad, color o variante cuando sea obvio. Prioriza frases reales de catálogo y compra.
+    2. ACCIÓN INMEDIATA: Usa "search" si menciona cualquier producto/servicio. "search_service" para oficios locales (plomero, etc). "ask" SOLO si falta información crítica para encontrar algo útil.
     3. CONDICIÓN: "new" (nuevo) por defecto, salvo que diga usado/seminuevo.
     4. CLASIFICACIÓN intent_type: producto, servicio_local, mayoreo, mayoreo_perecedero, ocio, otro.
     5. ANTI-ACCESORIOS: Si busca algo principal caro (TV, celular, consola), añade "-funda -case -protector -cable".
-    6. alternativeQueries: 3 variaciones de altísima calidad (sinónimos, marca alterna, forma local de decirlo). NO USES "site:".
+    6. alternativeQueries: genera de 2 a 4 variaciones de altísima calidad, pensando en cómo lo listan Amazon, Mercado Libre o catálogos mexicanos. NO USES "site:".
     7. MEXICANISMOS: Traduce "refiri"->refrigerador, "cel"->celular, "compu"->computadora.
+    8. CONVERSACIÓN Y SALUDOS: Si el usuario te saluda ("hola", "buenos días") sin pedir un producto, DEBES usar action="ask" y responder amablemente sugiriendo 3 categorías populares para buscar.
+    9. TYPOS: Corrige errores ortográficos evidentes en el searchQuery ("iphome" -> "iphone").
+    10. COMPARACIONES: Si el usuario compara 2 productos, usa action="search" con el PRIMER producto mencionado, pero en alternativeQueries incluye el otro como variante.
+    11. FOLLOW-UP INTELIGENTE: Si el usuario pide algo demasiado ambiguo ("quiero una laptop", "busco audífonos"), primero intenta resolver con una búsqueda genérica útil y usa action="ask" solo si de verdad no puedes formar un query de compra razonable.
+    12. RESULTADOS ÚTILES: Prefiere queries que ayuden a traer productos completos, no páginas genéricas, refacciones o accesorios sueltos.
+    13. COBERTURA: Si detectas un producto comprable pero faltan detalles finos, NO bloquees la búsqueda. Genera un searchQuery amplio pero comercial y usa alternativeQueries para marca, variante, tamaño, color o edición.
+    14. OFERTAS: En alternativeQueries incluye al menos una variante orientada a descuento/oferta/cupón cuando aplique naturalmente al producto.
   
     Devuelve ESTRICTAMENTE un JSON validado.
   `;
@@ -185,6 +192,17 @@ ${extraContext}`;
             }
 
             const parsed = JSON.parse(textResult);
+
+            // Validar que searchQuery no esté vacío
+            if (!parsed.searchQuery || parsed.searchQuery.trim().length === 0) {
+                console.warn('[LLM] searchQuery vacío, usando fallback con query original');
+                return {
+                    action: 'search',
+                    question: null,
+                    searchQuery: sanitizedText || userText,
+                    condition: 'new'
+                };
+            }
 
             // SECURITY FIX #8: Validate LLM output with Zod
             const validated = llmResponseSchema.safeParse(parsed);

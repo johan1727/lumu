@@ -1,8 +1,7 @@
 User-agent: *
 Allow: /
 Disallow: /api/
-Disallow: /dropship-admin.html
-Disallow: /historial.html
-Disallow: /scraper-dashboard.html
+Disallow: /*?code=*
+Disallow: /*?token=*
 
 Sitemap: https://lumu.dev/sitemap.xml

@@ -4,6 +4,27 @@ const affiliateManager = require('../utils/affiliateManager');
 const cacheService = require('../services/cacheService');
 const supabase = require('../config/supabase');
 const visionService = require('../services/visionService');
+const couponService = require('../services/couponService');
+
+function buildFallbackSuggestions(baseQuery, altQueries = []) {
+    const cleanBase = String(baseQuery || '').trim();
+    const baseSuggestions = cleanBase
+        ? [
+            `${cleanBase} precio`,
+            `${cleanBase} ofertas`,
+            `${cleanBase} descuento`,
+            `${cleanBase} tienda local`,
+            `${cleanBase} mercado libre`,
+            `${cleanBase} amazon`,
+            `${cleanBase} walmart`,
+            `${cleanBase} liverpool`
+        ]
+        : [];
+
+    return [...new Set([...(altQueries || []), ...baseSuggestions])]
+        .filter(Boolean)
+        .slice(0, 4);
+}
 
 exports.analyzeImage = async (req, res) => {
     try {
@@ -31,7 +52,8 @@ exports.analyzeImage = async (req, res) => {
 
 exports.searchProduct = async (req, res) => {
     try {
-        const { chatHistory = [], radius, lat, lng, skipLLM } = req.body;
+        console.log('[DEBUG /buscar] req.body:', JSON.stringify(req.body));
+        const { chatHistory = [], radius, lat, lng, skipLLM, safeStoresOnly = false } = req.body;
 
         // Use verified userId from auth middleware (JWT), ignore body.userId
         const userId = req.userId || null;
@@ -49,9 +71,13 @@ exports.searchProduct = async (req, res) => {
 
         // PAYWALL Enforcement: Rate limit anonymous users by IP (Supabase-based for serverless safety)
         if (!userId) {
-            // x-vercel-forwarded-for is authoritative on Vercel (can't be spoofed by client)
-            const ip = req.headers['x-vercel-forwarded-for']?.split(',')[0]?.trim() || req.headers['x-real-ip'] || req.headers['x-forwarded-for']?.split(',').pop()?.trim() || req.ip || 'unknown';
-            const ANON_DAILY_LIMIT = 5;
+            // Bypass anonymous IP rate limiting in development
+            if (process.env.NODE_ENV !== 'production') {
+                console.log('[Dev] Bypassing IP rate limit');
+            } else {
+                // x-vercel-forwarded-for is authoritative on Vercel (can't be spoofed by client)
+                const ip = req.headers['x-vercel-forwarded-for']?.split(',')[0]?.trim() || req.headers['x-real-ip'] || req.headers['x-forwarded-for']?.split(',').pop()?.trim() || req.ip || 'unknown';
+                const ANON_DAILY_LIMIT = 5;
 
             if (supabase) {
                 try {
@@ -79,7 +105,7 @@ exports.searchProduct = async (req, res) => {
                 // RAM fallback (unreliable in serverless but better than nothing)
                 if (!global._anonSearchLog) global._anonSearchLog = {};
                 const todayKey = new Date().toISOString().slice(0, 10);
-                const ipKey = `${ip}:${todayKey} `;
+                const ipKey = `${ip}:${todayKey}`;
                 global._anonSearchLog[ipKey] = (global._anonSearchLog[ipKey] || 0) + 1;
                 if (global._anonSearchLog[ipKey] > ANON_DAILY_LIMIT) {
                     return res.status(402).json({
@@ -88,6 +114,7 @@ exports.searchProduct = async (req, res) => {
                     });
                 }
             }
+            } // Close the else block for NODE_ENV
         }
 
         // PAYWALL Enforcement: Verificar límites por plan en backend (authenticated users)
@@ -139,13 +166,26 @@ exports.searchProduct = async (req, res) => {
             }
         }
 
-        // MASTER TIMEOUT: Wrap entire search pipeline to prevent Vercel from killing the function
-        const MASTER_TIMEOUT_MS = 45000; // 45s (Vercel limit is 60s, leave buffer)
+        // MASTER TIMEOUT: AbortController para cancelar operaciones si excedemos 45s
+        const MASTER_TIMEOUT_MS = 45000;
+        const abortController = new AbortController();
         const searchStartTime = Date.now();
+        
+        // Setup timeout abort
+        const timeoutId = setTimeout(() => {
+            abortController.abort();
+            console.warn('[Master Timeout] Abortando operaciones por exceso de tiempo');
+        }, MASTER_TIMEOUT_MS);
+
+        // Check if aborted before LLM call
+        if (abortController.signal.aborted) {
+            clearTimeout(timeoutId);
+            return res.status(504).json({ error: 'La búsqueda tomó demasiado tiempo. Intenta con una búsqueda más específica.' });
+        }
 
         let llmAnalysis;
         if (skipLLM) {
-            console.log(`[Direct Search] Saltando LLM para: ${query} `);
+            console.log(`[Direct Search] Saltando LLM para: ${query}`);
             llmAnalysis = {
                 action: 'search',
                 searchQuery: query,
@@ -154,7 +194,7 @@ exports.searchProduct = async (req, res) => {
             };
         } else {
             // 1. Evaluar el mensaje del usuario con la IA Conversacional (incluyendo historial)
-            llmAnalysis = await llmService.analyzeMessage(query, chatHistory);
+            llmAnalysis = await llmService.analyzeMessage(query, chatHistory, abortController.signal);
             console.log('Análisis LLM:', llmAnalysis);
         }
 
@@ -187,35 +227,72 @@ exports.searchProduct = async (req, res) => {
             });
         }
 
-        console.log(`[Search Pipeline]Buscando: "${searchQuery}" | radius=${radius} | lat=${lat} | lng=${lng} | intent=${llmAnalysis.intent_type} `);
-        const shoppingResults = await shoppingService.searchGoogleShopping(searchQuery, radius, lat, lng, llmAnalysis.intent_type);
-        console.log(`[Search Pipeline] Resultados de shoppingService: ${shoppingResults.length} `);
+        // Check if aborted
+        if (abortController.signal.aborted) {
+            clearTimeout(timeoutId);
+            return res.status(504).json({ error: 'La búsqueda fue cancelada por timeout.' });
+        }
+
+        console.log(`[Search Pipeline] Buscando: "${searchQuery}" | radius=${radius} | lat=${lat} | lng=${lng} | intent=${llmAnalysis.intent_type}`);
+        const shoppingResults = await shoppingService.searchGoogleShopping(searchQuery, radius, lat, lng, llmAnalysis.intent_type, abortController.signal);
+        console.log(`[Search Pipeline] Resultados de shoppingService: ${shoppingResults.length}`);
 
         // Check remaining time before alt queries (skip if running low)
         const elapsedMs = Date.now() - searchStartTime;
         const remainingMs = MASTER_TIMEOUT_MS - elapsedMs;
-        console.log(`[Search Pipeline]Elapsed: ${elapsedMs} ms, Remaining: ${remainingMs} ms`);
+        console.log(`[Search Pipeline] Elapsed: ${elapsedMs}ms, Remaining: ${remainingMs}ms`);
 
         // NUEVO: Multi-Query Background Scraper para Variantes (skip if < 15s remaining)
         const cleanSearchQuery = searchQuery.replace(/\s+-\w+/g, '').trim();
         const altQueries = llmAnalysis.alternativeQueries || [];
-        if (altQueries.length > 0 && remainingMs > 15000) {
-            console.log(`Ejecutando Multi - Query alternativas: ${altQueries.join(', ')} `);
+        if (altQueries.length > 0 && remainingMs > 15000 && !abortController.signal.aborted) {
+            console.log(`Ejecutando Multi-Query alternativas: ${altQueries.join(', ')}`);
             const directScraper = require('../services/directScraper');
             const altPromises = [];
-            for (const altQ of altQueries.slice(0, 1)) { // Reduced from 2 to 1 alt query
+            const altAbortControllers = [];
+            
+            for (const altQ of altQueries.slice(0, 2)) {
                 const cleanAltQ = altQ.replace(/\bsite:\S+/gi, '').trim();
                 if (!cleanAltQ) continue;
-                altPromises.push(directScraper.scrapeMercadoLibreDirect(cleanAltQ));
-                altPromises.push(directScraper.scrapeAmazonDirect(cleanAltQ));
+                
+                // Crear AbortController para cada scraper
+                const altAbortController = new AbortController();
+                altAbortControllers.push(altAbortController);
+                
+                altPromises.push(
+                    directScraper.scrapeMercadoLibreDirect(cleanAltQ, altAbortController.signal)
+                        .catch(() => []),
+                    directScraper.scrapeAmazonDirect(cleanAltQ, altAbortController.signal)
+                        .catch(() => [])
+                );
             }
+            
             // Race alt queries against remaining time minus buffer
             const altTimeout = Math.min(remainingMs - 10000, 10000);
-            const altTimeoutPromise = new Promise(resolve => setTimeout(() => resolve([]), altTimeout));
-            const altResultsRaw = await Promise.race([
-                Promise.allSettled(altPromises),
-                altTimeoutPromise
-            ]);
+            
+            let altResultsRaw;
+            try {
+                altResultsRaw = await Promise.race([
+                    Promise.allSettled(altPromises),
+                    new Promise((_, reject) => {
+                        const timer = setTimeout(() => {
+                            // Abortar todos los scrapers
+                            altAbortControllers.forEach(ctrl => ctrl.abort());
+                            reject(new Error('AltQueries timeout'));
+                        }, altTimeout);
+                        abortController.signal.addEventListener('abort', () => {
+                            clearTimeout(timer);
+                            altAbortControllers.forEach(ctrl => ctrl.abort());
+                            reject(new Error('Aborted'));
+                        });
+                    })
+                ]);
+            } catch (timeoutErr) {
+                console.log(`[Search Pipeline] Alt queries timeout o abortado`);
+                altAbortControllers.forEach(ctrl => ctrl.abort());
+                altResultsRaw = [];
+            }
+            
             if (Array.isArray(altResultsRaw)) {
                 altResultsRaw.forEach(altResult => {
                     if (altResult.status === 'fulfilled' && altResult.value) {
@@ -223,30 +300,59 @@ exports.searchProduct = async (req, res) => {
                     }
                 });
             }
+            
+            // Limpiar AbortControllers
+            altAbortControllers.forEach(ctrl => ctrl.abort());
         } else if (altQueries.length > 0) {
-            console.log(`[Search Pipeline] Skipping alt queries — only ${remainingMs}ms remaining`);
+            console.log(`[Search Pipeline] Skipping alt queries — only ${remainingMs}ms remaining o abortado`);
         }
 
         console.log(`[Search Pipeline] Total resultados(con alt queries): ${shoppingResults.length} `);
 
         if (shoppingResults.length === 0) {
             console.warn(`[Search Pipeline] ⚠️ CERO resultados para "${searchQuery}".Serper key: ${process.env.SERPER_API_KEY ? 'SET' : 'MISSING'} `);
-            return res.json({
-                tipo_respuesta: 'resultados',
-                intencion_detectada: {
-                    busqueda: searchQuery,
-                    condicion: llmAnalysis.condition,
-                    desde_cache: false
-                },
-                top_5_baratos: [],
-                sugerencias: llmAnalysis.alternativeQueries || [searchQuery + ' ofertas', searchQuery + ' amazon', searchQuery + ' mercado libre'],
-                advertencia_uso: usageWarning
-            });
+            
+            // --- NUEVO: Fallback Simplificado ---
+            const simplifiedQuery = searchQuery.split(/\s+/).slice(0, 3).join(' ');
+            if (simplifiedQuery.length < searchQuery.length) {
+                console.log(`[Search Pipeline] 🔄 Reintentando con query simplificado: "${simplifiedQuery}"`);
+                const retryResults = await shoppingService.searchGoogleShopping(simplifiedQuery, radius, lat, lng, llmAnalysis.intent_type);
+                if (retryResults && retryResults.length > 0) {
+                    shoppingResults.push(...retryResults);
+                    console.log(`[Search Pipeline] ✅ Reintento exitoso: ${retryResults.length} resultados.`);
+                }
+            }
+
+            if (shoppingResults.length === 0) {
+                return res.json({
+                    tipo_respuesta: 'resultados',
+                    intencion_detectada: {
+                        busqueda: searchQuery,
+                        condicion: llmAnalysis.condition,
+                        desde_cache: false
+                    },
+                    top_5_baratos: [],
+                    sugerencias: buildFallbackSuggestions(searchQuery, llmAnalysis.alternativeQueries),
+                    advertencia_uso: usageWarning
+                });
+            }
         }
 
         // 4. Filtrar y Procesar resultados (Simular filtro Condition + Deduplicar)
-        // --- PRE-FILTER: Remove garbage results ---
+        // --- PRE-FILTER: Remove garbage results & Apply Safe Stores Filter ---
         const cleanedResults = shoppingResults.filter(item => {
+            // Apply Safe Stores Filter if requested
+            if (safeStoresOnly) {
+                const storeName = (item.source || item.store || '').toLowerCase();
+                const url = (item.link || item.url || '').toLowerCase();
+                const isUntrusted = /temu|aliexpress|shein|wish|shopee/i.test(storeName) || 
+                                    /temu\.com|aliexpress\.com|shein\.com|wish\.com|shopee\.com/i.test(url);
+                if (isUntrusted) {
+                    console.log(`[Safe Filter] Excluyendo tienda no segura: ${storeName}`);
+                    return false;
+                }
+            }
+
             // Keep local store results even without price
             if (item.isLocalStore) return true;
             // Remove items with no title or garbage titles (navigation pages, category pages)
@@ -255,6 +361,10 @@ exports.searchProduct = async (req, res) => {
             if (/^(compra|ver|buscar|encuentra|tienda|catálogo|categoría|página|p\.\-?\d)/i.test(title)) return false;
             // Robust price parsing: handle "$1,299.00", "MXN 1299", "1,299", numbers, etc.
             let price = null;
+            const sourceText = String(item.source || item.store || '').toLowerCase();
+            const urlText = String(item.url || item.link || '').toLowerCase();
+            const hasTrustedSource = /amazon|mercado|walmart|liverpool|coppel|best buy|bestbuy|elektra|costco|sam'?s|sams|office depot|officedepot|soriana|sears|home depot|homedepot|bodega aurrera|linio|claro shop|sanborns|local/i.test(sourceText)
+                || /amazon\.|mercadolibre\.|walmart\.|liverpool\.|coppel\.|bestbuy\.|elektra\.|costco\.|sams\.|officedepot\.|soriana\.|sears\.|homedepot\.|bodegaaurrera\.|linio\.|claroshop\.|sanborns\.|google\.com\/maps/i.test(urlText);
             if (item.price != null) {
                 const priceStr = String(item.price).replace(/[^0-9.,]/g, '').replace(/,/g, '');
                 price = parseFloat(priceStr);
@@ -263,7 +373,11 @@ exports.searchProduct = async (req, res) => {
                     item.price = price;
                 }
             }
-            if (price === null || !Number.isFinite(price) || price <= 0) return false;
+            if (price === null || !Number.isFinite(price) || price <= 0) {
+                if (!item.isLocalStore && !hasTrustedSource) return false;
+                item.price = null;
+                return true;
+            }
             // Remove suspiciously cheap items (likely price-per-unit or errors) — lowered from 10 to 5
             if (price < 5) return false;
             return true;
@@ -329,28 +443,28 @@ exports.searchProduct = async (req, res) => {
         });
 
         // --- DIVERSIDAD: Round-robin por tienda (máx 3 por tienda) ---
-        const MAX_PER_STORE = 3;
-        const MAX_RESULTS = 10;
+        const MAX_PER_STORE = 4;
+        const MAX_RESULTS = 18;
         const storeCount = {};
-        const top10 = [];
+        const topResults = [];
         for (const item of sortedResults) {
-            if (top10.length >= MAX_RESULTS) break;
+            if (topResults.length >= MAX_RESULTS) break;
             const storeKey = (item.source || 'Desconocida').toLowerCase().replace(/[^a-záéíóúñ0-9]/g, '');
             storeCount[storeKey] = (storeCount[storeKey] || 0) + 1;
             if (storeCount[storeKey] <= MAX_PER_STORE) {
-                top10.push(item);
+                topResults.push(item);
             }
         }
-        // Si no llenamos 10, completar con los restantes sin importar tienda
-        if (top10.length < MAX_RESULTS) {
+        // Completar con los restantes sin importar tienda si no se llenó
+        if (topResults.length < MAX_RESULTS) {
             for (const item of sortedResults) {
-                if (top10.length >= MAX_RESULTS) break;
-                if (!top10.includes(item)) top10.push(item);
+                if (topResults.length >= MAX_RESULTS) break;
+                if (!topResults.includes(item)) topResults.push(item);
             }
         }
 
         // 5. Inyectar links de afiliados (o dejarlos como Loss Leaders)
-        const finalProducts = top10.map(product => {
+        const finalProducts = topResults.map(product => {
             return {
                 titulo: product.title,
                 precio: product.price,            // null for local stores
@@ -392,7 +506,8 @@ exports.searchProduct = async (req, res) => {
                     delta: absDelta,
                     percent,
                     previousPrice,
-                    comparedAt: previous.created_at
+                    comparedAt: previous.created_at,
+                    history: productHistory.slice(0, 7).map(h => ({ price: Number(h.price), date: h.created_at }))
                 }
             };
         });
@@ -401,7 +516,8 @@ exports.searchProduct = async (req, res) => {
         await cacheService.saveToCache(searchQuery, radius, lat, lng, productsWithTrend);
         await cacheService.savePriceSnapshot(searchQuery, radius, lat, lng, productsWithTrend);
 
-        // FIX #1: Registrar búsqueda para usuarios autenticados (Rate Limiting)
+        // FIX #6: Unificar logging - solo loguear en searches (no en rate_limits para autenticados)
+        // Las búsquedas anónimas ya se loguearon arriba en rate_limits
         if (userId && supabase) {
             supabase.from('searches').insert({
                 user_id: userId,
@@ -410,6 +526,35 @@ exports.searchProduct = async (req, res) => {
             }).then(() => { }).catch(e => console.error('[Search Logging] Error:', e.message));
         }
 
+        // NUEVO: Inyectar Cupones Universales Conocidos
+        const finalProductsConCupones = productsWithTrend.map(product => {
+            const tienda = (product.tienda || product.fuente || '').toLowerCase();
+            let injectedCoupon = null;
+            let couponDetails = null;
+            
+            // Si el LLM detectó un cupón universal validado, usarlo
+            if (llmAnalysis.cupon && llmAnalysis.cupon.length > 2) {
+                injectedCoupon = llmAnalysis.cupon;
+                couponDetails = "Cupón sugerido por IA";
+            } else {
+                // Lookup active universal coupons for this specific store
+                const storeCoupons = couponService.getCouponsForStore(tienda);
+                if (storeCoupons && storeCoupons.length > 0) {
+                    injectedCoupon = storeCoupons[0].code;
+                    couponDetails = storeCoupons[0].discount;
+                }
+            }
+
+            if (injectedCoupon && !product.cupon) {
+                product.cupon = injectedCoupon;
+                product.couponDetails = couponDetails;
+            }
+            return product;
+        });
+
+        // Clear master timeout at the end
+        clearTimeout(timeoutId);
+
         // 6. Devolver respuesta estandarizada al frontend
         return res.json({
             tipo_respuesta: 'resultados',
@@ -417,13 +562,24 @@ exports.searchProduct = async (req, res) => {
                 busqueda: searchQuery,
                 condicion: llmAnalysis.condition
             },
-            top_5_baratos: productsWithTrend,
-            advertencia_uso: usageWarning
+            top_5_baratos: finalProductsConCupones,
+            sugerencias: buildFallbackSuggestions(searchQuery, llmAnalysis.alternativeQueries),
+            advertencia_uso: usageWarning,
+            lumu_coins_awarded: (userId && finalProductsConCupones.length > 2) ? 1 : 0
         });
 
     } catch (error) {
-        console.error('Error en el endpoint /buscar:', error);
-        res.status(500).json({ error: 'Error interno del servidor al procesar la búsqueda. Nuestro equipo técnico ha sido notificado automáticamente.' });
+        // Clear timeout on error
+        if (typeof timeoutId !== 'undefined') clearTimeout(timeoutId);
+        
+        console.error('🔥🔥🔥 ERROR FATAL en /buscar:', error.stack || error);
+        
+        // No exponer stack trace en producción
+        const isDev = process.env.NODE_ENV !== 'production';
+        res.status(500).json({ 
+            error: 'Ocurrió un error al buscar las mejores ofertas. Si estás probando en local, asegúrate de configurar las variables de entorno.',
+            ...(isDev && { details: error.message, stack: error.stack })
+        });
     }
 };
 
@@ -595,5 +751,48 @@ exports.claimReward = async (req, res) => {
     } catch (err) {
         console.error('[Reward] Error:', err);
         return res.status(500).json({ error: 'Error al reclamar recompensa' });
+    }
+};
+
+// NUEVO: Fase 6 - Lumu Coins
+exports.getCoins = async (req, res) => {
+    try {
+        const userId = req.userId;
+        if (!userId) {
+            return res.json({ coins: 0, is_premium_temp: false });
+        }
+        if (!supabase) {
+            return res.json({ coins: 0, is_premium_temp: false });
+        }
+
+        // Coins = Total de búsquedas válidas realizadas
+        const { count, error } = await supabase.from('searches')
+            .select('*', { count: 'exact', head: true })
+            .eq('user_id', userId);
+
+        if (error) {
+            console.error('[Lumu Coins] Error:', error.message);
+            return res.status(500).json({ error: 'Error al obtener monedas' });
+        }
+
+        const exactCoins = count || 0;
+        // Para la Fase 6: 50 coins = PRO
+        // Calculamos monedas actuales relativas a la meta (ej. si tiene 52, tiene 2 para la sig. meta)
+        const currentCoins = exactCoins % 50;
+        const totalVIPUnlocked = Math.floor(exactCoins / 50);
+
+        // Si ya desbloqueó VIP al menos una vez, le damos el status premium_temp
+        const isPremiumTemp = totalVIPUnlocked > 0;
+
+        return res.json({
+            total_searches: exactCoins,
+            coins: currentCoins,
+            is_premium_temp: isPremiumTemp,
+            next_goal: 50
+        });
+
+    } catch (err) {
+        console.error('[Lumu Coins] TryCatch Error:', err);
+        return res.status(500).json({ error: 'Fallo interno' });
     }
 };

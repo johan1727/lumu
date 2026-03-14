@@ -15,16 +15,44 @@ const USER_AGENTS = [
 
 const getRandomUA = () => USER_AGENTS[Math.floor(Math.random() * USER_AGENTS.length)];
 
-const getAxiosConfig = () => ({
-    headers: {
-        'User-Agent': getRandomUA(),
-        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8',
-        'Accept-Language': 'es-MX,es;q=0.9,en-US;q=0.8,en;q=0.7',
-        'Accept-Encoding': 'gzip, deflate, br',
-        'Cache-Control': 'no-cache',
-    },
-    timeout: 7000,
-});
+const getAxiosConfig = () => {
+    const config = {
+        headers: {
+            'User-Agent': getRandomUA(),
+            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8',
+            'Accept-Language': 'es-MX,es;q=0.9,en-US;q=0.8,en;q=0.7',
+            'Accept-Encoding': 'gzip, deflate, br',
+            'Cache-Control': 'no-cache',
+        },
+        timeout: 10000,
+    };
+
+    // Smart Proxy Rotation (Sprint 3)
+    if (process.env.SCRAPER_PROXIES) {
+        const proxies = process.env.SCRAPER_PROXIES.split(',').map(p => p.trim()).filter(Boolean);
+        if (proxies.length > 0) {
+            const randomProxyUrl = proxies[Math.floor(Math.random() * proxies.length)];
+            try {
+                const proxyUrl = new URL(randomProxyUrl);
+                config.proxy = {
+                    protocol: proxyUrl.protocol.replace(':', ''),
+                    host: proxyUrl.hostname,
+                    port: parseInt(proxyUrl.port, 10) || 80,
+                };
+                if (proxyUrl.username && proxyUrl.password) {
+                    config.proxy.auth = { 
+                        username: decodeURIComponent(proxyUrl.username), 
+                        password: decodeURIComponent(proxyUrl.password) 
+                    };
+                }
+                console.log(`[Proxy] Using rotated proxy: ${config.proxy.host}`);
+            } catch (e) {
+                console.warn('[Proxy Error] URL de proxy inválida en SCRAPER_PROXIES');
+            }
+        }
+    }
+    return config;
+};
 
 const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 
@@ -669,6 +697,437 @@ exports.scrapeOfficeDepotMX = async (query) => {
         return results;
     } catch (error) {
         console.error('[Direct Scraper] Error en Office Depot MX:', error.message);
+        return [];
+    }
+};
+
+/**
+ * Scraper para Soriana México (supermercado/electrónica)
+ */
+exports.scrapeSorianaMX = async (query) => {
+    try {
+        console.log(`[Direct Scraper] Buscando en Soriana MX: ${query}`);
+        const url = `https://www.soriana.com/buscar?q=${encodeURIComponent(query)}`;
+        const response = await scrapeWithRetry(url);
+        const $ = cheerio.load(response.data);
+
+        const results = [];
+
+        // JSON-LD structured data
+        $('script[type="application/ld+json"]').each((i, el) => {
+            try {
+                const json = JSON.parse($(el).html());
+                const items = json['@type'] === 'ItemList' ? (json.itemListElement || [])
+                    : json['@type'] === 'Product' ? [json] : [];
+                items.slice(0, 5).forEach(item => {
+                    const product = item.item || item;
+                    if (product.name && product.offers) {
+                        const offer = Array.isArray(product.offers) ? product.offers[0] : product.offers;
+                        results.push({
+                            title: product.name,
+                            price: parseFloat(offer?.price) || null,
+                            url: product.url || url,
+                            source: 'Soriana',
+                            image: typeof product.image === 'string' ? product.image : (product.image?.[0] || '')
+                        });
+                    }
+                });
+            } catch (e) { /* skip */ }
+        });
+
+        // Fallback: HTML product cards
+        if (results.length === 0) {
+            $('[class*="product-card"], [class*="ProductCard"], [class*="product-tile"], .product-item').slice(0, 5).each((i, el) => {
+                const title = $(el).find('[class*="title"], [class*="name"], h3, h2').first().text().trim();
+                const link = $(el).find('a[href*="/producto"], a[href*="/p/"]').first().attr('href') || $(el).find('a').first().attr('href');
+                const priceText = $(el).find('[class*="price"], [class*="Price"]').first().text().replace(/[^0-9.]/g, '');
+                const img = $(el).find('img').first().attr('src') || $(el).find('img').first().attr('data-src');
+
+                if (title && title.length > 3 && link) {
+                    results.push({
+                        title,
+                        price: priceText ? parseFloat(priceText) : null,
+                        url: link.startsWith('http') ? link : `https://www.soriana.com${link}`,
+                        source: 'Soriana',
+                        image: img || ''
+                    });
+                }
+            });
+        }
+
+        console.log(`[Direct Scraper] Soriana MX encontró: ${results.length} resultados.`);
+        return results;
+    } catch (error) {
+        console.error('[Direct Scraper] Error en Soriana MX:', error.message);
+        return [];
+    }
+};
+
+/**
+ * Scraper para Sears México
+ */
+exports.scrapeSearsMX = async (query) => {
+    try {
+        console.log(`[Direct Scraper] Buscando en Sears MX: ${query}`);
+        const url = `https://www.sears.com.mx/buscar/${encodeURIComponent(query)}`;
+        const response = await scrapeWithRetry(url);
+        const $ = cheerio.load(response.data);
+
+        const results = [];
+
+        // JSON-LD structured data
+        $('script[type="application/ld+json"]').each((i, el) => {
+            try {
+                const json = JSON.parse($(el).html());
+                const items = json['@type'] === 'ItemList' ? (json.itemListElement || [])
+                    : json['@type'] === 'Product' ? [json] : [];
+                items.slice(0, 5).forEach(item => {
+                    const product = item.item || item;
+                    if (product.name && product.offers) {
+                        const offer = Array.isArray(product.offers) ? product.offers[0] : product.offers;
+                        results.push({
+                            title: product.name,
+                            price: parseFloat(offer?.price) || null,
+                            url: product.url || url,
+                            source: 'Sears MX',
+                            image: typeof product.image === 'string' ? product.image : (product.image?.[0] || '')
+                        });
+                    }
+                });
+            } catch (e) { /* skip */ }
+        });
+
+        // Fallback: HTML product cards
+        if (results.length === 0) {
+            $('[class*="product-card"], [class*="ProductCard"], [class*="product-item"]').slice(0, 5).each((i, el) => {
+                const title = $(el).find('[class*="title"], [class*="name"], h3, h2').first().text().trim();
+                const link = $(el).find('a[href*="/producto"], a[href*="/p/"]').first().attr('href') || $(el).find('a').first().attr('href');
+                const priceText = $(el).find('[class*="price"], [class*="Price"]').first().text().replace(/[^0-9.]/g, '');
+                const img = $(el).find('img').first().attr('src') || $(el).find('img').first().attr('data-src');
+
+                if (title && title.length > 3 && link) {
+                    results.push({
+                        title,
+                        price: priceText ? parseFloat(priceText) : null,
+                        url: link.startsWith('http') ? link : `https://www.sears.com.mx${link}`,
+                        source: 'Sears MX',
+                        image: img || ''
+                    });
+                }
+            });
+        }
+
+        console.log(`[Direct Scraper] Sears MX encontró: ${results.length} resultados.`);
+        return results;
+    } catch (error) {
+        console.error('[Direct Scraper] Error en Sears MX:', error.message);
+        return [];
+    }
+};
+
+/**
+ * Scraper para Shein México (moda barata)
+ */
+exports.scrapeSheinMX = async (query) => {
+    try {
+        console.log(`[Direct Scraper] Buscando en Shein MX: ${query}`);
+        const url = `https://mx.shein.com/pdsearch/${encodeURIComponent(query)}/`;
+        const config = getAxiosConfig();
+        config.headers['Accept-Language'] = 'es-MX,es;q=0.9';
+        config.timeout = 8000;
+        
+        const response = await axios.get(url, config);
+        const $ = cheerio.load(response.data);
+
+        const results = [];
+
+        // Try to find products from inline JSON data
+        const scriptContent = $('script').toArray()
+            .map(s => $(s).html())
+            .find(s => s && (s.includes('productList') || s.includes('goods_id')));
+        
+        if (scriptContent) {
+            const priceMatches = [...scriptContent.matchAll(/"(?:retail|sale|display)?[Pp]rice"\s*:\s*"?([\d.]+)"?/g)];
+            const titleMatches = [...scriptContent.matchAll(/"(?:goods_name|productName|title)"\s*:\s*"([^"]{5,200})"/g)];
+            const urlMatches = [...scriptContent.matchAll(/"(?:goods_url_name|productRelationID)"\s*:\s*"([^"]+)"/g)];
+
+            for (let i = 0; i < Math.min(titleMatches.length, 5); i++) {
+                results.push({
+                    title: titleMatches[i]?.[1] || 'Producto Shein',
+                    price: priceMatches[i] ? parseFloat(priceMatches[i][1]) : null,
+                    url: urlMatches[i] ? `https://mx.shein.com/${urlMatches[i][1]}` : url,
+                    source: 'Shein MX',
+                    image: ''
+                });
+            }
+        }
+
+        // Fallback: HTML product cards
+        if (results.length === 0) {
+            $('[class*="product-card"], [class*="S-product-item"], .product-list__item').slice(0, 5).each((i, el) => {
+                const title = $(el).find('[class*="title"], [class*="name"], [class*="goods-title"]').first().text().trim();
+                const link = $(el).find('a').first().attr('href');
+                const priceText = $(el).find('[class*="price"], [class*="Price"]').first().text().replace(/[^0-9.]/g, '');
+                const img = $(el).find('img').first().attr('src') || $(el).find('img').first().attr('data-src');
+
+                if (title && title.length > 3 && link) {
+                    results.push({
+                        title: title.slice(0, 200),
+                        price: priceText ? parseFloat(priceText) : null,
+                        url: link.startsWith('http') ? link : `https://mx.shein.com${link}`,
+                        source: 'Shein MX',
+                        image: img ? (img.startsWith('//') ? `https:${img}` : img) : ''
+                    });
+                }
+            });
+        }
+
+        console.log(`[Direct Scraper] Shein MX encontró: ${results.length} resultados.`);
+        return results;
+    } catch (error) {
+        console.error('[Direct Scraper] Error en Shein MX:', error.message);
+        return [];
+    }
+};
+
+/**
+ * Scraper para Temu México (marketplace barato)
+ */
+exports.scrapeTemuMX = async (query) => {
+    try {
+        console.log(`[Direct Scraper] Buscando en Temu MX: ${query}`);
+        const url = `https://www.temu.com/mx/search_result.html?search_key=${encodeURIComponent(query)}`;
+        const config = getAxiosConfig();
+        config.headers['Accept-Language'] = 'es-MX,es;q=0.9';
+        config.timeout = 8000;
+        
+        const response = await axios.get(url, config);
+        const $ = cheerio.load(response.data);
+
+        const results = [];
+
+        // Try inline JSON data
+        const scriptContent = $('script').toArray()
+            .map(s => $(s).html())
+            .find(s => s && (s.includes('goodsList') || s.includes('goods_id') || s.includes('itemList')));
+        
+        if (scriptContent) {
+            const priceMatches = [...scriptContent.matchAll(/"(?:price|salePrice|displayPrice)"\s*:\s*"?([\d.]+)"?/g)];
+            const titleMatches = [...scriptContent.matchAll(/"(?:goods_name|title|productTitle)"\s*:\s*"([^"]{5,200})"/g)];
+
+            for (let i = 0; i < Math.min(titleMatches.length, 5); i++) {
+                results.push({
+                    title: titleMatches[i]?.[1] || 'Producto Temu',
+                    price: priceMatches[i] ? parseFloat(priceMatches[i][1]) : null,
+                    url: url,
+                    source: 'Temu MX',
+                    image: ''
+                });
+            }
+        }
+
+        // Fallback: HTML product cards
+        if (results.length === 0) {
+            $('[class*="product-card"], [class*="ProductCard"], [class*="goods-card"]').slice(0, 5).each((i, el) => {
+                const title = $(el).find('[class*="title"], [class*="name"]').first().text().trim();
+                const link = $(el).find('a').first().attr('href');
+                const priceText = $(el).find('[class*="price"], [class*="Price"]').first().text().replace(/[^0-9.]/g, '');
+                const img = $(el).find('img').first().attr('src') || $(el).find('img').first().attr('data-src');
+
+                if (title && title.length > 3) {
+                    results.push({
+                        title: title.slice(0, 200),
+                        price: priceText ? parseFloat(priceText) : null,
+                        url: link ? (link.startsWith('http') ? link : `https://www.temu.com${link}`) : url,
+                        source: 'Temu MX',
+                        image: img ? (img.startsWith('//') ? `https:${img}` : img) : ''
+                    });
+                }
+            });
+        }
+
+        console.log(`[Direct Scraper] Temu MX encontró: ${results.length} resultados.`);
+        return results;
+    } catch (error) {
+        console.error('[Direct Scraper] Error en Temu MX:', error.message);
+        return [];
+    }
+};
+
+/**
+ * Scraper para Bodega Aurrera México
+ */
+exports.scrapeBodegaAurreraMX = async (query) => {
+    try {
+        console.log(`[Direct Scraper] Buscando en Bodega Aurrera: ${query}`);
+        const url = `https://www.bodegaaurrera.com.mx/productos?Ntt=${encodeURIComponent(query)}`;
+        const response = await scrapeWithRetry(url);
+        const $ = cheerio.load(response.data);
+
+        const results = [];
+        $('[data-testid="product-card"], .product-card, [class*="ProductCard"], [class*="product-item"]').slice(0, 5).each((i, el) => {
+            const title = $(el).find('[class*="title"], h3, h4, [data-testid="product-title"], [class*="description"]').first().text().trim();
+            const link = $(el).find('a[href*="/ip/"], a[href*="/productos/"]').first().attr('href');
+            const priceText = $(el).find('[class*="price"], [data-testid="product-price"]').first().text().replace(/[^0-9.]/g, '');
+            const img = $(el).find('img').first().attr('src') || $(el).find('img').first().attr('data-src');
+
+            if (title && priceText && link) {
+                results.push({
+                    title: title.slice(0, 200),
+                    price: parseFloat(priceText),
+                    url: link.startsWith('http') ? link : `https://www.bodegaaurrera.com.mx${link}`,
+                    source: 'Bodega Aurrera MX',
+                    image: img || ''
+                });
+            }
+        });
+
+        // Fallback: try JSON-LD structured data
+        if (results.length === 0) {
+            $('script[type="application/ld+json"]').each((i, el) => {
+                try {
+                    const json = JSON.parse($(el).html());
+                    const items = json.itemListElement || (json['@type'] === 'Product' ? [json] : []);
+                    items.slice(0, 5).forEach(item => {
+                        const product = item.item || item;
+                        if (product.name && product.offers) {
+                            const offer = Array.isArray(product.offers) ? product.offers[0] : product.offers;
+                            results.push({
+                                title: product.name.slice(0, 200),
+                                price: parseFloat(offer.price) || null,
+                                url: product.url || url,
+                                source: 'Bodega Aurrera MX',
+                                image: product.image || ''
+                            });
+                        }
+                    });
+                } catch (e) { }
+            });
+        }
+
+        console.log(`[Direct Scraper] Bodega Aurrera encontró: ${results.length} resultados.`);
+        return results;
+    } catch (error) {
+        console.error('[Direct Scraper] Error en Bodega Aurrera:', error.message);
+        return [];
+    }
+};
+
+/**
+ * Scraper para Linio México
+ */
+exports.scrapeLinioMX = async (query) => {
+    try {
+        console.log(`[Direct Scraper] Buscando en Linio MX: ${query}`);
+        const url = `https://www.linio.com.mx/search?scroll=&q=${encodeURIComponent(query)}`;
+        const response = await scrapeWithRetry(url);
+        const $ = cheerio.load(response.data);
+
+        const results = [];
+        $('.catalogue-product, [class*="ProductCard"], .product-card, [data-product-id]').slice(0, 5).each((i, el) => {
+            const title = $(el).find('.product-title, .product-name, [class*="title"], h2, h3').first().text().trim();
+            const link = $(el).find('a').first().attr('href');
+            const priceText = $(el).find('.price-main, .product-price, [class*="price"]').first().text().replace(/[^0-9.]/g, '');
+            const img = $(el).find('img').first().attr('src') || $(el).find('img').first().attr('data-src');
+
+            if (title && title.length > 3 && link) {
+                results.push({
+                    title: title.slice(0, 200),
+                    price: priceText ? parseFloat(priceText) : null,
+                    url: link.startsWith('http') ? link : `https://www.linio.com.mx${link}`,
+                    source: 'Linio MX',
+                    image: img ? (img.startsWith('//') ? `https:${img}` : img) : ''
+                });
+            }
+        });
+
+        // Fallback: JSON-LD
+        if (results.length === 0) {
+            $('script[type="application/ld+json"]').each((i, el) => {
+                try {
+                    const json = JSON.parse($(el).html());
+                    const items = json.itemListElement || (json['@type'] === 'Product' ? [json] : []);
+                    items.slice(0, 5).forEach(item => {
+                        const product = item.item || item;
+                        if (product.name && product.offers) {
+                            const offer = Array.isArray(product.offers) ? product.offers[0] : product.offers;
+                            results.push({
+                                title: product.name.slice(0, 200),
+                                price: parseFloat(offer.price) || null,
+                                url: product.url || url,
+                                source: 'Linio MX',
+                                image: product.image || ''
+                            });
+                        }
+                    });
+                } catch (e) { }
+            });
+        }
+
+        console.log(`[Direct Scraper] Linio MX encontró: ${results.length} resultados.`);
+        return results;
+    } catch (error) {
+        console.error('[Direct Scraper] Error en Linio MX:', error.message);
+        return [];
+    }
+};
+
+/**
+ * Scraper para Claro Shop México
+ */
+exports.scrapeClaroShopMX = async (query) => {
+    try {
+        console.log(`[Direct Scraper] Buscando en Claro Shop: ${query}`);
+        const url = `https://www.claroshop.com/buscar/${encodeURIComponent(query)}`;
+        const response = await scrapeWithRetry(url);
+        const $ = cheerio.load(response.data);
+
+        const results = [];
+        $('[class*="product-card"], [class*="ProductCard"], .product-item, [class*="card-product"]').slice(0, 5).each((i, el) => {
+            const title = $(el).find('[class*="title"], [class*="name"], h3, h4, .product-name').first().text().trim();
+            const link = $(el).find('a').first().attr('href');
+            const priceText = $(el).find('[class*="price"], [class*="Price"]').first().text().replace(/[^0-9.]/g, '');
+            const img = $(el).find('img').first().attr('src') || $(el).find('img').first().attr('data-src');
+
+            if (title && title.length > 3 && link) {
+                results.push({
+                    title: title.slice(0, 200),
+                    price: priceText ? parseFloat(priceText) : null,
+                    url: link.startsWith('http') ? link : `https://www.claroshop.com${link}`,
+                    source: 'Claro Shop MX',
+                    image: img ? (img.startsWith('//') ? `https:${img}` : img) : ''
+                });
+            }
+        });
+
+        // Fallback: embedded JSON data in script tags
+        if (results.length === 0) {
+            const scripts = $('script').toArray().map(s => $(s).html()).filter(Boolean);
+            for (const script of scripts) {
+                try {
+                    const jsonMatch = script.match(/"products"\s*:\s*(\[[\s\S]*?\])/);
+                    if (jsonMatch) {
+                        const products = JSON.parse(jsonMatch[1]);
+                        products.slice(0, 5).forEach(p => {
+                            if (p.name || p.title) {
+                                results.push({
+                                    title: (p.name || p.title).slice(0, 200),
+                                    price: parseFloat(p.price || p.salePrice) || null,
+                                    url: p.url ? (p.url.startsWith('http') ? p.url : `https://www.claroshop.com${p.url}`) : url,
+                                    source: 'Claro Shop MX',
+                                    image: p.image || p.imageUrl || ''
+                                });
+                            }
+                        });
+                    }
+                } catch (e) { }
+            }
+        }
+
+        console.log(`[Direct Scraper] Claro Shop encontró: ${results.length} resultados.`);
+        return results;
+    } catch (error) {
+        console.error('[Direct Scraper] Error en Claro Shop:', error.message);
         return [];
     }
 };

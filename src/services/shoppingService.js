@@ -5,6 +5,52 @@ const localPriceExtractor = require('./localPriceExtractor');
 
 // Timeout por defecto para Serper API
 const SERPER_TIMEOUT = 8000;
+const SERPER_MAX_RETRIES = 2;
+
+// Helper para retry con backoff
+async function fetchWithRetry(config, retries = SERPER_MAX_RETRIES) {
+    let lastError;
+    for (let i = 0; i <= retries; i++) {
+        try {
+            return await axios(config);
+        } catch (err) {
+            lastError = err;
+            const isTimeout = err.code === 'ECONNABORTED' || err.code === 'ETIMEDOUT';
+            const is5xx = err.response?.status >= 500;
+            const is429 = err.response?.status === 429;
+            
+            if ((isTimeout || is5xx || is429) && i < retries) {
+                const delay = Math.pow(2, i) * 1000 + Math.random() * 500;
+                console.warn(`[Serper Retry] Intento ${i + 1}/${retries + 1} falló, reintentando en ${Math.round(delay)}ms...`);
+                await new Promise(r => setTimeout(r, delay));
+            } else {
+                throw err;
+            }
+        }
+    }
+    throw lastError;
+}
+
+// Helper para limitar concurrencia
+async function runWithConcurrencyLimit(promiseFns, limit) {
+    const results = [];
+    const executing = new Set();
+    
+    for (const [index, promiseFn] of promiseFns.entries()) {
+        const p = Promise.resolve().then(() => promiseFn).then(result => ({ status: 'fulfilled', value: result, index })).catch(err => ({ status: 'rejected', reason: err, index }));
+        results.push(p);
+        
+        if (promiseFns.length >= limit) {
+            const tracked = p.then(() => executing.delete(tracked));
+            executing.add(tracked);
+            if (executing.size >= limit) {
+                await Promise.race(executing);
+            }
+        }
+    }
+    
+    return Promise.all(results);
+}
 
 exports.searchGoogleShopping = async (query, radius, lat, lng, intentType) => {
     const apiKey = process.env.SERPER_API_KEY;
@@ -52,7 +98,8 @@ exports.searchGoogleShopping = async (query, radius, lat, lng, intentType) => {
     } else if (apiKey) {
         // Flujo normal: Google Shopping + Web en PARALELO para máxima velocidad y variedad
         console.log(`[ShoppingService] Ejecutando Serper Shopping + Web para: "${query}"`);
-        const shoppingPromise = axios({
+        
+        const shoppingPromise = fetchWithRetry({
             method: 'post',
             url: 'https://google.serper.dev/shopping',
             headers: { 'X-API-KEY': apiKey, 'Content-Type': 'application/json' },
@@ -60,13 +107,13 @@ exports.searchGoogleShopping = async (query, radius, lat, lng, intentType) => {
             timeout: SERPER_TIMEOUT
         }).catch(err => { console.error('Error Google Shopping:', err.message); return null; });
 
-        const webPromise = axios({
+        const webPromise = fetchWithRetry({
             method: 'post',
             url: 'https://google.serper.dev/search',
             headers: { 'X-API-KEY': apiKey, 'Content-Type': 'application/json' },
             data: JSON.stringify({
-                q: `${query} precio comprar site:walmart.com.mx OR site:liverpool.com.mx OR site:coppel.com OR site:bestbuy.com.mx OR site:elektra.com.mx OR site:costco.com.mx OR site:sams.com.mx OR site:officedepot.com.mx`,
-                gl: 'mx', hl: 'es', num: 10
+                q: `${query} precio comprar site:walmart.com.mx OR site:liverpool.com.mx OR site:coppel.com OR site:bestbuy.com.mx OR site:elektra.com.mx OR site:costco.com.mx OR site:sams.com.mx OR site:officedepot.com.mx OR site:soriana.com OR site:sears.com.mx OR site:mx.shein.com OR site:temu.com OR site:bodegaaurrera.com.mx OR site:linio.com.mx OR site:claroshop.com OR site:sanborns.com.mx`,
+                gl: 'mx', hl: 'es', num: 20
             }),
             timeout: SERPER_TIMEOUT
         }).catch(err => { console.error('Error Serper Web:', err.message); return null; });
@@ -131,7 +178,16 @@ exports.searchGoogleShopping = async (query, radius, lat, lng, intentType) => {
                 'elektra.com.mx': 'Elektra',
                 'costco.com.mx': 'Costco MX',
                 'sams.com.mx': "Sam's Club MX",
-                'officedepot.com.mx': 'OfficeDepot MX'
+                'officedepot.com.mx': 'OfficeDepot MX',
+                'soriana.com': 'Soriana',
+                'sears.com.mx': 'Sears MX',
+                'mx.shein.com': 'Shein MX',
+                'shein.com': 'Shein MX',
+                'temu.com': 'Temu MX',
+                'bodegaaurrera.com.mx': 'Bodega Aurrera MX',
+                'linio.com.mx': 'Linio MX',
+                'claroshop.com': 'Claro Shop MX',
+                'sanborns.com.mx': 'Sanborns MX'
             };
             const webMapped = webResults.map(r => {
                 const domain = (r.link.match(/https?:\/\/(?:www\.)?([^/]+)/) || [])[1] || '';
@@ -179,7 +235,7 @@ exports.searchGoogleShopping = async (query, radius, lat, lng, intentType) => {
                 console.log(`[Serper Places] Encontró ${places.length} lugares cercanos`);
 
                 // Extraer precios web si existen con IA + calcular distancia
-                const localPromises = places.slice(0, 5).map(async p => {
+                const localPromises = places.slice(0, 8).map(async p => {
                     const mapsUrl = p.cid ? `https://www.google.com/maps?cid=${p.cid}` : `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(p.address || p.title)}`;
                     const storeName = p.title || 'Tienda Física';
                     const ratingStr = p.rating ? `⭐ ${p.rating}` : '';
@@ -231,26 +287,38 @@ exports.searchGoogleShopping = async (query, radius, lat, lng, intentType) => {
     }
 
     // 2. Ejecutar Scrapers DIRECTOS solo si NO es un servicio
+    // FIX: Limitar concurrencia a 5 scrapers simultáneos para evitar agotar conexiones
     let directResults = [];
     if (!isService && intentType !== 'mayoreo_perecedero') {
         // Strip Google-only negative keywords (-funda -case etc.) since direct scrapers use URL search params
         const cleanQuery = query.replace(/\s+-\w+/g, '').trim();
         console.log(`Ejecutando scrapers directos y rápidos para: ${cleanQuery} ...`);
-        const scraperPromises = [
-            monitor.wrap(directScraper.scrapeAmazonDirect, 'amazon_direct', cleanQuery),
-            monitor.wrap(directScraper.scrapeMercadoLibreDirect, 'ml_direct', cleanQuery),
-            monitor.wrap(directScraper.scrapeWalmartMX, 'walmart_direct', cleanQuery),
-            monitor.wrap(directScraper.scrapeLiverpoolMX, 'liverpool_direct', cleanQuery),
-            monitor.wrap(directScraper.scrapeCoppelMX, 'coppel_direct', cleanQuery),
-            monitor.wrap(directScraper.scrapeAliExpress, 'aliexpress_direct', cleanQuery),
-            monitor.wrap(directScraper.scrapeElektraMX, 'elektra_direct', cleanQuery),
-            monitor.wrap(directScraper.scrapeBestBuyMX, 'bestbuy_direct', cleanQuery),
-            monitor.wrap(directScraper.scrapeCostcoMX, 'costco_direct', cleanQuery),
-            monitor.wrap(directScraper.scrapeSamsClubMX, 'sams_direct', cleanQuery),
-            monitor.wrap(directScraper.scrapeHomeDepotMX, 'homedepot_direct', cleanQuery),
-            monitor.wrap(directScraper.scrapeOfficeDepotMX, 'officedepot_direct', cleanQuery)
+        
+        const scraperFunctions = [
+            () => monitor.wrap(directScraper.scrapeAmazonDirect, 'amazon_direct', cleanQuery),
+            () => monitor.wrap(directScraper.scrapeMercadoLibreDirect, 'ml_direct', cleanQuery),
+            () => monitor.wrap(directScraper.scrapeWalmartMX, 'walmart_direct', cleanQuery),
+            () => monitor.wrap(directScraper.scrapeLiverpoolMX, 'liverpool_direct', cleanQuery),
+            () => monitor.wrap(directScraper.scrapeCoppelMX, 'coppel_direct', cleanQuery),
+            () => monitor.wrap(directScraper.scrapeAliExpress, 'aliexpress_direct', cleanQuery),
+            () => monitor.wrap(directScraper.scrapeElektraMX, 'elektra_direct', cleanQuery),
+            () => monitor.wrap(directScraper.scrapeBestBuyMX, 'bestbuy_direct', cleanQuery),
+            () => monitor.wrap(directScraper.scrapeCostcoMX, 'costco_direct', cleanQuery),
+            () => monitor.wrap(directScraper.scrapeSamsClubMX, 'sams_direct', cleanQuery),
+            () => monitor.wrap(directScraper.scrapeHomeDepotMX, 'homedepot_direct', cleanQuery),
+            () => monitor.wrap(directScraper.scrapeOfficeDepotMX, 'officedepot_direct', cleanQuery),
+            () => monitor.wrap(directScraper.scrapeSorianaMX, 'soriana_direct', cleanQuery),
+            () => monitor.wrap(directScraper.scrapeSearsMX, 'sears_direct', cleanQuery),
+            () => monitor.wrap(directScraper.scrapeSheinMX, 'shein_direct', cleanQuery),
+            () => monitor.wrap(directScraper.scrapeTemuMX, 'temu_direct', cleanQuery),
+            () => monitor.wrap(directScraper.scrapeBodegaAurreraMX, 'bodega_aurrera_direct', cleanQuery),
+            () => monitor.wrap(directScraper.scrapeLinioMX, 'linio_direct', cleanQuery),
+            () => monitor.wrap(directScraper.scrapeClaroShopMX, 'claroshop_direct', cleanQuery)
         ];
-        const scraperResultsRaw = await Promise.allSettled(scraperPromises);
+        
+        const CONCURRENCY_LIMIT = 5;
+        const scraperResultsRaw = await runWithConcurrencyLimit(scraperFunctions, CONCURRENCY_LIMIT);
+        
         scraperResultsRaw.forEach(result => {
             if (result.status === 'fulfilled' && result.value) {
                 directResults = directResults.concat(result.value);
