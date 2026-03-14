@@ -3,5 +3,13 @@ Allow: /
 Disallow: /api/
 Disallow: /*?code=*
 Disallow: /*?token=*
+Disallow: /admin/
+Crawl-delay: 1
+
+# Allow important pages
+Allow: /about
+Allow: /privacy
+Allow: /terms
+Allow: /buscar/
 
 Sitemap: https://lumu.dev/sitemap.xml
