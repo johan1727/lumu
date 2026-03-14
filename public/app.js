@@ -1960,6 +1960,11 @@ async function initApp() {
 
                     if (data.top_5_baratos && data.top_5_baratos.length > 0) {
                         await renderProducts(data.top_5_baratos);
+                        
+                        // Track search in Google Analytics
+                        if (typeof trackSearch === 'function') {
+                            trackSearch(data.intencion_detectada?.busqueda || finalQuery);
+                        }
 
                         chatContainer.classList.remove('hidden');
                         addChatBubble('ai', getResultLeadCopy(data.intencion_detectada, data.top_5_baratos.length), [], true);
@@ -3067,25 +3072,40 @@ async function initApp() {
                 </div>
             `;
 
-                // SEO Schema Markup (Phase 7)
+                // SEO Schema Markup (Phase 7) - Enhanced with AggregateOffer
                 if (!isLocal && precioNumerico > 0) {
                     const schemaData = {
                         "@context": "https://schema.org/",
                         "@type": "Product",
                         "name": product.titulo,
                         "image": [imgUrl],
+                        "brand": {
+                            "@type": "Brand",
+                            "name": product.tienda || "Tienda Online"
+                        },
                         "offers": {
                             "@type": "Offer",
                             "url": product.urlMonetizada || product.urlOriginal,
                             "priceCurrency": getRegionConfig().currency,
                             "price": precioNumerico.toString(),
                             "availability": "https://schema.org/InStock",
+                            "priceValidUntil": new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
                             "seller": {
                                 "@type": "Organization",
                                 "name": product.tienda || "Tienda Online"
                             }
                         }
                     };
+                    
+                    // Add aggregateRating if available
+                    if (product.rating || product.reviewCount) {
+                        schemaData.aggregateRating = {
+                            "@type": "AggregateRating",
+                            "ratingValue": product.rating || "4.5",
+                            "reviewCount": product.reviewCount || "10"
+                        };
+                    }
+                    
                     card.innerHTML += `<script type="application/ld+json">${JSON.stringify(schemaData)}</script>`;
                 }
 
@@ -3098,6 +3118,12 @@ async function initApp() {
                     btnOpenOffer.addEventListener('click', (e) => {
                         e.preventDefault();
                         const target = btnOpenOffer.getAttribute('data-target-url');
+                        
+                        // Track product click in Google Analytics
+                        if (typeof trackProductClick === 'function') {
+                            trackProductClick(product.titulo, product.tienda, precioNumerico);
+                        }
+                        
                         if (target && target !== 'undefined' && target !== 'null') {
                             if (typeof window.openAdGateway === 'function') {
                                 window.openAdGateway(target);

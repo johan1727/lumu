@@ -1,0 +1,288 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    
+    <!-- SEO Meta Tags - PERSONALIZAR PARA CADA ARTÍCULO -->
+    <title>[TÍTULO DEL ARTÍCULO] - Lumu Blog</title>
+    <meta name="description" content="[DESCRIPCIÓN DE 150-160 CARACTERES CON PALABRA CLAVE]">
+    <meta name="keywords" content="[palabra clave 1], [palabra clave 2], comparador precios, ofertas mexico">
+    <meta name="author" content="Equipo Lumu">
+    
+    <!-- Open Graph -->
+    <meta property="og:title" content="[TÍTULO DEL ARTÍCULO]">
+    <meta property="og:description" content="[DESCRIPCIÓN CORTA]">
+    <meta property="og:image" content="https://lumu.dev/images/blog/[IMAGEN-ARTICULO].jpg">
+    <meta property="og:url" content="https://lumu.dev/blog/[URL-SLUG].html">
+    <meta property="og:type" content="article">
+    
+    <!-- Twitter Card -->
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="[TÍTULO DEL ARTÍCULO]">
+    <meta name="twitter:description" content="[DESCRIPCIÓN CORTA]">
+    <meta name="twitter:image" content="https://lumu.dev/images/blog/[IMAGEN-ARTICULO].jpg">
+    
+    <link rel="canonical" href="https://lumu.dev/blog/[URL-SLUG].html">
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- Google Analytics 4 -->
+    <script async src="https://www.googletagmanager.com/gtag/js?id=G-XXXXXXXXXX"></script>
+    <script>
+        window.dataLayer = window.dataLayer || [];
+        function gtag(){dataLayer.push(arguments);}
+        gtag('js', new Date());
+        gtag('config', 'G-XXXXXXXXXX');
+    </script>
+    
+    <!-- Article Schema Markup -->
+    <script type="application/ld+json">
+    {
+        "@context": "https://schema.org",
+        "@type": "BlogPosting",
+        "headline": "[TÍTULO DEL ARTÍCULO]",
+        "description": "[DESCRIPCIÓN]",
+        "image": "https://lumu.dev/images/blog/[IMAGEN-ARTICULO].jpg",
+        "author": {
+            "@type": "Organization",
+            "name": "Lumu",
+            "url": "https://lumu.dev"
+        },
+        "publisher": {
+            "@type": "Organization",
+            "name": "Lumu",
+            "logo": {
+                "@type": "ImageObject",
+                "url": "https://lumu.dev/images/og-cover.png"
+            }
+        },
+        "datePublished": "[YYYY-MM-DD]",
+        "dateModified": "[YYYY-MM-DD]",
+        "mainEntityOfPage": {
+            "@type": "WebPage",
+            "@id": "https://lumu.dev/blog/[URL-SLUG].html"
+        }
+    }
+    </script>
+</head>
+<body class="bg-slate-50">
+    <!-- Header con logo y navegación -->
+    <header class="bg-white border-b border-slate-200 sticky top-0 z-50">
+        <div class="max-w-4xl mx-auto px-4 py-4 flex items-center justify-between">
+            <a href="/" class="flex items-center gap-2">
+                <div class="w-8 h-8 rounded-xl bg-gradient-to-br from-emerald-500 to-teal-500 flex items-center justify-center text-white font-black text-sm shadow-lg">L</div>
+                <span class="text-xl font-black text-slate-900">Lumu</span>
+            </a>
+            <nav class="flex items-center gap-4">
+                <a href="/blog" class="text-sm font-medium text-slate-600 hover:text-emerald-600">Blog</a>
+                <a href="/" class="px-4 py-2 bg-emerald-500 text-white text-sm font-bold rounded-lg hover:bg-emerald-600">Buscar Ofertas</a>
+            </nav>
+        </div>
+    </header>
+
+    <!-- Artículo -->
+    <article class="max-w-4xl mx-auto px-4 py-12">
+        <!-- Breadcrumb -->
+        <nav class="text-sm text-slate-500 mb-6">
+            <a href="/" class="hover:text-emerald-600">Inicio</a> / 
+            <a href="/blog" class="hover:text-emerald-600">Blog</a> / 
+            <span class="text-slate-700">[Título del artículo]</span>
+        </nav>
+
+        <!-- Título principal (H1) -->
+        <h1 class="text-4xl md:text-5xl font-black text-slate-900 mb-4 leading-tight">
+            [Título del Artículo con Palabra Clave Principal]
+        </h1>
+
+        <!-- Meta info -->
+        <div class="flex items-center gap-4 text-sm text-slate-500 mb-8 pb-8 border-b border-slate-200">
+            <span>📅 [Fecha: Marzo 14, 2026]</span>
+            <span>⏱️ [Tiempo de lectura: 5 min]</span>
+            <span>✍️ Equipo Lumu</span>
+        </div>
+
+        <!-- Imagen destacada -->
+        <img src="https://lumu.dev/images/blog/[IMAGEN-ARTICULO].jpg" 
+             alt="[Descripción de la imagen con palabra clave]" 
+             class="w-full rounded-2xl shadow-lg mb-8">
+
+        <!-- Introducción -->
+        <div class="prose prose-lg max-w-none">
+            <p class="text-xl text-slate-700 leading-relaxed mb-8">
+                [INTRODUCCIÓN: Hook que capture atención + problema que resuelve el artículo. 
+                Incluir palabra clave principal en las primeras 100 palabras.]
+            </p>
+
+            <!-- Tabla de contenidos (opcional para artículos largos) -->
+            <div class="bg-emerald-50 border border-emerald-200 rounded-2xl p-6 mb-8">
+                <h2 class="text-lg font-bold text-emerald-800 mb-3">📋 En este artículo:</h2>
+                <ul class="space-y-2 text-emerald-700">
+                    <li><a href="#seccion1" class="hover:underline">1. [Título sección 1]</a></li>
+                    <li><a href="#seccion2" class="hover:underline">2. [Título sección 2]</a></li>
+                    <li><a href="#seccion3" class="hover:underline">3. [Título sección 3]</a></li>
+                </ul>
+            </div>
+
+            <!-- Sección 1 -->
+            <h2 id="seccion1" class="text-3xl font-bold text-slate-900 mt-12 mb-4">
+                [H2: Subtítulo con palabra clave secundaria]
+            </h2>
+            <p class="text-slate-700 leading-relaxed mb-6">
+                [CONTENIDO: Párrafo de 3-5 líneas. Usar lenguaje natural, evitar keyword stuffing.
+                Incluir datos, estadísticas o ejemplos concretos.]
+            </p>
+
+            <!-- Lista con bullets -->
+            <h3 class="text-2xl font-bold text-slate-800 mt-8 mb-4">
+                [H3: Sub-subtítulo específico]
+            </h3>
+            <ul class="list-disc list-inside text-slate-700 space-y-3 mb-6">
+                <li><strong>Punto 1:</strong> Explicación detallada del punto 1</li>
+                <li><strong>Punto 2:</strong> Explicación detallada del punto 2</li>
+                <li><strong>Punto 3:</strong> Explicación detallada del punto 3</li>
+            </ul>
+
+            <!-- Caja de tip/consejo -->
+            <div class="bg-amber-50 border-l-4 border-amber-500 p-6 rounded-r-xl my-8">
+                <p class="text-amber-900 font-medium">
+                    💡 <strong>Tip Pro:</strong> [Consejo práctico y accionable relacionado con el tema]
+                </p>
+            </div>
+
+            <!-- Sección 2 -->
+            <h2 id="seccion2" class="text-3xl font-bold text-slate-900 mt-12 mb-4">
+                [H2: Otro subtítulo importante]
+            </h2>
+            <p class="text-slate-700 leading-relaxed mb-6">
+                [CONTENIDO: Más información valiosa. Usar transiciones naturales entre párrafos.]
+            </p>
+
+            <!-- Tabla comparativa (ejemplo) -->
+            <div class="overflow-x-auto my-8">
+                <table class="w-full border-collapse bg-white rounded-xl overflow-hidden shadow-sm">
+                    <thead class="bg-emerald-500 text-white">
+                        <tr>
+                            <th class="px-4 py-3 text-left font-bold">Tienda</th>
+                            <th class="px-4 py-3 text-left font-bold">Precio</th>
+                            <th class="px-4 py-3 text-left font-bold">Envío</th>
+                        </tr>
+                    </thead>
+                    <tbody class="divide-y divide-slate-200">
+                        <tr>
+                            <td class="px-4 py-3">Amazon MX</td>
+                            <td class="px-4 py-3 font-bold text-emerald-600">$12,999</td>
+                            <td class="px-4 py-3">Gratis</td>
+                        </tr>
+                        <tr>
+                            <td class="px-4 py-3">Mercado Libre</td>
+                            <td class="px-4 py-3 font-bold">$13,499</td>
+                            <td class="px-4 py-3">$199</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+
+            <!-- Sección 3 -->
+            <h2 id="seccion3" class="text-3xl font-bold text-slate-900 mt-12 mb-4">
+                [H2: Conclusión o recomendaciones finales]
+            </h2>
+            <p class="text-slate-700 leading-relaxed mb-6">
+                [CONCLUSIÓN: Resumir puntos clave + call-to-action suave]
+            </p>
+
+            <!-- CTA final -->
+            <div class="bg-gradient-to-br from-emerald-500 to-teal-500 rounded-2xl p-8 text-center my-12">
+                <h3 class="text-2xl font-black text-white mb-3">
+                    ¿Listo para encontrar el mejor precio?
+                </h3>
+                <p class="text-emerald-50 mb-6">
+                    Compara precios en 19 tiendas con Lumu en segundos
+                </p>
+                <a href="/" class="inline-block px-8 py-3 bg-white text-emerald-600 font-bold rounded-xl hover:bg-emerald-50 transition-all shadow-lg">
+                    Buscar Ofertas Ahora 🚀
+                </a>
+            </div>
+
+            <!-- FAQ Schema (opcional pero muy bueno para SEO) -->
+            <h2 class="text-3xl font-bold text-slate-900 mt-12 mb-6">
+                Preguntas Frecuentes
+            </h2>
+            <div class="space-y-4">
+                <details class="bg-white rounded-xl p-6 border border-slate-200">
+                    <summary class="font-bold text-slate-900 cursor-pointer">
+                        ¿[Pregunta frecuente 1]?
+                    </summary>
+                    <p class="text-slate-700 mt-3">
+                        [Respuesta detallada con palabra clave]
+                    </p>
+                </details>
+                <details class="bg-white rounded-xl p-6 border border-slate-200">
+                    <summary class="font-bold text-slate-900 cursor-pointer">
+                        ¿[Pregunta frecuente 2]?
+                    </summary>
+                    <p class="text-slate-700 mt-3">
+                        [Respuesta detallada]
+                    </p>
+                </details>
+            </div>
+        </div>
+
+        <!-- Compartir en redes sociales -->
+        <div class="mt-12 pt-8 border-t border-slate-200">
+            <p class="text-sm font-bold text-slate-700 mb-4">Compartir este artículo:</p>
+            <div class="flex gap-3">
+                <a href="https://wa.me/?text=[TÍTULO]%20https://lumu.dev/blog/[URL-SLUG].html" 
+                   target="_blank" 
+                   class="px-4 py-2 bg-emerald-500 text-white rounded-lg hover:bg-emerald-600 flex items-center gap-2">
+                    <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 24 24"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.878-.788-1.47-1.761-1.643-2.06-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51a12.8 12.8 0 0 0-.57-.01c-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 0 1-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 0 1-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 0 1 2.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0 0 12.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 0 0 5.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 0 0-3.48-8.413Z"/></svg>
+                    WhatsApp
+                </a>
+                <a href="https://twitter.com/intent/tweet?text=[TÍTULO]&url=https://lumu.dev/blog/[URL-SLUG].html" 
+                   target="_blank" 
+                   class="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600">
+                    Twitter
+                </a>
+                <a href="https://www.facebook.com/sharer/sharer.php?u=https://lumu.dev/blog/[URL-SLUG].html" 
+                   target="_blank" 
+                   class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700">
+                    Facebook
+                </a>
+            </div>
+        </div>
+    </article>
+
+    <!-- Footer -->
+    <footer class="bg-white border-t border-slate-200 mt-16 py-8">
+        <div class="max-w-4xl mx-auto px-4 text-center">
+            <p class="text-slate-600 text-sm">
+                © 2026 Lumu AI. Todos los derechos reservados. | 
+                <a href="/privacy.html" class="hover:text-emerald-600">Privacidad</a> | 
+                <a href="/terms.html" class="hover:text-emerald-600">Términos</a>
+            </p>
+        </div>
+    </footer>
+
+    <!-- FAQ Schema Markup -->
+    <script type="application/ld+json">
+    {
+        "@context": "https://schema.org",
+        "@type": "FAQPage",
+        "mainEntity": [{
+            "@type": "Question",
+            "name": "¿[Pregunta frecuente 1]?",
+            "acceptedAnswer": {
+                "@type": "Answer",
+                "text": "[Respuesta detallada]"
+            }
+        }, {
+            "@type": "Question",
+            "name": "¿[Pregunta frecuente 2]?",
+            "acceptedAnswer": {
+                "@type": "Answer",
+                "text": "[Respuesta detallada]"
+            }
+        }]
+    }
+    </script>
+</body>
+</html>

@@ -63,6 +63,44 @@
     <!-- Canvas Confetti -->
     <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.9.2/dist/confetti.browser.min.js"></script>
 
+    <!-- Google Analytics 4 -->
+    <script async src="https://www.googletagmanager.com/gtag/js?id=G-XXXXXXXXXX"></script>
+    <script>
+        window.dataLayer = window.dataLayer || [];
+        function gtag(){dataLayer.push(arguments);}
+        gtag('js', new Date());
+        gtag('config', 'G-XXXXXXXXXX', {
+            'send_page_view': true,
+            'anonymize_ip': true
+        });
+        
+        // Custom events for tracking
+        function trackSearch(query) {
+            gtag('event', 'search', {
+                'search_term': query
+            });
+        }
+        
+        function trackProductClick(productName, store, price) {
+            gtag('event', 'select_item', {
+                'item_name': productName,
+                'item_brand': store,
+                'price': price
+            });
+        }
+        
+        function trackSubscription(plan) {
+            gtag('event', 'purchase', {
+                'transaction_id': Date.now(),
+                'value': plan === 'pro' ? 99 : 0,
+                'currency': 'MXN',
+                'items': [{
+                    'item_name': 'Lumu ' + plan.toUpperCase()
+                }]
+            });
+        }
+    </script>
+
     <!-- JSON-LD Structured Data -->
     <script type="application/ld+json">
     {
