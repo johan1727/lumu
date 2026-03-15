@@ -7,6 +7,19 @@ const localPriceExtractor = require('./localPriceExtractor');
 const SERPER_TIMEOUT = 8000;
 const SERPER_MAX_RETRIES = 2;
 
+function extractSnippetPrice(text) {
+    const source = String(text || '');
+    const lowered = source.toLowerCase();
+    if (!source) return null;
+    if (/meses|msi|mensual|mensualidades|quincena|quincenal|semanales|semana|por mes|desde \$/.test(lowered)) {
+        return null;
+    }
+    const match = source.match(/\$([\d,]+(?:\.\d{2})?)/);
+    if (!match) return null;
+    const parsed = parseFloat(match[1].replace(/,/g, ''));
+    return Number.isFinite(parsed) ? parsed : null;
+}
+
 // Helper para retry con backoff
 async function fetchWithRetry(config, retries = SERPER_MAX_RETRIES) {
     let lastError;
@@ -52,10 +65,11 @@ async function runWithConcurrencyLimit(promiseFns, limit) {
     return Promise.all(results);
 }
 
-exports.searchGoogleShopping = async (query, radius, lat, lng, intentType) => {
+exports.searchGoogleShopping = async (query, radius, lat, lng, intentType, abortSignal, conditionMode = 'all') => {
     const apiKey = process.env.SERPER_API_KEY;
     let serperResults = [];
     let isService = intentType === 'servicio_local';
+    const searchConditionMode = conditionMode || 'all';
 
     // 1. Resolver búsqueda según la intención de la IA
     if (intentType === 'mayoreo_perecedero') {
@@ -97,7 +111,7 @@ exports.searchGoogleShopping = async (query, radius, lat, lng, intentType) => {
         }
     } else if (apiKey) {
         // Flujo normal: Google Shopping + Web en PARALELO para máxima velocidad y variedad
-        console.log(`[ShoppingService] Ejecutando Serper Shopping + Web para: "${query}"`);
+        console.log(`[ShoppingService] Ejecutando Serper Shopping + Web para: "${query}" (${searchConditionMode})`);
         
         const shoppingPromise = fetchWithRetry({
             method: 'post',
@@ -141,7 +155,8 @@ exports.searchGoogleShopping = async (query, radius, lat, lng, intentType) => {
                     url: item.link || '',
                     source: item.source || 'Tienda Desconocida',
                     image: item.imageUrl || '',
-                    isGoogleRedirect: (item.link || '').includes('google.com/search')
+                    isGoogleRedirect: (item.link || '').includes('google.com/search'),
+                    snippet: item.snippet || ''
                 };
             });
             console.log(`[Serper Shopping] ${serperResults.length} resultados procesados`);
@@ -192,15 +207,14 @@ exports.searchGoogleShopping = async (query, radius, lat, lng, intentType) => {
             const webMapped = webResults.map(r => {
                 const domain = (r.link.match(/https?:\/\/(?:www\.)?([^/]+)/) || [])[1] || '';
                 const storeName = Object.entries(storeMap).find(([d]) => domain.includes(d))?.[1] || domain;
-                const priceMatch = (r.snippet || '').match(/\$([\d,]+(?:\.\d{2})?)/)
-                    || (r.title || '').match(/\$([\d,]+(?:\.\d{2})?)/);
-                const price = priceMatch ? parseFloat(priceMatch[1].replace(/,/g, '')) : null;
+                const price = extractSnippetPrice(r.snippet || '') ?? extractSnippetPrice(r.title || '');
                 return {
                     title: r.title || 'Sin Título',
                     price,
                     url: r.link,
                     source: storeName,
-                    image: r.imageUrl || ''
+                    image: r.imageUrl || '',
+                    snippet: r.snippet || ''
                 };
             });
             serperResults = [...serperResults, ...webMapped];

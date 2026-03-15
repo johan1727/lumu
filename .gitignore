@@ -2,6 +2,7 @@
 .env
 .env.local
 .env.*.local
+.env.example
 
 # Dependencies
 node_modules/
@@ -24,3 +25,8 @@ dist/
 
 # Debug scripts
 *.py
+
+# Debug scripts and outputs
+p_output.*
+diff.*
+syntax_error.txt

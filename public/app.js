@@ -37,7 +37,9 @@ let btnVoiceInput, isRecording = false;
 let selectedImageBase64 = null;
 // Location inputs (global so they're accessible in submit handler)
 let locRadiusInput, userLatInput, userLngInput;
+let conditionModeInput = null;
 let currentRegion = 'MX';
+const SEARCH_SNAPSHOTS_KEY = 'lumu_search_snapshots';
 
 const REGION_LABELS = {
     MX: {
@@ -428,13 +430,51 @@ function getSearchButtonLabel() {
 
 function getSearchButtonIdleHTML() {
     return `
-                ${getSearchButtonLabel()}
+                <span>${getSearchButtonLabel()}</span>
                 <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-corner-down-left"><polyline points="9 10 4 15 9 20"/><path d="M20 4v7a4 4 0 0 1-4 4H4"/></svg>
             `;
 }
 
+function getSearchSnapshots() {
+    try {
+        return JSON.parse(localStorage.getItem(SEARCH_SNAPSHOTS_KEY) || '{}');
+    } catch (error) {
+        console.warn('Could not parse search snapshots:', error);
+        return {};
+    }
+}
+
+function getSearchSnapshot(query) {
+    if (!query) return null;
+    return getSearchSnapshots()[String(query).trim().toLowerCase()] || null;
+}
+
+function saveSearchSnapshot(snapshot) {
+    if (!snapshot?.query || !Array.isArray(snapshot?.results)) return;
+    const snapshots = getSearchSnapshots();
+    snapshots[String(snapshot.query).trim().toLowerCase()] = {
+        ...snapshot,
+        savedAt: snapshot.savedAt || new Date().toISOString()
+    };
+    localStorage.setItem(SEARCH_SNAPSHOTS_KEY, JSON.stringify(snapshots));
+}
+
+function buildFallbackProductImage(label = 'Lumu') {
+    return `data:image/svg+xml,${encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" width="320" height="240" viewBox="0 0 320 240"><defs><linearGradient id="bg" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#ecfdf5"/><stop offset="1" stop-color="#dbeafe"/></linearGradient></defs><rect width="320" height="240" rx="28" fill="url(#bg)"/><rect x="22" y="22" width="276" height="196" rx="24" fill="#ffffff" stroke="#a7f3d0"/><g fill="none" stroke="#10b981" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"><path d="M116 93h88l-9 67h-70l-9-67z"/><path d="M139 93V82a21 21 0 0 1 42 0v11"/></g><text x="160" y="189" text-anchor="middle" font-family="Arial, sans-serif" font-size="18" font-weight="700" fill="#065f46">${String(label).slice(0, 20)}</text></svg>`)}`;
+}
+
 function getLocalizedText(spanish, english) {
     return currentRegion === 'US' ? english : spanish;
+}
+
+function getConditionMode() {
+    return conditionModeInput?.value || 'all';
+}
+
+function getConditionLabel(mode = getConditionMode()) {
+    if (mode === 'used') return getLocalizedText('Usado / reacondicionado', 'Used / refurbished');
+    if (mode === 'new') return getLocalizedText('Solo nuevo', 'New only');
+    return getLocalizedText('Nuevo + usado', 'New + used');
 }
 
 function getResultLeadCopy(searchIntent = {}, totalResults = 0) {
@@ -729,6 +769,84 @@ async function initApp() {
         imagePreview = document.getElementById('image-preview');
         btnRemoveImage = document.getElementById('btn-remove-image');
         btnVoiceInput = document.getElementById('btn-voice-input');
+        if (btnVoiceInput) {
+            const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+            if (!SpeechRecognition) {
+                btnVoiceInput.disabled = true;
+                btnVoiceInput.classList.add('opacity-40', 'cursor-not-allowed');
+                btnVoiceInput.title = 'Tu navegador no soporta dictado por voz';
+            } else {
+                const recognition = new SpeechRecognition();
+                recognition.lang = 'es-MX';
+                recognition.interimResults = true;
+                recognition.maxAlternatives = 1;
+                recognition.continuous = false;
+
+                const stopRecording = () => {
+                    isRecording = false;
+                    btnVoiceInput.classList.remove('text-rose-500', 'animate-pulse');
+                    btnVoiceInput.classList.add('text-slate-400');
+                };
+
+                recognition.onstart = () => {
+                    isRecording = true;
+                    btnVoiceInput.classList.add('text-rose-500', 'animate-pulse');
+                    btnVoiceInput.classList.remove('text-slate-400');
+                    if (typeof showGlobalFeedback === 'function') showGlobalFeedback('Escuchando... habla ahora.', 'info');
+                };
+
+                recognition.onresult = (event) => {
+                    const transcript = Array.from(event.results)
+                        .map(result => result[0]?.transcript || '')
+                        .join(' ')
+                        .trim();
+                    if (!transcript || !searchInput) return;
+                    searchInput.value = transcript;
+                    searchInput.dispatchEvent(new Event('input'));
+                    searchInput.focus();
+                };
+
+                recognition.onerror = (event) => {
+                    console.error('Speech recognition error:', event.error);
+                    stopRecording();
+                    if (typeof showGlobalFeedback !== 'function') return;
+                    if (event.error === 'not-allowed' || event.error === 'service-not-allowed') {
+                        showGlobalFeedback('Activa el permiso del micrófono en tu navegador.', 'error');
+                    } else if (event.error === 'no-speech') {
+                        showGlobalFeedback('No detecté voz. Intenta de nuevo.', 'error');
+                    } else if (event.error === 'audio-capture') {
+                        showGlobalFeedback('No pude acceder a tu micrófono.', 'error');
+                    } else {
+                        showGlobalFeedback('Error con el micrófono. Intenta otra vez.', 'error');
+                    }
+                };
+
+                recognition.onend = () => stopRecording();
+
+                btnVoiceInput.addEventListener('click', async () => {
+                    if (isRecording) {
+                        recognition.stop();
+                        return;
+                    }
+
+                    if (window.isSecureContext === false && location.hostname !== 'localhost' && location.hostname !== '127.0.0.1') {
+                        if (typeof showGlobalFeedback === 'function') showGlobalFeedback('El micrófono requiere HTTPS o localhost.', 'error');
+                        return;
+                    }
+
+                    try {
+                        if (navigator.mediaDevices?.getUserMedia) {
+                            const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                            stream.getTracks().forEach(track => track.stop());
+                        }
+                        recognition.start();
+                    } catch (err) {
+                        console.error('Microphone permission error:', err);
+                        if (typeof showGlobalFeedback === 'function') showGlobalFeedback('No se concedió permiso al micrófono.', 'error');
+                    }
+                });
+            }
+        }
 
         navB2b = document.getElementById('nav-b2b');
         b2bModal = document.getElementById('b2b-modal');
@@ -749,7 +867,9 @@ async function initApp() {
         locRadiusInput = document.getElementById('loc-radius');
         userLatInput = document.getElementById('user-lat');
         userLngInput = document.getElementById('user-lng');
+        conditionModeInput = document.getElementById('condition-mode');
         const locFilterBtns = document.querySelectorAll('.loc-filter-btn');
+        const conditionChips = document.querySelectorAll('[data-condition]');
         applyRegionalCopy();
         const categoryBtns = document.querySelectorAll('[data-macro-category]');
         const btnLoginHeader = document.getElementById('btn-login');
@@ -809,6 +929,36 @@ async function initApp() {
         localStorage.setItem('theme', 'light');
 
         // 2. Location Filters
+        const activeFiltersSummary = document.getElementById('active-filters-summary');
+        const renderActiveFiltersSummary = () => {
+            if (!activeFiltersSummary) return;
+
+            const conditionLabels = {
+                all: 'Nuevo y usado',
+                new: 'Solo nuevo',
+                used: 'Usado / reacond.'
+            };
+
+            const locationLabels = {
+                global: 'Todas partes',
+                local_only: 'Tiendas locales',
+                '5': 'Cerca de mí'
+            };
+
+            const items = [
+                conditionLabels[conditionModeInput?.value || 'all'] || 'Nuevo y usado',
+                locationLabels[locRadiusInput?.value || 'global'] || 'Todas partes'
+            ];
+
+            if (document.getElementById('btn-safe-stores')?.getAttribute('data-safe') === 'true') {
+                items.push('Solo seguras');
+            }
+
+            activeFiltersSummary.innerHTML = items.map(label => `
+                <span class="active-filter-pill rounded-full px-3 py-1.5 text-[11px] font-black uppercase tracking-[0.16em]">${label}</span>
+            `).join('');
+        };
+
         if (locFilterBtns.length > 0 && locRadiusInput) {
             locFilterBtns.forEach(btn => {
                 btn.addEventListener('click', () => {
@@ -866,8 +1016,48 @@ async function initApp() {
                     btnSafeStores.classList.remove('border-slate-200', 'bg-white', 'text-slate-600');
                     btnSafeStores.classList.add('border-emerald-500', 'bg-emerald-50', 'text-emerald-700');
                 }
+                renderActiveFiltersSummary();
             });
         }
+
+        if (conditionChips.length > 0 && conditionModeInput) {
+            conditionChips.forEach(btn => {
+                btn.addEventListener('click', () => {
+                    const mode = btn.getAttribute('data-condition') || 'all';
+                    conditionModeInput.value = mode;
+                    conditionChips.forEach(chip => chip.classList.remove('condition-chip-active'));
+                    btn.classList.add('condition-chip-active');
+                    renderActiveFiltersSummary();
+                });
+            });
+        }
+
+        const btnToggleFilters = document.getElementById('btn-toggle-filters');
+        const filtersCollapsible = document.getElementById('filters-collapsible');
+        const toggleFiltersLabel = document.getElementById('toggle-filters-label');
+        const toggleFiltersIcon = document.getElementById('toggle-filters-icon');
+
+        if (btnToggleFilters && filtersCollapsible) {
+            const syncFiltersPanel = (collapsed) => {
+                filtersCollapsible.classList.toggle('filters-collapsed', collapsed);
+                if (toggleFiltersLabel) {
+                    toggleFiltersLabel.textContent = collapsed ? 'Mostrar filtros' : 'Ocultar filtros';
+                }
+                if (toggleFiltersIcon) {
+                    toggleFiltersIcon.classList.toggle('rotate-180', !collapsed);
+                }
+                btnToggleFilters.setAttribute('aria-expanded', collapsed ? 'false' : 'true');
+            };
+
+            syncFiltersPanel(window.innerWidth < 640);
+
+            btnToggleFilters.addEventListener('click', () => {
+                const isCollapsed = filtersCollapsible.classList.contains('filters-collapsed');
+                syncFiltersPanel(!isCollapsed);
+            });
+        }
+
+        renderActiveFiltersSummary();
 
         if (homeLogoLink) {
             homeLogoLink.addEventListener('click', (e) => {
@@ -1010,55 +1200,6 @@ async function initApp() {
                 selectedImageBase64 = null;
                 imageUpload.value = '';
                 imagePreviewContainer.classList.add('hidden');
-            });
-        }
-
-        if (btnVoiceInput) {
-            btnVoiceInput.addEventListener('click', () => {
-                const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-                if (!SpeechRecognition) {
-                    alert('Tu navegador no soporta reconocimiento de voz.');
-                    return;
-                }
-
-                if (isRecording) return;
-
-                const recognition = new SpeechRecognition();
-                recognition.lang = 'es-MX';
-                recognition.interimResults = false;
-
-                recognition.onstart = () => {
-                    console.log('Voice recognition started');
-                };
-
-                recognition.onresult = (event) => {
-                    const transcript = event.results[0][0].transcript;
-                    searchInput.value = transcript;
-                    // Trigger resize
-                    searchInput.dispatchEvent(new Event('input'));
-                };
-
-                recognition.onerror = (event) => {
-                    console.error('Speech recognition error:', event.error);
-                    stopRecording();
-                };
-
-                recognition.onend = () => {
-                    stopRecording();
-                };
-
-                function stopRecording() {
-                    isRecording = false;
-                    btnVoiceInput.classList.remove('text-rose-500', 'animate-pulse');
-                    btnVoiceInput.classList.add('text-slate-400');
-                }
-
-                // Feedback inmediato al hacer clic
-                isRecording = true;
-                btnVoiceInput.classList.add('text-rose-500', 'animate-pulse');
-                btnVoiceInput.classList.remove('text-slate-400');
-
-                recognition.start();
             });
         }
 
@@ -1429,22 +1570,93 @@ async function initApp() {
         // --- Email/Password auth removed (only Google OAuth is supported) ---
 
 
+        async function restoreSearchSnapshot(snapshot) {
+            if (!snapshot || !Array.isArray(snapshot.results) || snapshot.results.length === 0) return;
+            closeHistoryModal();
+            if (searchInput) {
+                searchInput.value = snapshot.query || '';
+                searchInput.style.height = '56px';
+                searchInput.style.height = `${searchInput.scrollHeight}px`;
+            }
+            if (conditionModeInput && snapshot.conditionMode) {
+                conditionModeInput.value = snapshot.conditionMode;
+                document.querySelectorAll('.condition-chip').forEach(chip => {
+                    const isActive = chip.dataset.condition === snapshot.conditionMode;
+                    chip.classList.toggle('condition-chip-active', isActive);
+                });
+            }
+            if (locRadiusInput && snapshot.radius) locRadiusInput.value = snapshot.radius;
+
+            chatHistory = [];
+            chatContainer.classList.add('hidden');
+            chatContainer.innerHTML = '';
+            resultsContainer.innerHTML = '';
+            resultsWrapper.classList.remove('hidden');
+            if (categoryIconBar) categoryIconBar.classList.add('hidden');
+            if (flashDealsSection) flashDealsSection.classList.add('hidden');
+            if (tendenciasSection) tendenciasSection.classList.add('hidden');
+            if (productShowcase) productShowcase.classList.add('hidden');
+            if (extraSections) extraSections.classList.add('hidden');
+            errorMessage.classList.add('hidden');
+
+            renderSearchContext({
+                query: snapshot.query || '',
+                radius: snapshot.radius || 'global',
+                safeStoresOnly: Boolean(snapshot.safeStoresOnly),
+                resultCount: snapshot.results.length
+            });
+            await renderProducts(snapshot.results);
+            if (typeof showGlobalFeedback === 'function') {
+                showGlobalFeedback('Vista previa restaurada sin gastar otra búsqueda.', 'success');
+            }
+        }
+
         async function loadSearchHistory() {
+            const renderHistoryEntry = (query, createdAt = null) => {
+                const snapshot = getSearchSnapshot(query);
+                const labelDate = createdAt || snapshot?.savedAt;
+                const prettyDate = labelDate
+                    ? new Date(labelDate).toLocaleDateString('es-MX', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })
+                    : 'Guardado local';
+                const card = document.createElement('div');
+                card.className = 'rounded-2xl border border-slate-200 bg-white p-4 shadow-sm';
+                card.innerHTML = `
+                    <div class="flex items-start justify-between gap-3">
+                        <div class="min-w-0">
+                            <p class="text-sm font-black text-slate-800 truncate">${sanitize(query)}</p>
+                            <p class="text-[11px] text-slate-400 font-medium mt-1">${prettyDate}</p>
+                            <p class="text-xs font-bold mt-1 ${snapshot?.results?.length ? 'text-emerald-700' : 'text-slate-400'}">${snapshot?.results?.length ? `${snapshot.results.length} resultados guardados` : 'Sin vista previa guardada'}</p>
+                        </div>
+                        <span class="rounded-full bg-emerald-50 px-2.5 py-1 text-[10px] font-black uppercase tracking-widest text-emerald-700">Historial</span>
+                    </div>
+                    <div class="mt-3 flex flex-wrap gap-2">
+                        <button type="button" class="btn-history-preview px-3.5 py-2 rounded-xl bg-emerald-500 text-white text-xs font-black hover:bg-emerald-600 transition-colors ${snapshot?.results?.length ? '' : 'opacity-50 cursor-not-allowed'}" ${snapshot?.results?.length ? '' : 'disabled'}>Ver vista previa</button>
+                        <button type="button" class="btn-history-refresh px-3.5 py-2 rounded-xl border border-slate-200 bg-white text-slate-700 text-xs font-black hover:bg-slate-50 transition-colors">Actualizar búsqueda</button>
+                    </div>
+                `;
+                const previewBtn = card.querySelector('.btn-history-preview');
+                const refreshBtn = card.querySelector('.btn-history-refresh');
+                if (previewBtn && snapshot?.results?.length) {
+                    previewBtn.addEventListener('click', () => restoreSearchSnapshot(snapshot));
+                }
+                if (refreshBtn) {
+                    refreshBtn.addEventListener('click', () => {
+                        closeHistoryModal();
+                        searchInput.value = query;
+                        searchForm.dispatchEvent(new Event('submit', { cancelable: true, bubbles: true }));
+                    });
+                }
+                historyList.appendChild(card);
+            };
+
             if (!supabaseClient || !currentUser) {
-                // Fallback a LocalStorage si no hay sesión
                 const localHist = JSON.parse(localStorage.getItem('lumu_local_history') || '[]');
                 if (localHist.length === 0) {
                     historyList.innerHTML = '<div class="text-center py-6 text-slate-400 font-medium text-sm">No hay búsquedas recientes.</div>';
                     return;
                 }
                 historyList.innerHTML = '';
-                localHist.slice(0, 10).forEach(qh => {
-                    const btn = document.createElement('button');
-                    btn.className = 'w-full text-left p-3 hover:bg-slate-50 transition-colors flex items-center justify-between group border-b border-slate-100 last:border-0';
-                    btn.innerHTML = `<div class="flex items-center gap-3"><svg class="w-4 h-4 text-slate-400 group-hover:text-primary transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg><span class="text-sm font-semibold text-slate-700 group-hover:text-primary transition-colors">${sanitize(qh)}</span></div>`;
-                    btn.addEventListener('click', () => window.quickSearch(qh));
-                    historyList.appendChild(btn);
-                });
+                localHist.slice(0, 10).forEach(qh => renderHistoryEntry(typeof qh === 'string' ? qh : qh?.query || '', qh?.savedAt || null));
                 return;
             }
 
@@ -1466,31 +1678,7 @@ async function initApp() {
                 }
 
                 historyList.innerHTML = '';
-                data.forEach(item => {
-                    const date = new Date(item.created_at).toLocaleDateString('es-MX', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
-
-                    const div = document.createElement('div');
-                    div.className = 'group flex items-center justify-between p-3.5 bg-slate-50/50 border border-slate-100 rounded-xl hover:bg-emerald-50 hover:border-emerald-100 transition-colors cursor-pointer';
-                    div.innerHTML = `
-                    <div class="flex items-start gap-3 overflow-hidden">
-                        <div class="mt-0.5 text-slate-300 group-hover:text-primary transition-colors">
-                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg>
-                        </div>
-                        <div class="flex-grow overflow-hidden">
-                            <p class="text-sm font-bold text-slate-700 truncate group-hover:text-slate-900">${sanitize(item.query)}</p>
-                            <p class="text-[11px] text-slate-400 font-medium mt-0.5">${date}</p>
-                        </div>
-                    </div>
-                `;
-
-                    div.addEventListener('click', () => {
-                        closeHistoryModal();
-                        searchInput.value = item.query;
-                        searchForm.dispatchEvent(new Event('submit', { cancelable: true, bubbles: true }));
-                    });
-
-                    historyList.appendChild(div);
-                });
+                data.forEach(item => renderHistoryEntry(item.query, item.created_at));
 
             } catch (err) {
                 console.error('Error cargando historial:', err);
@@ -1545,17 +1733,18 @@ async function initApp() {
                 if (!autocompleteDropdown) return;
                 autocompleteDropdown.innerHTML = '';
                 currentFocus = -1;
+                const categoryBar = document.getElementById('category-icon-bar');
 
                 if (isRecent && suggestions.length > 0) {
                     const header = document.createElement('div');
-                    header.className = 'px-4 py-2 text-[10px] font-black text-slate-400 uppercase tracking-widest border-b border-slate-100';
+                    header.className = 'px-4 py-2.5 text-[10px] font-black text-slate-400 uppercase tracking-widest border-b border-slate-100 bg-slate-50';
                     header.textContent = getLocalizedText('Búsquedas recientes', 'Recent searches');
                     autocompleteDropdown.appendChild(header);
                 }
 
                 suggestions.forEach((sugg, i) => {
                     const item = document.createElement('div');
-                    item.className = 'px-4 py-3 cursor-pointer hover:bg-slate-50 flex items-center gap-3 transition-colors border-b border-slate-50 last:border-0 autocomplete-item';
+                    item.className = 'px-4 py-3.5 cursor-pointer hover:bg-emerald-50 flex items-center gap-3 transition-colors border-b border-slate-100 last:border-0 autocomplete-item bg-white';
                     const icon = isRecent
                         ? '<svg class="w-4 h-4 text-slate-400 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>'
                         : '<svg class="w-4 h-4 text-slate-400 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg>';
@@ -1570,6 +1759,7 @@ async function initApp() {
                     });
                     autocompleteDropdown.appendChild(item);
                 });
+                if (categoryBar) categoryBar.classList.add('autocomplete-hidden');
                 autocompleteDropdown.classList.remove('hidden');
             }
 
@@ -1577,6 +1767,10 @@ async function initApp() {
                 if (autocompleteDropdown) {
                     autocompleteDropdown.classList.add('hidden');
                     // We don't clear innerHTML here immediately so clicks can register
+                }
+                const categoryBar = document.getElementById('category-icon-bar');
+                if (categoryBar && resultsWrapper?.classList.contains('hidden')) {
+                    categoryBar.classList.remove('autocomplete-hidden');
                 }
             }
 
@@ -1741,7 +1935,7 @@ async function initApp() {
             searchButton.disabled = true;
             const originalButtonHTML = getSearchButtonIdleHTML();
             // Asegurar que el spinner tenga el mismo tamaño que el texto para evitar que el botón cambie de tamaño bruscamente
-            searchButton.innerHTML = `<div class="flex items-center justify-center w-[52px] h-[20px]"><svg class="animate-spin h-5 w-5 text-white" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"></path></svg></div>`;
+            searchButton.innerHTML = `<div class="flex items-center justify-center w-[90px] h-[20px]"><svg class="animate-spin h-5 w-5 text-white" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"></path></svg></div>`;
 
             try {
                 let finalQuery = query;
@@ -1806,7 +2000,8 @@ async function initApp() {
                     chatHistory: safeChatHistory,
                     radius: radius,
                     skipLLM: skipLLM,
-                    safeStoresOnly: safeStoresOnly
+                    safeStoresOnly: safeStoresOnly,
+                    conditionMode: getConditionMode()
                 };
                 const parsedLat = parseFloat(lat);
                 const parsedLng = parseFloat(lng);
@@ -1838,13 +2033,23 @@ async function initApp() {
                 });
 
                 // FIX #2: Defensive parsing to prevent "Unexpected token 'A'" crash
-                let data;
-                try {
-                    const textData = await response.text();
-                    data = JSON.parse(textData);
-                } catch (parseError) {
-                    console.error('Invalid JSON response from server:', parseError);
-                    throw new Error('El servidor devolvió un error inesperado. Por favor, intenta de nuevo.');
+                let data = {};
+                const textData = await response.text();
+                const responseType = response.headers.get('content-type') || '';
+                if (textData && textData.trim()) {
+                    const trimmed = textData.trim();
+                    const looksLikeJson = responseType.includes('application/json') || trimmed.startsWith('{') || trimmed.startsWith('[');
+                    if (looksLikeJson) {
+                        try {
+                            data = JSON.parse(trimmed);
+                        } catch (parseError) {
+                            console.error('Invalid JSON response from server:', parseError, trimmed.slice(0, 300));
+                            throw new Error(`El servidor devolvió una respuesta inválida (${response.status}).`);
+                        }
+                    } else {
+                        console.error('Non-JSON response from server:', response.status, trimmed.slice(0, 300));
+                        data = { error: `Respuesta inesperada del servidor (${response.status}).` };
+                    }
                 }
 
 
@@ -1936,6 +2141,14 @@ async function initApp() {
                     // Guardar la búsqueda en la base de datos "searches" o LocalStorage
                     if (data.intencion_detectada?.busqueda) {
                         const busqueda = data.intencion_detectada.busqueda;
+                        saveSearchSnapshot({
+                            query: busqueda,
+                            radius,
+                            safeStoresOnly,
+                            conditionMode: getConditionMode(),
+                            results: data.top_5_baratos || [],
+                            savedAt: new Date().toISOString()
+                        });
                         if (supabaseClient && currentUser) {
                             supabaseClient.from('searches').insert([{
                                 user_id: currentUser.id,
@@ -1946,7 +2159,7 @@ async function initApp() {
                         } else {
                             // Guardar en LocalStorage
                             let localHist = JSON.parse(localStorage.getItem('lumu_local_history') || '[]');
-                            localHist = [busqueda, ...localHist.filter(q => q !== busqueda)].slice(0, 50);
+                            localHist = [busqueda, ...localHist.filter(q => (typeof q === 'string' ? q : q?.query) !== busqueda)].slice(0, 50);
                             localStorage.setItem('lumu_local_history', JSON.stringify(localHist));
                         }
                     }
@@ -2077,6 +2290,10 @@ async function initApp() {
                 
                 errorMessage.textContent = userMsg;
                 errorMessage.classList.remove('hidden');
+                errorMessage.style.display = 'block';
+                if (typeof showGlobalFeedback === 'function') {
+                    showGlobalFeedback(userMsg, 'error');
+                }
                 resultsContainer.innerHTML = '';
                 resultsWrapper.classList.add('hidden');
             } finally {
@@ -2334,6 +2551,16 @@ async function initApp() {
                 const targetUrl = encodeURIComponent(product.urlMonetizada || product.urlOriginal);
                 const isLocal = product.isLocalStore;
                 const isCheapest = idx === 0;
+                const conditionBadgeClass = product.conditionLabel === 'used'
+                    ? 'bg-amber-50 text-amber-700 border-amber-200'
+                    : product.conditionLabel === 'refurbished'
+                        ? 'bg-violet-50 text-violet-700 border-violet-200'
+                        : 'bg-sky-50 text-sky-700 border-sky-200';
+                const conditionBadgeText = product.conditionLabel === 'used'
+                    ? 'USADO'
+                    : product.conditionLabel === 'refurbished'
+                        ? 'REACOND.'
+                        : 'NUEVO';
 
                 let trendBadge = '';
                 if (product.priceTrend?.direction === 'down') {
@@ -2357,6 +2584,8 @@ async function initApp() {
                             <span class="text-base font-black ${precioNumerico > 0 ? 'text-slate-900' : 'text-amber-600'}">${formattedPrice}</span>
                             ${trendBadge}
                             <span class="text-[9px] font-bold ${store.color} px-1.5 py-0.5 rounded-md border text-center">${store.label}</span>
+                            <span class="text-[9px] font-bold ${conditionBadgeClass} px-1.5 py-0.5 rounded-md border text-center">${conditionBadgeText}</span>
+                            ${product.isC2C ? '<span class="text-[9px] font-bold bg-rose-50 text-rose-700 border border-rose-200 px-1.5 py-0.5 rounded-md text-center">C2C</span>' : ''}
                         </div>
                         ${product.cupon ? `<span class="text-[9px] font-bold text-amber-600 bg-amber-50 px-1.5 py-0.5 rounded mt-0.5 inline-block border border-amber-200">🎟️ ${sanitize(product.cupon)}</span>` : ''}
                     </div>
@@ -2845,17 +3074,21 @@ async function initApp() {
                     'costco': 'https://upload.wikimedia.org/wikipedia/commons/5/59/Costco_Wholesale_logo_2010-10-26.svg',
                     'sam': 'https://upload.wikimedia.org/wikipedia/commons/9/9a/Sam%27s_Club.svg'
                 };
-                const defaultFallback = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='300' height='300' viewBox='0 0 300 300'%3E%3Crect width='300' height='300' fill='%23f1f5f9'/%3E%3Ctext x='150' y='160' text-anchor='middle' font-size='40' fill='%2394a3b8'%3E📦%3C/text%3E%3C/svg%3E";
-                let imgUrl = product.imgUrl || product.imagen;
-                if (!imgUrl) {
-                    const matchedStore = Object.entries(storeFallbacks).find(([key]) => tiendaLower.includes(key));
-                    imgUrl = matchedStore ? matchedStore[1] : defaultFallback;
-                } else if (imgUrl.length > 200 || imgUrl.startsWith('data:')) {
-                    // It's likely a base64 string from Serper, don't proxy it
-                    imgUrl = imgUrl;
-                } else if (imgUrl.startsWith('http')) {
-                    // Only proxy actual http/https URLs
-                    imgUrl = `/api/img-proxy?url=${encodeURIComponent(imgUrl)}`;
+                const defaultFallback = buildFallbackProductImage(product.tienda || product.titulo || 'Lumu');
+                const matchedStore = Object.entries(storeFallbacks).find(([key]) => tiendaLower.includes(key));
+                const fallbackImgUrl = defaultFallback;
+                let imgUrl = typeof (product.imgUrl || product.imagen) === 'string' ? String(product.imgUrl || product.imagen).trim() : '';
+                const isMissingImage = !imgUrl || /^(null|undefined|about:blank)$/i.test(imgUrl) || /placeholder|no[\s_-]?image/i.test(imgUrl);
+                const isDataImage = imgUrl.startsWith('data:image/');
+                const isRemoteImage = /^https?:\/\//i.test(imgUrl);
+                const isLocalImage = imgUrl.startsWith('/') || imgUrl.startsWith('./') || imgUrl.startsWith('../');
+                const looksLikeStoreLogo = /logo|mercadolibre|costco|walmart|amazon|coppel|liverpool|sams|best[\s_-]?buy|elektra/i.test(imgUrl);
+                if (isMissingImage) {
+                    imgUrl = matchedStore ? matchedStore[1] : fallbackImgUrl;
+                } else if (isDataImage || isRemoteImage || isLocalImage) {
+                    imgUrl = looksLikeStoreLogo ? (matchedStore ? matchedStore[1] : fallbackImgUrl) : imgUrl;
+                } else {
+                    imgUrl = matchedStore ? matchedStore[1] : fallbackImgUrl;
                 }
 
                 // Local store: price can be null
@@ -2998,12 +3231,27 @@ async function initApp() {
                     ${localMeta.phone ? `<p class="text-xs text-slate-500 dark:text-slate-400">📞 ${sanitize(localMeta.phone)}</p>` : ''}
                 </div>` : '';
 
+                const conditionBadgeMap = {
+                    new: 'bg-sky-50 text-sky-700 ring-1 ring-sky-200',
+                    used: 'bg-amber-50 text-amber-700 ring-1 ring-amber-200',
+                    refurbished: 'bg-violet-50 text-violet-700 ring-1 ring-violet-200'
+                };
+                const conditionBadgeClass = conditionBadgeMap[product.conditionLabel] || 'bg-slate-100 text-slate-600 ring-1 ring-slate-200';
+                const conditionBadgeText = product.conditionLabel === 'used'
+                    ? 'USADO'
+                    : product.conditionLabel === 'refurbished'
+                        ? 'REACOND.'
+                        : 'NUEVO';
+                const c2cBadgeHtml = product.isC2C
+                    ? '<span class="text-[9px] font-bold text-rose-700 bg-rose-50 px-2 py-0.5 rounded-full ring-1 ring-rose-200">C2C</span>'
+                    : '';
+
                 const productAlt = sanitize(product.titulo || 'Producto') + ' - ' + sanitize(product.tienda || 'Tienda');
                 card.innerHTML = `
                 ${priceDropBadge}
                 <!-- Image Section -->
                 <div class="w-full bg-slate-50 border-b border-slate-100 flex-shrink-0 h-40 md:h-48 flex items-center justify-center p-3 md:p-4 relative overflow-hidden group-hover:bg-emerald-50/30 transition-colors">
-                    <img src="${imgUrl}" alt="${productAlt}" loading="lazy" class="w-full h-full object-contain mix-blend-multiply group-hover:scale-105 transition-transform duration-500 ease-out" onerror="this.onerror=null; this.src='data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 width=%27300%27 height=%27300%27 viewBox=%270 0 300 300%27%3E%3Crect width=%27300%27 height=%27300%27 fill=%27%23f1f5f9%27/%3E%3Ctext x=%27150%27 y=%27160%27 text-anchor=%27middle%27 font-size=%2740%27 fill=%27%2394a3b8%27%3E📦%3C/text%3E%3C/svg%3E'">
+                    <img src="${imgUrl}" alt="${productAlt}" loading="lazy" referrerpolicy="no-referrer" data-fallback-src="${fallbackImgUrl}" class="w-full h-full object-contain group-hover:scale-105 transition-transform duration-500 ease-out" onerror="this.onerror=null; this.src=this.dataset.fallbackSrc;">
                     <button class="btn-favorite absolute top-2 right-2 p-2 bg-white/80 dark:bg-slate-800/80 backdrop-blur rounded-full ${heartColor} hover:text-red-500 hover:bg-white dark:hover:bg-slate-800 shadow-sm transition-all z-20 hover:scale-110">
                         <svg class="w-5 h-5 drop-shadow-sm" fill="currentColor" viewBox="0 0 24 24"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/></svg>
                     </button>
@@ -3023,6 +3271,8 @@ async function initApp() {
                         <div class="flex items-center gap-1">
                             ${isBestPrice ? '<span class="text-[9px] font-bold text-white bg-gradient-to-r from-emerald-500 to-teal-500 px-2 py-0.5 rounded-full ring-2 ring-emerald-200 shadow-sm animate-pulse">💰 MEJOR PRECIO</span>' : ''}
                             ${product.isLocalStore ? '<span class="text-[9px] font-bold text-emerald-700 bg-emerald-100 px-2 py-0.5 rounded-full ring-1 ring-emerald-200">📍 LOCAL</span>' : ''}
+                            <span class="text-[9px] font-bold px-2 py-0.5 rounded-full ${conditionBadgeClass}">${conditionBadgeText}</span>
+                            ${c2cBadgeHtml}
                         </div>
                     </div>
                     
@@ -3040,7 +3290,7 @@ async function initApp() {
                         ${couponHtml}
                         
                         <div class="flex flex-col gap-2 mt-3 w-full">
-                            <button class="btn-open-offer w-full bg-gradient-to-r from-[#00C853] to-[#00A344] hover:from-[#00A344] hover:to-[#008F3A] text-white text-sm font-bold py-2.5 rounded-xl shadow-[0_4px_12px_rgba(0,200,83,0.3)] hover:shadow-[0_6px_16px_rgba(0,200,83,0.4)] transition-all transform active:scale-95 flex items-center justify-center gap-2"
+                            <button class="btn-open-offer w-full bg-primary hover:bg-emerald-600 text-white text-sm font-bold py-3 rounded-xl shadow-lg shadow-emerald-500/20 hover:shadow-xl hover:shadow-emerald-500/25 transition-all transform active:scale-95 flex items-center justify-center gap-2"
                                     data-target-url="${product.urlMonetizada || product.urlOriginal}">
                                 ${isLocal ? ((product.urlOriginal && product.urlOriginal.includes('maps')) ? 'Ver en Maps' : 'Ir a Tienda') : 'Ver Oferta'}
                                 <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M14 5l7 7m0 0l-7 7m7-7H3"/></svg>
@@ -3048,7 +3298,7 @@ async function initApp() {
                             
                             <!-- Acciones secundarias en botones Outline abajo -->
                             ${(!isLocal && precioNumerico > 0) ? `
-                            <div class="grid grid-cols-3 gap-2 w-full mt-1">
+                            <div class="grid grid-cols-2 gap-2 w-full mt-1">
                                 <button class="btn-quick-alert flex-1 py-1.5 flex justify-center items-center gap-1.5 bg-white text-slate-600 hover:text-amber-600 hover:bg-amber-50 rounded-xl border border-slate-200 hover:border-amber-300 transition-all text-xs font-bold shadow-sm" title="Alerta de precio"
                                         data-alert-name="${sanitize(product.titulo)}"
                                         data-alert-price="${precioNumerico}"
@@ -3061,10 +3311,8 @@ async function initApp() {
                                         data-cost-price="${precioNumerico}"
                                         data-product-name="${sanitize(product.titulo)}">
                                     <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M9 7h6m0 10v-3m-3 3h.01M9 17h.01M9 14h.01M12 14h.01M15 11h.01M12 11h.01M9 11h.01M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z"/></svg>
+                                    <span>Margen</span>
                                 </button>
-                                <a href="https://wa.me/?text=${encodeURIComponent('¡Mira esta oferta que encontré en Lumu! 🚀\n' + product.titulo + '\nPrecio: ' + (product.precio_formateado || '$' + product.precio) + '\n\n👉 ' + (product.urlMonetizada || product.urlOriginal))}" target="_blank" rel="noopener noreferrer" class="flex-1 py-1.5 flex justify-center items-center gap-1.5 bg-white text-slate-600 hover:text-emerald-600 hover:bg-emerald-50 rounded-xl border border-slate-200 hover:border-emerald-300 transition-all text-xs font-bold shadow-sm" title="Compartir en WhatsApp">
-                                    <svg class="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 24 24"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.878-.788-1.47-1.761-1.643-2.06-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51a12.8 12.8 0 0 0-.57-.01c-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 0 1-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 0 1-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 0 1 2.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0 0 12.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 0 0 5.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 0 0-3.48-8.413Z"/></svg>
-                                </a>
                             </div>` : ''}
                             
                         </div>
@@ -3252,27 +3500,64 @@ async function initApp() {
         const btnAcceptCookies = document.getElementById('btn-accept-cookies');
         const btnRejectCookies = document.getElementById('btn-reject-cookies');
 
-        if (cookieBanner && !localStorage.getItem('lumu_cookies')) {
+        const applyCookieConsent = (accepted) => {
+            if (typeof window.updateAnalyticsConsent === 'function') {
+                window.updateAnalyticsConsent(Boolean(accepted));
+            }
+        };
+
+        const savedCookieChoice = localStorage.getItem('lumu_cookies');
+        if (savedCookieChoice) {
+            applyCookieConsent(savedCookieChoice === 'accepted');
+        }
+
+        const cookieBannerSpacer = document.getElementById('cookie-banner-spacer');
+
+        function syncCookieBannerSpacer() {
+            if (!cookieBanner || !cookieBannerSpacer) return;
+
+            const isHidden = cookieBanner.classList.contains('cookie-banner-hidden');
+            if (isHidden) {
+                cookieBannerSpacer.style.height = '0px';
+                return;
+            }
+
+            const height = cookieBanner.offsetHeight || 0;
+            cookieBannerSpacer.style.height = `${height + 20}px`;
+        }
+
+        if (cookieBanner && !savedCookieChoice) {
             setTimeout(() => {
-                cookieBanner.classList.remove('translate-y-full');
-            }, 1500); // Mostrar banner 1.5s después de cargar
+                cookieBanner.classList.remove('cookie-banner-hidden');
+                document.body.classList.add('cookie-banner-visible');
+                syncCookieBannerSpacer();
+            }, 1500);
         }
 
         function closeBanner() {
-            cookieBanner.classList.add('translate-y-full');
+            if (!cookieBanner) return;
+            cookieBanner.classList.add('cookie-banner-hidden');
+            document.body.classList.remove('cookie-banner-visible');
+            syncCookieBannerSpacer();
         };
+
+        if (cookieBanner && cookieBannerSpacer) {
+            window.addEventListener('resize', syncCookieBannerSpacer);
+            window.addEventListener('orientationchange', syncCookieBannerSpacer);
+        }
 
         if (btnAcceptCookies) {
             btnAcceptCookies.addEventListener('click', () => {
                 localStorage.setItem('lumu_cookies', 'accepted');
+                applyCookieConsent(true);
                 closeBanner();
-                // Aquí en un futuro se inicializaría fbq('track', 'PageView');
             });
         }
 
         if (btnRejectCookies) {
             btnRejectCookies.addEventListener('click', () => {
                 localStorage.setItem('lumu_cookies', 'rejected');
+                applyCookieConsent(false);
                 closeBanner();
             });
         }
@@ -4078,7 +4363,6 @@ function onAdError(adErrorEvent) {
 
 function startFallbackCountdown() {
     const countdownOverlay = document.getElementById('ad-countdown-overlay');
-    window.currentAdIsForReward = false;
     if (countdownOverlay) countdownOverlay.classList.remove('hidden');
 
     let timeLeft = 3; // FIX: Reducido a 3s para mejor UX
@@ -4086,7 +4370,9 @@ function startFallbackCountdown() {
 
     if (btnSkipAd) {
         btnSkipAd.disabled = true;
-        btnSkipAd.innerHTML = '<span class="animate-pulse">⏳ Cargando oferta...</span>';
+        btnSkipAd.innerHTML = window.currentAdIsForReward
+            ? '<span class="animate-pulse">⏳ Preparando recompensa...</span>'
+            : '<span class="animate-pulse">⏳ Cargando oferta...</span>';
     }
 
     if (adInterval) clearInterval(adInterval);
@@ -4479,70 +4765,8 @@ function initFavoritesHover() {
 }
 
 window.watchRewardedAdForSearches = function () {
-    if (!adModal || !btnSkipAd) return;
-
-    window.currentAdIsForReward = true;
-
-    if (errorMessage) errorMessage.classList.add('hidden');
-
-    adModal.classList.remove('invisible', 'opacity-0');
-    adModal.classList.add('opacity-100');
-
-    btnSkipAd.disabled = true;
-
-    const rewardUser = () => {
-        let searchData = JSON.parse(localStorage.getItem('lumu_searches_data') || '{"count": 0, "date": null}');
-        // Give 3 extra searches locally
-        searchData.count = Math.max(0, (searchData.count || 0) - 3);
-        localStorage.setItem('lumu_searches_data', JSON.stringify(searchData));
-
-        // Also try to grant credits server-side for authenticated users
-        const sb = window.supabaseClient;
-        const user = window.currentUser;
-        if (sb && user) {
-            sb.auth.getSession().then(({ data: session }) => {
-                const token = session?.session?.access_token;
-                if (token) {
-                    // Delete the 3 most recent search entries to "give back" credits
-                    sb.from('searches')
-                        .select('id')
-                        .eq('user_id', user.id)
-                        .order('created_at', { ascending: false })
-                        .limit(3)
-                        .then(({ data }) => {
-                            if (data && data.length > 0) {
-                                const ids = data.map(d => d.id);
-                                sb.from('searches').delete().in('id', ids).then(() => {
-                                    console.log('[RewardAd] Server-side: removed', ids.length, 'search entries');
-                                }).catch(() => { });
-                            }
-                        }).catch(() => { });
-                }
-            }).catch(() => { });
-        }
-
-        closeAdGateway();
-
-        setTimeout(() => {
-            if (searchInput) searchInput.focus();
-        }, 300);
-    };
-
-    if (typeof adsLoader !== 'undefined' && adsLoader && typeof google !== 'undefined' && google && google.ima) {
-        btnSkipAd.innerHTML = '<span class="animate-pulse">Cargando Anuncio...</span>';
-        requestAd();
-        btnSkipAd.onclick = rewardUser;
-    } else {
-        // Fallback inmediato
-        if (typeof startFallbackCountdown === 'function') {
-            startFallbackCountdown();
-        } else {
-            // Fallback minimalista si todo falla
-            btnSkipAd.disabled = false;
-            btnSkipAd.innerHTML = '🎉 Reclamar 3 Búsquedas Extra';
-            btnSkipAd.onclick = rewardUser;
-        }
-        btnSkipAd.onclick = rewardUser;
+    if (typeof window.openAdGateway === 'function') {
+        window.openAdGateway('reward', true);
     }
 };
 
@@ -4656,7 +4880,6 @@ function showTutorialStep() {
 
     const targetEl = document.querySelector(step.target);
     if (!targetEl) {
-        // Skip to next if element not found
         tutorialStep++;
         if (tutorialStep < tutorialSteps.length) showTutorialStep();
         else endTutorial();
@@ -4671,10 +4894,17 @@ function showTutorialStep() {
         const spotlight = document.getElementById('tutorial-spotlight');
         const tooltip = document.getElementById('tutorial-tooltip');
         const padding = 12;
+        const isMobile = window.innerWidth < 640;
 
-        // Position spotlight
-        spotlight.style.top = (rect.top - padding + window.scrollY) + 'px';
-        spotlight.style.left = (rect.left - padding) + 'px';
+        // Position spotlight — use fixed on mobile so it doesn't need scrollY offset
+        if (isMobile) {
+            spotlight.style.position = 'fixed';
+            spotlight.style.top = (rect.top - padding) + 'px';
+        } else {
+            spotlight.style.position = 'absolute';
+            spotlight.style.top = (rect.top - padding + window.scrollY) + 'px';
+        }
+        spotlight.style.left = Math.max(0, rect.left - padding) + 'px';
         spotlight.style.width = (rect.width + padding * 2) + 'px';
         spotlight.style.height = (rect.height + padding * 2) + 'px';
 
@@ -4686,29 +4916,46 @@ function showTutorialStep() {
         // Update progress dots
         const progressContainer = document.getElementById('tutorial-progress');
         progressContainer.innerHTML = tutorialSteps.map((_, i) =>
-            `<div class="w-2 h-2 rounded-full transition-colors ${i === tutorialStep ? 'bg-emerald-500' : i < tutorialStep ? 'bg-emerald-300' : 'bg-slate-200 dark:bg-slate-600'}"></div>`
+            `<div class="w-2 h-2 rounded-full transition-colors ${i === tutorialStep ? 'bg-emerald-500' : i < tutorialStep ? 'bg-emerald-300' : 'bg-slate-200'}"></div>`
         ).join('');
 
         // Update button text
         const nextBtn = document.getElementById('tutorial-next');
         nextBtn.textContent = tutorialStep === tutorialSteps.length - 1 ? '¡Listo! 🎉' : 'Siguiente →';
 
-        // Position tooltip
-        const tooltipRect = tooltip.getBoundingClientRect();
         const arrow = tooltip.querySelector('.tutorial-tooltip-arrow');
 
-        if (step.position === 'bottom') {
-            tooltip.style.top = (rect.bottom + padding + 16 + window.scrollY) + 'px';
-            arrow.className = 'tutorial-tooltip-arrow arrow-top';
-        } else {
-            tooltip.style.top = (rect.top - padding - tooltipRect.height - 16 + window.scrollY) + 'px';
+        if (isMobile) {
+            // On mobile: pin tooltip to bottom of viewport, full-width
+            tooltip.style.position = 'fixed';
+            tooltip.style.left = '12px';
+            tooltip.style.right = '12px';
+            tooltip.style.width = 'auto';
+            tooltip.style.maxWidth = 'none';
+            tooltip.style.bottom = '16px';
+            tooltip.style.top = 'auto';
             arrow.className = 'tutorial-tooltip-arrow arrow-bottom';
-        }
+        } else {
+            // On desktop: position relative to target
+            tooltip.style.position = 'absolute';
+            tooltip.style.bottom = 'auto';
+            tooltip.style.right = 'auto';
+            const tooltipRect = tooltip.getBoundingClientRect();
+            const tooltipW = Math.max(tooltipRect.width, 320);
 
-        // Center horizontally relative to target
-        let tooltipLeft = rect.left + (rect.width / 2) - 160;
-        tooltipLeft = Math.max(16, Math.min(tooltipLeft, window.innerWidth - 336));
-        tooltip.style.left = tooltipLeft + 'px';
+            if (step.position === 'bottom') {
+                tooltip.style.top = (rect.bottom + padding + 16 + window.scrollY) + 'px';
+                arrow.className = 'tutorial-tooltip-arrow arrow-top';
+            } else {
+                tooltip.style.top = (rect.top - padding - tooltipRect.height - 16 + window.scrollY) + 'px';
+                arrow.className = 'tutorial-tooltip-arrow arrow-bottom';
+            }
+
+            let tooltipLeft = rect.left + (rect.width / 2) - (tooltipW / 2);
+            tooltipLeft = Math.max(16, Math.min(tooltipLeft, window.innerWidth - tooltipW - 16));
+            tooltip.style.left = tooltipLeft + 'px';
+            tooltip.style.width = tooltipW + 'px';
+        }
 
         // Animate in
         spotlight.classList.add('active');
@@ -4750,6 +4997,8 @@ function endTutorial() {
     }
     localStorage.setItem('lumu_tutorial_done', 'true');
 }
+
+window.startInteractiveTutorial = startInteractiveTutorial;
 
 // ============================================================
 // FASE 7 — Wishlist Compartible

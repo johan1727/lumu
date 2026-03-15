@@ -53,7 +53,7 @@ exports.analyzeImage = async (req, res) => {
 exports.searchProduct = async (req, res) => {
     try {
         console.log('[DEBUG /buscar] req.body:', JSON.stringify(req.body));
-        const { chatHistory = [], radius, lat, lng, skipLLM, safeStoresOnly = false } = req.body;
+        const { chatHistory = [], radius, lat, lng, skipLLM, safeStoresOnly = false, conditionMode = 'all' } = req.body;
 
         // Use verified userId from auth middleware (JWT), ignore body.userId
         const userId = req.userId || null;
@@ -189,13 +189,19 @@ exports.searchProduct = async (req, res) => {
             llmAnalysis = {
                 action: 'search',
                 searchQuery: query,
-                condition: 'new',
+                condition: conditionMode === 'used' ? 'used' : 'new',
                 reason: 'Direct category search'
             };
         } else {
             // 1. Evaluar el mensaje del usuario con la IA Conversacional (incluyendo historial)
             llmAnalysis = await llmService.analyzeMessage(query, chatHistory, abortController.signal);
             console.log('Análisis LLM:', llmAnalysis);
+        }
+
+        if (conditionMode === 'used') {
+            llmAnalysis.condition = 'used';
+        } else if (conditionMode === 'new') {
+            llmAnalysis.condition = 'new';
         }
 
         // 2. Si faltan datos, devolver la pregunta de seguimiento al frontend
@@ -209,8 +215,12 @@ exports.searchProduct = async (req, res) => {
         }
 
         // 3. Si la acción es 'search', ejecutamos Google Shopping
-        const searchQuery = llmAnalysis.searchQuery;
-        const isNew = llmAnalysis.condition === 'new';
+        let searchQuery = llmAnalysis.searchQuery;
+        if (conditionMode === 'used') {
+            searchQuery = `${searchQuery} usado reacondicionado refurbished seminuevo open box segunda mano marketplace mercadolibre`;
+        } else if (conditionMode === 'new') {
+            searchQuery = `${searchQuery} -usado -reacondicionado -refurbished -"open box"`;
+        }
 
         // NUEVO: Verificamos en Caché
         const cachedResults = await cacheService.getCachedResults(searchQuery, radius, lat, lng);
@@ -234,7 +244,7 @@ exports.searchProduct = async (req, res) => {
         }
 
         console.log(`[Search Pipeline] Buscando: "${searchQuery}" | radius=${radius} | lat=${lat} | lng=${lng} | intent=${llmAnalysis.intent_type}`);
-        const shoppingResults = await shoppingService.searchGoogleShopping(searchQuery, radius, lat, lng, llmAnalysis.intent_type, abortController.signal);
+        const shoppingResults = await shoppingService.searchGoogleShopping(searchQuery, radius, lat, lng, llmAnalysis.intent_type, abortController.signal, conditionMode);
         console.log(`[Search Pipeline] Resultados de shoppingService: ${shoppingResults.length}`);
 
         // Check remaining time before alt queries (skip if running low)
@@ -347,7 +357,9 @@ exports.searchProduct = async (req, res) => {
                 const url = (item.link || item.url || '').toLowerCase();
                 const isUntrusted = /temu|aliexpress|shein|wish|shopee/i.test(storeName) || 
                                     /temu\.com|aliexpress\.com|shein\.com|wish\.com|shopee\.com/i.test(url);
-                if (isUntrusted) {
+                const isRiskyC2C = /facebook|marketplace|segunda mano|segundamano|locanto|vivanuncios|ebay|craigslist/i.test(storeName)
+                    || /facebook\.com|fb\.com|vivanuncios\.com|segundamano\.mx|ebay\./i.test(url);
+                if (isUntrusted || isRiskyC2C) {
                     console.log(`[Safe Filter] Excluyendo tienda no segura: ${storeName}`);
                     return false;
                 }
@@ -378,11 +390,39 @@ exports.searchProduct = async (req, res) => {
                 item.price = null;
                 return true;
             }
+            const expensiveProductSearch = /iphone|playstation|ps5|macbook|ipad|galaxy|xbox|switch oled|switch|ultra|s24|s25/i.test(searchQuery);
+            const titleLower = title.toLowerCase();
+            if (expensiveProductSearch && price < 1500 && /funda|case|mica|protector|cable|correa|carcasa|templado|adaptador/i.test(titleLower)) {
+                return false;
+            }
+            if (/(meses|msi|mensual|mensualidades|quincena|por mes|semanales)/i.test(`${item.snippet || ''} ${item.title || ''}`)) {
+                item.isSuspicious = true;
+            }
+            if (expensiveProductSearch && price < 1500) {
+                item.isSuspicious = true;
+            }
             // Remove suspiciously cheap items (likely price-per-unit or errors) — lowered from 10 to 5
             if (price < 5) return false;
             return true;
         });
         console.log(`[Search Pipeline] Después de pre - filter: ${cleanedResults.length} de ${shoppingResults.length} `);
+
+        const classifyCondition = (item) => {
+            const text = `${item.title || ''} ${item.snippet || ''} ${item.source || ''} ${item.url || ''}`.toLowerCase();
+            const isRefurbished = /reacond|refurb|renewed|remanufacturado|open box|certified renewed/.test(text);
+            const isUsed = /usad|seminuev|segunda mano|preowned|pre-owned|pre loved|preloved/.test(text);
+            const isC2C = /mercado libre|mercadolibre|facebook|marketplace|ebay|vivanuncios|segundamano/.test(text);
+            return {
+                conditionLabel: isRefurbished ? 'refurbished' : (isUsed ? 'used' : 'new'),
+                isC2C
+            };
+        };
+
+        for (const item of cleanedResults) {
+            const conditionMeta = classifyCondition(item);
+            item.conditionLabel = conditionMeta.conditionLabel;
+            item.isC2C = conditionMeta.isC2C;
+        }
 
         // Deduplicación: por URL exacta + Jaccard similarity en títulos
         const seen = new Set();
@@ -430,15 +470,30 @@ exports.searchProduct = async (req, res) => {
                 if (!a._isAccessory && b._isAccessory) return -1;
             }
 
+            const aConditionBoost = conditionMode === 'used'
+                ? ((a.conditionLabel === 'used' || a.conditionLabel === 'refurbished') ? -900 : 700)
+                : conditionMode === 'new'
+                    ? (a.conditionLabel === 'new' ? -220 : 350)
+                    : (a.conditionLabel === 'refurbished' ? -120 : a.conditionLabel === 'used' ? -80 : 0);
+            const bConditionBoost = conditionMode === 'used'
+                ? ((b.conditionLabel === 'used' || b.conditionLabel === 'refurbished') ? -900 : 700)
+                : conditionMode === 'new'
+                    ? (b.conditionLabel === 'new' ? -220 : 350)
+                    : (b.conditionLabel === 'refurbished' ? -120 : b.conditionLabel === 'used' ? -80 : 0);
+            const aC2CBoost = a.isC2C ? (conditionMode === 'used' ? -220 : 25) : 0;
+            const bC2CBoost = b.isC2C ? (conditionMode === 'used' ? -220 : 25) : 0;
+            const aSuspiciousPenalty = a.isSuspicious ? 3000 : 0;
+            const bSuspiciousPenalty = b.isSuspicious ? 3000 : 0;
+
             const aPrice = a.price == null ? Infinity : parseFloat(a.price);
             const bPrice = b.price == null ? Infinity : parseFloat(b.price);
 
             if (hasLocation) {
                 const aBoost = a.isLocalStore ? Math.min(aPrice * 0.10, 150) : 0;
                 const bBoost = b.isLocalStore ? Math.min(bPrice * 0.10, 150) : 0;
-                return (aPrice - aBoost) - (bPrice - bBoost);
+                return (aPrice - aBoost + aConditionBoost + aC2CBoost + aSuspiciousPenalty) - (bPrice - bBoost + bConditionBoost + bC2CBoost + bSuspiciousPenalty);
             } else {
-                return aPrice - bPrice;
+                return (aPrice + aConditionBoost + aC2CBoost + aSuspiciousPenalty) - (bPrice + bConditionBoost + bC2CBoost + bSuspiciousPenalty);
             }
         });
 
@@ -474,7 +529,10 @@ exports.searchProduct = async (req, res) => {
                 urlMonetizada: affiliateManager.generateAffiliateLink(product.url, product.source),
                 isLocalStore: product.isLocalStore || false,
                 localDetails: product.localDetails || null,
-                cupon: llmAnalysis.cupon || null
+                cupon: llmAnalysis.cupon || null,
+                conditionLabel: product.conditionLabel || 'new',
+                isC2C: Boolean(product.isC2C),
+                isSuspicious: Boolean(product.isSuspicious)
             };
         });
 
@@ -560,7 +618,8 @@ exports.searchProduct = async (req, res) => {
             tipo_respuesta: 'resultados',
             intencion_detectada: {
                 busqueda: searchQuery,
-                condicion: llmAnalysis.condition
+                condicion: llmAnalysis.condition,
+                modo_condicion: conditionMode
             },
             top_5_baratos: finalProductsConCupones,
             sugerencias: buildFallbackSuggestions(searchQuery, llmAnalysis.alternativeQueries),
