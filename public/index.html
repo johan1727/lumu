@@ -1306,20 +1306,20 @@
                                     d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z">
                                 </path>
                             </svg>
-                            Favoritos
+                            <span id="nav-favorites-label">Favoritos</span>
                         </button>
                         <!-- Mini Pantallita de Favoritos -->
                         <div class="absolute top-full mt-2 left-1/2 -translate-x-1/2 bg-white border border-slate-100 shadow-xl rounded-2xl w-80 opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all p-3 z-[100] cursor-default"
                             style="box-shadow: 0 10px 40px -10px rgba(0,0,0,0.15)">
-                            <h4 class="text-xs font-black text-slate-800 uppercase tracking-widest mb-2 px-1">Tus Favoritos
+                            <h4 id="mini-favorites-title" class="text-xs font-black text-slate-800 uppercase tracking-widest mb-2 px-1">Tus Favoritos
                                 Recientes</h4>
                             <div id="mini-favorites-list"
                                 class="flex flex-col gap-2 max-h-[300px] overflow-y-auto custom-scrollbar">
-                                <p class="text-xs text-slate-400 text-center py-4 font-medium">Inicia sesión y pasa el
+                                <p id="mini-favorites-empty" class="text-xs text-slate-400 text-center py-4 font-medium">Inicia sesión y pasa el
                                     cursor para cargar tus favoritos.</p>
                             </div>
                             <div class="mt-2 pt-2 border-t border-slate-100">
-                                <button onclick="document.getElementById('nav-favoritos').click()"
+                                <button id="mini-favorites-open" onclick="document.getElementById('nav-favoritos').click()"
                                     class="w-full text-center text-xs text-primary font-bold hover:text-emerald-500 py-1 transition-colors">Abrir
                                     Galería Completa →</button>
                             </div>
@@ -1332,7 +1332,7 @@
                                 d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z">
                             </path>
                         </svg>
-                        Distribuidor B2B
+                        <span id="nav-b2b-label">Distribuidor B2B</span>
                     </button>
 
                     <!-- Botón Alerta de Precio -->
@@ -1354,7 +1354,7 @@
                                     d="M11 16l-4-4m0 0l4-4m-4 4h14m-5 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h7a3 3 0 013 3v1">
                                 </path>
                             </svg>
-                            Ingresar
+                            <span id="nav-login-label">Ingresar</span>
                         </button>
                     </div>
                 </nav>
@@ -1366,11 +1366,11 @@
 
             <!-- Hero Titles (Restored) -->
             <div class="text-center max-w-3xl mx-auto mb-8 md:mb-12 relative z-20">
-                <h1 class="font-display text-5xl md:text-6xl lg:text-[72px] font-black text-slate-900 tracking-[-0.04em] leading-[1.05] mb-5">
+                <h1 id="hero-title" class="font-display text-5xl md:text-6xl lg:text-[72px] font-black text-slate-900 tracking-[-0.04em] leading-[1.05] mb-5">
                     El precio perfecto,<br/>
                     <span class="text-transparent bg-clip-text bg-gradient-to-r from-emerald-500 to-teal-400">en un instante.</span>
                 </h1>
-                <p class="text-lg md:text-xl text-slate-500 font-medium max-w-2xl mx-auto leading-relaxed">
+                <p id="hero-subtitle" class="text-lg md:text-xl text-slate-500 font-medium max-w-2xl mx-auto leading-relaxed">
                     Comparamos precios en Amazon, Mercado Libre y tiendas locales con IA.
                 </p>
             </div>
@@ -1385,7 +1385,7 @@
                         class="block w-full min-h-[60px] max-h-36 py-4 px-4 text-base md:text-[17px] bg-transparent border-0 focus:ring-0 font-semibold resize-none custom-scrollbar relative z-10 leading-relaxed text-slate-800 placeholder:text-slate-400 caret-emerald-500"
                         placeholder="Dime qué estás buscando... Ej: iPhone 15 Pro Max" required
                         autocomplete="off"></textarea>
-                    <div class="px-4 pb-1 text-[13px] text-slate-500 font-medium">
+                    <div id="search-assistant-copy" class="px-4 pb-1 text-[13px] text-slate-500 font-medium">
                         Describe lo que necesitas y Lumu compara precios, tiendas confiables y opciones cerca de ti.
                     </div>
 
@@ -1448,8 +1448,8 @@
                     <div class="filters-shell rounded-[2rem] p-3 md:p-4">
                         <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
                             <div>
-                                <p class="text-[11px] font-black uppercase tracking-[0.22em] text-emerald-700">Búsqueda guiada</p>
-                                <p class="text-sm text-slate-500 font-medium">Elige cómo quieres buscar sin perderte entre tantos botones.</p>
+                                <p id="guided-search-title" class="text-[11px] font-black uppercase tracking-[0.22em] text-emerald-700">Búsqueda guiada</p>
+                                <p id="guided-search-copy" class="text-sm text-slate-500 font-medium">Elige cómo quieres buscar sin perderte entre tantos botones.</p>
                             </div>
                             <button type="button" id="btn-toggle-filters"
                                 class="self-start sm:self-auto inline-flex items-center gap-2 rounded-full border border-emerald-100 bg-white/85 px-4 py-2 text-[11px] font-black uppercase tracking-[0.18em] text-slate-700 shadow-sm transition-all hover:border-emerald-200 hover:bg-emerald-50">
@@ -1463,7 +1463,7 @@
                         <div id="filters-collapsible" class="filters-collapsible mt-4">
                             <div class="space-y-4">
                                 <div>
-                                    <p class="filter-section-label mb-2 text-center">Condición</p>
+                                    <p id="filter-section-condition" class="filter-section-label mb-2 text-center">Condición</p>
                                     <div id="condition-filter-bar" class="flex flex-wrap items-center justify-center gap-2 px-2">
                                         <button type="button" class="condition-chip condition-chip-active rounded-full px-4 py-2 text-[11px] font-black uppercase tracking-[0.18em]" data-condition="all">Nuevo y usado</button>
                                         <button type="button" class="condition-chip rounded-full px-4 py-2 text-[11px] font-black uppercase tracking-[0.18em]" data-condition="new">Solo nuevo</button>
@@ -1472,7 +1472,7 @@
                                 </div>
 
                                 <div>
-                                    <p class="filter-section-label mb-2 text-center">Ubicación</p>
+                                    <p id="filter-section-location" class="filter-section-label mb-2 text-center">Ubicación</p>
                                     <div id="search-location-filters" class="flex flex-wrap items-center justify-center gap-2.5">
                                         <button type="button" id="filter-global"
                                             class="loc-filter-btn filter-chip-base px-5 py-2 text-[11px] font-black uppercase tracking-widest border-emerald-200 bg-emerald-50 text-emerald-800"
@@ -1501,11 +1501,11 @@
                                 </div>
 
                                 <div>
-                                    <p class="filter-section-label mb-2 text-center">Atajos IA</p>
+                                    <p id="filter-section-ai-shortcuts" class="filter-section-label mb-2 text-center">Atajos IA</p>
                                     <div id="search-prompt-bar" class="flex flex-wrap items-center justify-center gap-2 px-2">
-                                        <button type="button" class="search-prompt-chip rounded-full px-3.5 py-2 text-xs font-bold" data-prompt='Quiero la opción más barata disponible'>Lo más barato</button>
-                                        <button type="button" class="search-prompt-chip rounded-full px-3.5 py-2 text-xs font-bold" data-prompt='Compárame precios y dime cuál conviene más'>¿Cuál conviene?</button>
-                                        <button type="button" class="search-prompt-chip rounded-full px-3.5 py-2 text-xs font-bold" data-prompt='Buscar opciones en tiendas locales cerca de mí'>Cerca de mí</button>
+                                        <button id="search-prompt-cheapest" type="button" class="search-prompt-chip rounded-full px-3.5 py-2 text-xs font-bold" data-prompt='Quiero la opción más barata disponible'>Lo más barato</button>
+                                        <button id="search-prompt-best" type="button" class="search-prompt-chip rounded-full px-3.5 py-2 text-xs font-bold" data-prompt='Compárame precios y dime cuál conviene más'>¿Cuál conviene?</button>
+                                        <button id="search-prompt-nearby" type="button" class="search-prompt-chip rounded-full px-3.5 py-2 text-xs font-bold" data-prompt='Buscar opciones en tiendas locales cerca de mí'>Cerca de mí</button>
                                     </div>
                                 </div>
                             </div>
@@ -1531,7 +1531,7 @@
                     <div
                         class="w-5 h-5 rounded-full bg-slate-50 group-hover:bg-white flex items-center justify-center text-xs transition-colors">
                         📱</div>
-                    <span
+                    <span id="category-chip-tech"
                         class="text-[11px] font-bold text-slate-700 uppercase tracking-wide group-hover:text-emerald-800">Tecnología</span>
                 </button>
 
@@ -1540,7 +1540,7 @@
                     <div
                         class="w-5 h-5 rounded-full bg-slate-50 group-hover:bg-white flex items-center justify-center text-xs transition-colors">
                         👕</div>
-                    <span
+                    <span id="category-chip-fashion"
                         class="text-[11px] font-bold text-slate-700 uppercase tracking-wide group-hover:text-emerald-800">Moda</span>
                 </button>
 
@@ -1549,7 +1549,7 @@
                     <div
                         class="w-5 h-5 rounded-full bg-slate-50 group-hover:bg-white flex items-center justify-center text-xs transition-colors">
                         🏠</div>
-                    <span
+                    <span id="category-chip-home"
                         class="text-[11px] font-bold text-slate-700 uppercase tracking-wide group-hover:text-emerald-800">Hogar</span>
                 </button>
 
@@ -1558,7 +1558,7 @@
                     <div
                         class="w-5 h-5 rounded-full bg-slate-50 group-hover:bg-white flex items-center justify-center text-xs transition-colors">
                         ⚽</div>
-                    <span
+                    <span id="category-chip-sports"
                         class="text-[11px] font-bold text-slate-700 uppercase tracking-wide group-hover:text-emerald-800">Deportes</span>
                 </button>
 
@@ -1567,7 +1567,7 @@
                     <div
                         class="w-5 h-5 rounded-full bg-slate-50 group-hover:bg-white flex items-center justify-center text-xs transition-colors">
                         ✨</div>
-                    <span
+                    <span id="category-chip-beauty"
                         class="text-[11px] font-bold text-slate-700 uppercase tracking-wide group-hover:text-emerald-800">Belleza</span>
                 </button>
 
@@ -1576,7 +1576,7 @@
                     <div
                         class="w-5 h-5 rounded-full bg-slate-50 group-hover:bg-white flex items-center justify-center text-xs transition-colors">
                         🎮</div>
-                    <span
+                    <span id="category-chip-toys"
                         class="text-[11px] font-bold text-slate-700 uppercase tracking-wide group-hover:text-emerald-800">Juguetes</span>
                 </button>
 
@@ -1585,7 +1585,7 @@
                     <div
                         class="w-5 h-5 rounded-full bg-slate-50 group-hover:bg-white flex items-center justify-center text-xs transition-colors">
                         🚗</div>
-                    <span
+                    <span id="category-chip-cars"
                         class="text-[11px] font-bold text-slate-700 uppercase tracking-wide group-hover:text-emerald-800">Autos</span>
                 </button>
             </div>
@@ -1595,9 +1595,9 @@
         <div id="flash-deals-section" class="w-full max-w-6xl mx-auto mb-16 fade-in px-4">
             <div class="flex items-center justify-between mb-6">
                 <div class="flex items-center gap-3">
-                    <h3 class="text-2xl font-display font-black text-slate-900">Ofertas Relámpago</h3>
+                    <h3 id="flash-deals-title" class="text-2xl font-display font-black text-slate-900">Ofertas Relámpago</h3>
                 </div>
-                <button class="text-primary font-bold text-sm hover:underline hidden sm:block">Ver todas</button>
+                <button id="flash-deals-view-all" class="text-primary font-bold text-sm hover:underline hidden sm:block">Ver todas</button>
             </div>
 
             <div class="grid grid-cols-2 lg:grid-cols-4 gap-6">
@@ -1606,7 +1606,7 @@
                     onclick="document.getElementById('search-input').value='iPhone 15 Pro 256GB'; document.getElementById('search-form').dispatchEvent(new Event('submit', { cancelable: true, bubbles: true }));">
                     <div
                         class="relative w-full aspect-[4/3] bg-slate-50/80 rounded-xl mb-4 flex items-center justify-center overflow-hidden p-4">
-                        <div
+                        <div id="flash-deal-badge-1"
                             class="absolute top-2 left-2 bg-emerald-100 text-emerald-800 text-[10px] font-bold px-2.5 py-1 rounded-full z-10 shadow-sm tracking-wide">
                             MÁS BUSCADO</div>
                         <img src="/images/iphone15pro.png" alt="iPhone 15 Pro" referrerpolicy="no-referrer"
@@ -1632,7 +1632,7 @@
                     onclick="document.getElementById('search-input').value='Nintendo Switch OLED'; document.getElementById('search-form').dispatchEvent(new Event('submit', { cancelable: true, bubbles: true }));">
                     <div
                         class="relative w-full aspect-[4/3] bg-slate-50/80 rounded-xl mb-4 flex items-center justify-center overflow-hidden p-4">
-                        <div
+                        <div id="flash-deal-badge-2"
                             class="absolute top-2 left-2 bg-emerald-100 text-emerald-800 text-[10px] font-bold px-2.5 py-1 rounded-full z-10 shadow-sm tracking-wide">
                             OFERTA DEL DÍA</div>
                         <img src="/images/switch.png" alt="Switch OLED" referrerpolicy="no-referrer" loading="lazy"
@@ -1669,7 +1669,7 @@
                         <span class="text-2xl font-black text-slate-900">$5,999</span>
                         <span class="text-xs font-bold text-slate-400 line-through mb-1">$7,499</span>
                     </div>
-                    <div
+                    <div id="flash-deal-meta-3"
                         class="text-[11px] text-blue-600 font-bold bg-blue-50 w-fit px-2 py-0.5 rounded-md mt-2 tracking-wide">
                         Importación segura</div>
                 </div>
@@ -1679,7 +1679,7 @@
                     onclick="document.getElementById('search-input').value='Freidora de Aire Ninja'; document.getElementById('search-form').dispatchEvent(new Event('submit', { cancelable: true, bubbles: true }));">
                     <div
                         class="relative w-full aspect-[4/3] bg-slate-50/80 rounded-xl mb-4 flex items-center justify-center overflow-hidden p-4">
-                        <div
+                        <div id="flash-deal-badge-4"
                             class="absolute top-2 left-2 bg-gradient-to-r from-emerald-600 to-green-500 text-white text-[10px] font-black px-2.5 py-1 rounded-full z-10 shadow-[0_8px_20px_rgba(16,185,129,0.25)] tracking-[0.14em] uppercase">
                             LIQUIDACIÓN</div>
                         <img src="/images/ninja.png" alt="Freidora Ninja" referrerpolicy="no-referrer" loading="lazy"
@@ -1694,7 +1694,7 @@
                         <span class="text-2xl font-black text-slate-900">$1,899</span>
                         <span class="text-xs font-bold text-slate-400 line-through mb-1">$2,999</span>
                     </div>
-                    <div
+                    <div id="flash-deal-meta-4"
                         class="text-[11px] text-rose-600 font-bold bg-rose-50 w-fit px-2 py-0.5 rounded-md mt-2 tracking-wide">
                         Últimas 5 unidades</div>
                 </div>
@@ -1736,7 +1736,7 @@
                                 <div class="flex h-10 w-10 items-center justify-center rounded-2xl bg-gradient-to-br from-emerald-500 to-teal-500 text-white shadow-[0_10px_24px_rgba(16,185,129,0.25)]">✦</div>
                                 <div>
                                     <p id="coins-progress-title" class="text-xs font-black uppercase tracking-widest text-emerald-700">Lumu Coins</p>
-                                    <p class="text-[11px] font-semibold text-slate-500">Sube con cada búsqueda útil</p>
+                                    <p id="coins-progress-subtitle" class="text-[11px] font-semibold text-slate-500">Sube con cada búsqueda útil</p>
                                 </div>
                             </div>
                             <span id="coins-progress-value" class="rounded-full bg-white px-2.5 py-1 text-sm font-black text-slate-800 shadow-sm ring-1 ring-emerald-100">0/50</span>
@@ -1942,7 +1942,7 @@
         <div id="extra-sections" class="w-full mt-16 grid grid-cols-1 md:grid-cols-3 gap-8 fade-in">
             <!-- Categorías -->
             <div class="glass-panel p-6 rounded-3xl">
-                <h3 class="text-xl font-display font-bold text-slate-900 mb-4 flex items-center gap-2">
+                <h3 id="extra-categories-title" class="text-xl font-display font-bold text-slate-900 mb-4 flex items-center gap-2">
                     <svg class="w-5 h-5 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
                             d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6z">
@@ -1953,33 +1953,33 @@
                 <div class="flex flex-wrap gap-2">
                     <button onclick="quickSearch('Smartphones')"
                         class="px-3 py-1.5 bg-white border border-slate-200 rounded-full text-sm font-medium text-slate-600 hover:text-primary hover:border-primary/40 cursor-pointer transition-colors shadow-sm">📱
-                        Celulares</button>
+                        <span id="extra-category-phones">Celulares</span></button>
                     <button onclick="quickSearch('Laptops para trabajo y estudio')"
                         class="px-3 py-1.5 bg-white border border-slate-200 rounded-full text-sm font-medium text-slate-600 hover:text-primary hover:border-primary/40 cursor-pointer transition-colors shadow-sm">💻
-                        Laptops</button>
+                        <span id="extra-category-laptops">Laptops</span></button>
                     <button onclick="quickSearch('Audífonos inalámbricos')"
                         class="px-3 py-1.5 bg-white border border-slate-200 rounded-full text-sm font-medium text-slate-600 hover:text-primary hover:border-primary/40 cursor-pointer transition-colors shadow-sm">🎧
-                        Audio</button>
+                        <span id="extra-category-audio">Audio</span></button>
                     <button onclick="quickSearch('Consolas de videojuegos')"
                         class="px-3 py-1.5 bg-white border border-slate-200 rounded-full text-sm font-medium text-slate-600 hover:text-primary hover:border-primary/40 cursor-pointer transition-colors shadow-sm">🎮
-                        Consolas</button>
+                        <span id="extra-category-consoles">Consolas</span></button>
                     <button onclick="quickSearch('Tenis deportivos')"
                         class="px-3 py-1.5 bg-white border border-slate-200 rounded-full text-sm font-medium text-slate-600 hover:text-primary hover:border-primary/40 cursor-pointer transition-colors shadow-sm">👟
-                        Tenis</button>
+                        <span id="extra-category-shoes">Tenis</span></button>
                     <button onclick="quickSearch('Electrodomésticos cocina')"
                         class="px-3 py-1.5 bg-white border border-slate-200 rounded-full text-sm font-medium text-slate-600 hover:text-primary hover:border-primary/40 cursor-pointer transition-colors shadow-sm">🍳
-                        Cocina</button>
+                        <span id="extra-category-kitchen">Cocina</span></button>
                     <button onclick="quickSearch('Perfumes originales')"
                         class="px-3 py-1.5 bg-white border border-slate-200 rounded-full text-sm font-medium text-slate-600 hover:text-primary hover:border-primary/40 cursor-pointer transition-colors shadow-sm">🧴
-                        Perfumes</button>
+                        <span id="extra-category-perfumes">Perfumes</span></button>
                     <button onclick="quickSearch('Muebles para casa')"
                         class="px-3 py-1.5 bg-white border border-slate-200 rounded-full text-sm font-medium text-slate-600 hover:text-primary hover:border-primary/40 cursor-pointer transition-colors shadow-sm">🛋️
-                        Muebles</button>
+                        <span id="extra-category-furniture">Muebles</span></button>
                 </div>
             </div>
             <!-- Tendencias -->
             <div class="glass-panel p-6 rounded-3xl">
-                <h3 class="text-xl font-display font-bold text-slate-900 mb-4 flex items-center gap-2">
+                <h3 id="extra-trending-title" class="text-xl font-display font-bold text-slate-900 mb-4 flex items-center gap-2">
                     <svg class="w-5 h-5 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
                             d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6"></path>
@@ -2021,7 +2021,7 @@
             </div>
             <!-- Ofertas Flash -->
             <div class="glass-panel p-6 rounded-3xl">
-                <h3 class="text-xl font-display font-bold text-slate-900 mb-4 flex items-center gap-2">
+                <h3 id="extra-deals-title" class="text-xl font-display font-bold text-slate-900 mb-4 flex items-center gap-2">
                     <svg class="w-5 h-5 text-red-500" fill="currentColor" viewBox="0 0 20 20">
                         <path fill-rule="evenodd"
                             d="M12.395 2.553a1 1 0 00-1.45-.385c-.345.23-.614.558-.822.88-.281.436-.506.914-.769 1.36-1.09 1.838-2.253 3.664-4.524 4.54a1 1 0 00-.598.91v7a1 1 0 001 1h8.773a1 1 0 00.957-.704l1.297-4.143a4 4 0 00-1.29-4.2l-2.58-1.547zm-7.382 7.785l-.546-.328A3 3 0 001 10.871v5a1 1 0 001 1h1.5A3.5 3.5 0 007 13.371v-2.033z"
@@ -2088,8 +2088,8 @@
                     </svg>
                 </div>
                 <div>
-                    <h3 class="text-xl font-display font-bold text-slate-900">Mis Búsquedas</h3>
-                    <p class="text-sm text-slate-500 font-medium">Historial de productos que le has pedido a
+                    <h3 id="history-modal-title" class="text-xl font-display font-bold text-slate-900">Mis Búsquedas</h3>
+                    <p id="history-modal-copy" class="text-sm text-slate-500 font-medium">Historial de productos que le has pedido a
                         Lumu AI.</p>
                 </div>
             </div>
@@ -2125,15 +2125,15 @@
                     </svg>
                 </div>
                 <div>
-                    <h3 class="text-xl font-display font-bold text-slate-900">🔔 Alertas de Precio</h3>
-                    <p class="text-sm text-slate-500 font-medium">Te avisamos cuando baje el precio.</p>
+                    <h3 id="price-alert-title" class="text-xl font-display font-bold text-slate-900">🔔 Alertas de Precio</h3>
+                    <p id="price-alert-copy" class="text-sm text-slate-500 font-medium">Te avisamos cuando baje el precio.</p>
                 </div>
             </div>
             <form id="alert-form" class="space-y-3 mb-6">
                 <input type="text" id="alert-product" placeholder="Ej: iPhone 15 Pro"
                     class="w-full bg-slate-50 border border-slate-200 text-slate-900 text-sm rounded-xl px-4 py-3 focus:ring-2 focus:ring-primary focus:border-primary outline-none transition-all placeholder:text-slate-400">
                 <div class="flex gap-2">
-                    <span
+                    <span id="alert-currency-label"
                         class="flex items-center bg-slate-100 px-3 rounded-xl text-slate-500 font-bold text-sm border border-slate-200">MXN
                         $</span>
                     <input type="number" id="alert-price" placeholder="Precio máximo (ej: 18000)"
@@ -2141,13 +2141,13 @@
                 </div>
                 <button type="submit"
                     class="w-full bg-primary text-white hover:bg-emerald-600 px-4 py-3 rounded-xl font-bold transition-all shadow-sm active:scale-95">
-                    ➕ Agregar Alerta
+                    <span id="alert-submit-label">➕ Agregar Alerta</span>
                 </button>
             </form>
             <div>
-                <h4 class="text-sm font-bold text-slate-500 uppercase tracking-wide mb-3">Alertas Activas</h4>
+                <h4 id="alerts-active-title" class="text-sm font-bold text-slate-500 uppercase tracking-wide mb-3">Alertas Activas</h4>
                 <div id="alerts-list" class="space-y-2 max-h-48 overflow-y-auto pr-1">
-                    <p class="text-sm text-slate-400 text-center py-4">Aún no tienes alertas configuradas.</p>
+                    <p id="alerts-empty-copy" class="text-sm text-slate-400 text-center py-4">Aún no tienes alertas configuradas.</p>
                 </div>
             </div>
         </div>
@@ -2169,7 +2169,7 @@
                 </div>
 
                 <div class="flex justify-between items-start relative z-10 mb-4">
-                    <h3 class="text-2xl font-display font-black text-white">Mi Perfil<span
+                    <h3 id="profile-modal-title" class="text-2xl font-display font-black text-white">Mi Perfil<span
                             class="text-primary">.ai</span></h3>
                     <button id="close-profile-modal"
                         class="text-slate-400 hover:text-white bg-slate-800 hover:bg-slate-700 rounded-full p-2 transition-colors">
@@ -2210,7 +2210,7 @@
                     <div class="relative z-10">
                         <div class="flex justify-between items-center mb-1">
                             <p class="text-emerald-100 text-xs font-bold uppercase tracking-wider">
-                                Plan Actual</p>
+                                <span id="profile-plan-current-label">Plan Actual</span></p>
                             <span id="profile-status-badge"
                                 class="px-2 py-0.5 bg-slate-900/30 text-emerald-50 rounded text-[10px] font-black uppercase tracking-widest">Gratis</span>
                         </div>
@@ -2222,12 +2222,12 @@
                 </div>
 
                 <div class="p-4 rounded-xl border border-amber-200 bg-amber-50 mb-6 hidden">
-                    <h4 class="text-sm font-bold text-amber-800 mb-1">¡Sube de Nivel AHORA!</h4>
-                    <p class="text-[13px] text-amber-700 mb-3 leading-relaxed">Hazte VIP y
+                    <h4 id="upgrade-title" class="text-sm font-bold text-amber-800 mb-1">¡Sube de Nivel AHORA!</h4>
+                    <p id="upgrade-copy" class="text-[13px] text-amber-700 mb-3 leading-relaxed">Hazte VIP y
                         accede a las búsquedas ilimitadas e internacionales.</p>
                     <a href="#" id="stripe-checkout-btn" target="_blank"
                         class="w-full block text-center bg-amber-500 text-white font-bold py-2 px-4 rounded-lg hover:bg-amber-600 transition-colors shadow-sm">
-                        Comprar Acceso VIP ($39)
+                        <span id="upgrade-button-label">Comprar Acceso VIP ($39)</span>
                     </a>
                 </div>
 
@@ -2244,9 +2244,9 @@
                                 </svg>
                             </div>
                             <span class="text-left">
-                                <span class="block text-sm font-bold text-slate-800">Historial de
+                                <span id="history-title" class="block text-sm font-bold text-slate-800">Historial de
                                     Búsquedas</span>
-                                <span class="block text-xs text-slate-500 font-medium mt-0.5">Revisa
+                                <span id="history-subtitle" class="block text-xs text-slate-500 font-medium mt-0.5">Revisa
                                     tus compras pasadas</span>
                             </span>
                         </div>
@@ -2263,7 +2263,7 @@
                                 d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1">
                             </path>
                         </svg>
-                        Cerrar Sesión Segura
+                        <span id="logout-label">Cerrar Sesión Segura</span>
                     </button>
                 </div>
 
@@ -2278,23 +2278,23 @@
         <div
             class="pricing-surface rounded-[2rem] p-8 md:p-12 text-center">
             <div class="relative z-10">
-                <div class="inline-flex items-center gap-2 rounded-full bg-emerald-500/10 px-3 py-1 text-[11px] font-black uppercase tracking-[0.2em] text-emerald-700 ring-1 ring-emerald-200 mb-4">Más valor por menos</div>
+                <div id="pricing-badge" class="inline-flex items-center gap-2 rounded-full bg-emerald-500/10 px-3 py-1 text-[11px] font-black uppercase tracking-[0.2em] text-emerald-700 ring-1 ring-emerald-200 mb-4">Más valor por menos</div>
                 <div class="text-4xl mb-3">💎</div>
-                <h2 class="text-2xl md:text-3xl font-display font-black text-slate-900 tracking-tight mb-2">¿Quieres
+                <h2 id="pricing-title" class="text-2xl md:text-3xl font-display font-black text-slate-900 tracking-tight mb-2">¿Quieres
                     búsquedas ilimitadas?</h2>
-                <p class="text-slate-600 font-medium mb-6 max-w-xl mx-auto">Desde <strong
+                <p id="pricing-copy" class="text-slate-600 font-medium mb-6 max-w-xl mx-auto">Desde <strong
                         class="text-emerald-600">$39 MXN/mes</strong> — sin anuncios, con alertas de precio y cupones
                     exclusivos para encontrar más rápido las mejores ofertas.</p>
                 <div class="flex flex-wrap items-center justify-center gap-2 mb-6">
-                    <span class="rounded-full bg-white/80 px-3 py-1.5 text-[11px] font-black uppercase tracking-wider text-slate-700 ring-1 ring-emerald-100">Sin anuncios</span>
-                    <span class="rounded-full bg-white/80 px-3 py-1.5 text-[11px] font-black uppercase tracking-wider text-slate-700 ring-1 ring-emerald-100">Alertas de precio</span>
-                    <span class="rounded-full bg-white/80 px-3 py-1.5 text-[11px] font-black uppercase tracking-wider text-slate-700 ring-1 ring-emerald-100">Cupones exclusivos</span>
+                    <span id="pricing-chip-ads" class="rounded-full bg-white/80 px-3 py-1.5 text-[11px] font-black uppercase tracking-wider text-slate-700 ring-1 ring-emerald-100">Sin anuncios</span>
+                    <span id="pricing-chip-alerts" class="rounded-full bg-white/80 px-3 py-1.5 text-[11px] font-black uppercase tracking-wider text-slate-700 ring-1 ring-emerald-100">Alertas de precio</span>
+                    <span id="pricing-chip-coupons" class="rounded-full bg-white/80 px-3 py-1.5 text-[11px] font-black uppercase tracking-wider text-slate-700 ring-1 ring-emerald-100">Cupones exclusivos</span>
                 </div>
             </div>
             <div class="relative z-10 flex flex-col sm:flex-row gap-3 justify-center">
                 <a href="/precios.html"
                     class="inline-flex items-center justify-center gap-2 bg-gradient-to-r from-emerald-500 to-green-500 hover:from-emerald-600 hover:to-green-600 text-white px-8 py-4 rounded-2xl font-black shadow-[0_20px_40px_rgba(16,185,129,0.22)] transition-all active:scale-95">
-                    Ver Planes y Precios
+                    <span id="pricing-button-label">Ver Planes y Precios</span>
                     <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M9 5l7 7-7 7" />
                     </svg>
@@ -2313,38 +2313,40 @@
                         <div class="w-8 h-8 rounded-xl bg-gradient-to-br from-emerald-500 to-teal-500 flex items-center justify-center text-white font-black text-sm shadow-lg">L</div>
                         <span class="text-xl font-black text-slate-900">Lumu</span>
                     </div>
-                    <p class="text-sm text-slate-600 mb-4 max-w-xs">Tu Personal Shopper con IA. Encuentra el mejor precio en segundos.</p>
-                    <p class="text-xs font-semibold text-emerald-700 mb-4">Compara más claro. Decide más rápido.</p>
-                    <p class="text-xs text-slate-400">© 2026 Lumu AI. Todos los derechos reservados.</p>
+                    <p id="footer-brand-tagline" class="text-sm text-slate-600 mb-4 max-w-xs">Tu Personal Shopper con IA. Encuentra el mejor precio en segundos.</p>
+                    <p id="footer-brand-supporting" class="text-xs font-semibold text-emerald-700 mb-4">Compara más claro. Decide más rápido.</p>
+                    <p id="footer-rights-copy" class="text-xs text-slate-400">© 2026 Lumu AI. Todos los derechos reservados.</p>
                 </div>
                 
                 <!-- Column 2: Products -->
                 <div class="flex flex-col items-center md:items-start text-center md:text-left">
-                    <h4 class="text-sm font-black text-slate-900 uppercase tracking-wider mb-4">Explora</h4>
+                    <h4 id="footer-explore-title" class="text-sm font-black text-slate-900 uppercase tracking-wider mb-4">Explora</h4>
                     <nav class="flex flex-col gap-2.5">
-                        <a href="/celulares-baratos.html" class="footer-link text-sm">Tecnología</a>
-                        <a href="/laptops.html" class="footer-link text-sm">Trabajo y estudio</a>
-                        <a href="/gaming-barato.html" class="footer-link text-sm">Gaming</a>
-                        <a href="/moda.html" class="footer-link text-sm">Estilo y hogar</a>
+                        <a id="footer-link-celulares" href="/celulares-baratos.html" class="footer-link text-sm">Celulares baratos</a>
+                        <a id="footer-link-precios" href="/precios-de-celulares.html" class="footer-link text-sm">Precios de celulares</a>
+                        <a id="footer-link-calidad-precio" href="/mejores-celulares-calidad-precio.html" class="footer-link text-sm">Celulares calidad-precio</a>
+                        <a id="footer-link-work" href="/laptops.html" class="footer-link text-sm">Trabajo y estudio</a>
+                        <a id="footer-link-gaming" href="/gaming-barato.html" class="footer-link text-sm">Gaming</a>
+                        <a id="footer-link-style" href="/moda.html" class="footer-link text-sm">Estilo y hogar</a>
                     </nav>
                 </div>
                 
                 <!-- Column 3: Company -->
                 <div class="flex flex-col items-center md:items-start text-center md:text-left">
-                    <h4 class="text-sm font-black text-slate-900 uppercase tracking-wider mb-4">Empresa</h4>
+                    <h4 id="footer-company-title" class="text-sm font-black text-slate-900 uppercase tracking-wider mb-4">Empresa</h4>
                     <nav class="flex flex-col gap-2.5">
-                        <a href="/about.html" class="footer-link text-sm">Sobre Nosotros</a>
-                        <a href="/privacy.html" class="footer-link text-sm">Privacidad</a>
-                        <a href="/terms.html" class="footer-link text-sm">Términos</a>
-                        <a href="/guia-de-ahorro.html" class="footer-link text-sm">Guía de Ahorro</a>
-                        <button onclick="if(typeof window.startInteractiveTutorial === 'function'){ localStorage.removeItem('lumu_tutorial_done'); localStorage.removeItem('lumu_onboarding_done'); window.startInteractiveTutorial(); } else { localStorage.removeItem('lumu_tutorial_done'); localStorage.removeItem('lumu_onboarding_done'); location.reload(); }" class="footer-link text-sm cursor-pointer text-left">Tutorial</button>
+                        <a id="footer-link-about" href="/about.html" class="footer-link text-sm">Sobre Nosotros</a>
+                        <a id="footer-link-privacy" href="/privacy.html" class="footer-link text-sm">Privacidad</a>
+                        <a id="footer-link-terms" href="/terms.html" class="footer-link text-sm">Términos</a>
+                        <a id="footer-link-guide" href="/guia-de-ahorro.html" class="footer-link text-sm">Guía de Ahorro</a>
+                        <button id="footer-link-tutorial" onclick="if(typeof window.startInteractiveTutorial === 'function'){ localStorage.removeItem('lumu_tutorial_done'); localStorage.removeItem('lumu_onboarding_done'); window.startInteractiveTutorial(); } else { localStorage.removeItem('lumu_tutorial_done'); localStorage.removeItem('lumu_onboarding_done'); location.reload(); }" class="footer-link text-sm cursor-pointer text-left">Tutorial</button>
                     </nav>
                 </div>
             </div>
             <div class="mt-5 flex flex-wrap items-center justify-center gap-2.5">
-                <span class="footer-trust-chip rounded-full px-3.5 py-2 text-[11px] font-black uppercase tracking-[0.18em]">Privacidad clara</span>
-                <span class="footer-trust-chip rounded-full px-3.5 py-2 text-[11px] font-black uppercase tracking-[0.18em]">Tiendas seguras</span>
-                <span class="footer-trust-chip rounded-full px-3.5 py-2 text-[11px] font-black uppercase tracking-[0.18em]">Sin spam</span>
+                <span id="footer-trust-privacy" class="footer-trust-chip rounded-full px-3.5 py-2 text-[11px] font-black uppercase tracking-[0.18em]">Privacidad clara</span>
+                <span id="footer-trust-stores" class="footer-trust-chip rounded-full px-3.5 py-2 text-[11px] font-black uppercase tracking-[0.18em]">Tiendas seguras</span>
+                <span id="footer-trust-no-spam" class="footer-trust-chip rounded-full px-3.5 py-2 text-[11px] font-black uppercase tracking-[0.18em]">Sin spam</span>
             </div>
         </div>
     </footer>
@@ -2373,15 +2375,15 @@
                 </div>
             </div>
             <div>
-                <h3 class="text-2xl font-display font-black text-slate-900">Plan Revendedor (B2B)</h3>
-                <p class="text-sm text-slate-500 font-medium">Búsqueda masiva en lote para importar a Excel. <span
-                        class="text-amber-500 font-bold">(Máximo 10 items por vez en Beta)</span></p>
+                <h3 id="b2b-title" class="text-2xl font-display font-black text-slate-900">Plan Revendedor (B2B)</h3>
+                <p id="b2b-copy" class="text-sm text-slate-500 font-medium">Búsqueda masiva en lote para importar a Excel. <span
+                        id="b2b-copy-highlight" class="text-amber-500 font-bold">(Máximo 10 items por vez en Beta)</span></p>
             </div>
 
             <div class="flex flex-col md:flex-row gap-6 flex-grow overflow-hidden mt-6">
                 <!-- Zona de Input -->
                 <div class="w-full md:w-1/3 flex flex-col">
-                    <label class="block text-sm font-bold text-slate-700 mb-2">Lista de Productos (Uno por
+                    <label id="b2b-input-label" class="block text-sm font-bold text-slate-700 mb-2">Lista de Productos (Uno por
                         línea)</label>
                     <textarea id="b2b-textarea"
                         class="w-full flex-grow bg-slate-50 border border-slate-200 text-slate-800 text-sm rounded-xl focus:ring-amber-500 focus:border-amber-500 p-4 resize-none shadow-inner"
@@ -2392,7 +2394,7 @@
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
                                 d="M13 10V3L4 14h7v7l9-11h-7z"></path>
                         </svg>
-                        Procesar Lote
+                        <span id="b2b-process-label">Procesar Lote</span>
                     </button>
                 </div>
 
@@ -2400,14 +2402,14 @@
                 <div
                     class="w-full md:w-2/3 flex flex-col bg-slate-50 rounded-2xl border border-slate-200 overflow-hidden">
                     <div class="p-4 border-b border-slate-200 bg-white flex justify-between items-center z-10">
-                        <h4 class="font-bold text-slate-800">Resultados de Búsqueda Masiva</h4>
+                        <h4 id="b2b-results-title" class="font-bold text-slate-800">Resultados de Búsqueda Masiva</h4>
                         <button id="btn-export-b2b" disabled
                             class="text-xs bg-slate-800 text-white px-3 py-1.5 rounded-lg hover:bg-slate-700 disabled:opacity-50 transition-colors flex items-center gap-1 font-bold">
                             <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
                                     d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path>
                             </svg>
-                            Exportar CSV
+                            <span id="b2b-export-label">Exportar CSV</span>
                         </button>
                     </div>
                     <div id="b2b-results-table-container" class="flex-grow overflow-auto p-0 relative custom-scrollbar">
@@ -2422,15 +2424,15 @@
                         <table class="w-full text-sm text-left text-slate-600">
                             <thead class="text-xs text-slate-500 uppercase bg-slate-100 sticky top-0 shadow-sm z-10">
                                 <tr>
-                                    <th scope="col" class="px-4 py-3">Tu Query</th>
-                                    <th scope="col" class="px-4 py-3">Mejor Precio</th>
-                                    <th scope="col" class="px-4 py-3">Tienda</th>
-                                    <th scope="col" class="px-4 py-3 text-center">Acción</th>
+                                    <th id="b2b-th-query" scope="col" class="px-4 py-3">Tu Query</th>
+                                    <th id="b2b-th-price" scope="col" class="px-4 py-3">Mejor Precio</th>
+                                    <th id="b2b-th-store" scope="col" class="px-4 py-3">Tienda</th>
+                                    <th id="b2b-th-action" scope="col" class="px-4 py-3 text-center">Acción</th>
                                 </tr>
                             </thead>
                             <tbody id="b2b-results-body" class="divide-y divide-slate-100">
                                 <tr>
-                                    <td colspan="4" class="px-4 py-12 text-center text-slate-400">
+                                    <td id="b2b-empty-state" colspan="4" class="px-4 py-12 text-center text-slate-400">
                                         Pega tu lista y haz clic en procesar para ver los resultados aquí.
                                     </td>
                                 </tr>
@@ -2465,20 +2467,20 @@
                     </svg>
                 </div>
                 <div>
-                    <h3 class="text-xl font-display font-bold text-slate-900">Danos tu opinión</h3>
-                    <p class="text-sm text-slate-500 font-medium">Ayúdanos a mejorar Lumu AI.</p>
+                    <h3 id="feedback-title" class="text-xl font-display font-bold text-slate-900">Danos tu opinión</h3>
+                    <p id="feedback-copy" class="text-sm text-slate-500 font-medium">Ayúdanos a mejorar Lumu AI.</p>
                 </div>
             </div>
             <form id="feedback-form" class="space-y-4">
                 <div>
-                    <label class="block text-sm font-bold text-slate-700 mb-1">Tu sugerencia o comentario</label>
+                    <label id="feedback-label" class="block text-sm font-bold text-slate-700 mb-1">Tu sugerencia o comentario</label>
                     <textarea id="feedback-text" rows="4" required
                         class="w-full bg-slate-50 border border-slate-200 text-slate-900 text-sm rounded-xl focus:ring-primary focus:border-primary block p-3 resize-none shadow-inner"
                         placeholder="Ej. Deberían agregar más tiendas como Zara o H&M..."></textarea>
                 </div>
                 <button type="submit"
                     class="w-full text-white bg-primary hover:bg-emerald-500 focus:ring-4 focus:outline-none focus:ring-emerald-300 font-bold rounded-xl text-sm px-5 py-3 text-center transition-all shadow-[0_4px_15px_rgba(16,185,129,0.3)] hover:-translate-y-0.5 flex justify-center items-center">
-                    Enviar Feedback
+                    <span id="feedback-submit-label">Enviar Feedback</span>
                 </button>
             </form>
             <div id="feedback-success" class="hidden text-center py-4">
@@ -2489,8 +2491,8 @@
                         </path>
                     </svg>
                 </div>
-                <h4 class="text-lg font-bold text-slate-800">¡Gracias por tu apoyo!</h4>
-                <p class="text-slate-500 text-sm">Hemos recibido tu mensaje correctamente.</p>
+                <h4 id="feedback-success-title" class="text-lg font-bold text-slate-800">¡Gracias por tu apoyo!</h4>
+                <p id="feedback-success-copy" class="text-slate-500 text-sm">Hemos recibido tu mensaje correctamente.</p>
             </div>
         </div>
     </div>
@@ -2519,8 +2521,8 @@
                 </svg>
             </div>
 
-            <h3 class="text-2xl font-display font-black text-white mb-3">Enlace Bloqueado</h3>
-            <p class="text-slate-400 font-medium mb-8 leading-relaxed">Para mantener Lumu 100% gratis, mira
+            <h3 id="ad-gateway-title" class="text-2xl font-display font-black text-white mb-3">Enlace Bloqueado</h3>
+            <p id="ad-gateway-copy" class="text-slate-400 font-medium mb-8 leading-relaxed">Para mantener Lumu 100% gratis, mira
                 este
                 breve anuncio patrocinado para desbloquear la oferta.</p>
 
@@ -2552,9 +2554,9 @@
                 class="w-full text-white bg-slate-800 border border-slate-700 font-bold rounded-xl text-sm px-5 py-4 text-center transition-all opacity-50 cursor-not-allowed">
                 Esperando anuncio...
             </button>
-            <p class="text-[11px] text-slate-500 mt-5">¿Cansado de los anuncios? <button
+            <p id="ad-vip-copy" class="text-[11px] text-slate-500 mt-5">¿Cansado de los anuncios? <button
                     onclick="if(window.stripePaymentLink){ window.open(window.stripePaymentLink, '_blank'); } else if(typeof openModal === 'function'){ closeAdGateway(); openModal(); }"
-                    class="text-emerald-400 hover:text-emerald-300 font-bold underline">Hazte VIP</button></p>
+                    id="ad-vip-button" class="text-emerald-400 hover:text-emerald-300 font-bold underline">Hazte VIP</button></p>
         </div>
     </div>
 
@@ -2573,8 +2575,8 @@
                         </svg>
                     </div>
                     <div>
-                        <h3 class="text-xl font-display font-black text-slate-900 tracking-tight">Mis Favoritos</h3>
-                        <p class="text-xs text-slate-500 font-bold uppercase tracking-widest">Tu Wishlist Personal
+                        <h3 id="favorites-title" class="text-xl font-display font-black text-slate-900 tracking-tight">Mis Favoritos</h3>
+                        <p id="favorites-subtitle" class="text-xs text-slate-500 font-bold uppercase tracking-widest">Tu Wishlist Personal
                         </p>
                     </div>
                 </div>
@@ -2590,10 +2592,10 @@
                 <!-- Items inyectados por JS -->
             </div>
             <div class="p-6 bg-slate-50/80 border-t border-slate-200/60 flex justify-between items-center">
-                <p class="text-[11px] text-slate-400 font-bold uppercase tracking-wider">Guardado en la Nube via
+                <p id="favorites-cloud-copy" class="text-[11px] text-slate-400 font-bold uppercase tracking-wider">Guardado en la Nube via
                     Supabase
                 </p>
-                <button onclick="document.getElementById('close-favorites-modal').click()"
+                <button id="favorites-close-label" onclick="if(typeof closeFavorites==='function') closeFavorites()"
                     class="px-6 py-2.5 bg-slate-900 text-white rounded-xl font-bold text-sm hover:bg-slate-800 transition-all shadow-lg">Cerrar</button>
             </div>
         </div>
@@ -2619,8 +2621,8 @@
                     <div
                         class="w-16 h-16 bg-emerald-100 rounded-2xl flex items-center justify-center mx-auto mb-4 text-3xl shadow-emerald-500/10 shadow-lg">
                         👋</div>
-                    <h3 class="text-3xl font-display font-black text-slate-900 tracking-tight">Bienvenido</h3>
-                    <p class="text-slate-500 font-medium mt-2">Inicia sesión para guardar tus favoritos y ver tu
+                    <h3 id="auth-title" class="text-3xl font-display font-black text-slate-900 tracking-tight">Bienvenido</h3>
+                    <p id="auth-copy" class="text-slate-500 font-medium mt-2">Inicia sesión para guardar tus favoritos y ver tu
                         historial.</p>
                 </div>
                 <div class="space-y-4">
@@ -2640,9 +2642,9 @@
                                 d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"
                                 fill="#EA4335" />
                         </svg>
-                        <span class="font-black text-slate-700">Continuar con Google</span>
+                        <span id="google-login-label" class="font-black text-slate-700">Continuar con Google</span>
                     </button>
-                    <p class="text-xs text-slate-400 text-center mt-4 font-medium">Al continuar, aceptas nuestros <a
+                    <p id="auth-terms-copy" class="text-xs text-slate-400 text-center mt-4 font-medium">Al continuar, aceptas nuestros <a
                             href="/terminos.html" class="underline hover:text-primary">Términos</a> y <a
                             href="/privacidad.html" class="underline hover:text-primary">Privacidad</a>.</p>
                 </div>
@@ -2677,9 +2679,9 @@
             </div>
 
             <nav class="flex flex-col gap-4">
-                <a href="#product-showcase"
+                <a id="mobile-link-inspiration" href="#product-showcase"
                     class="mobile-nav-link text-lg font-bold text-slate-700 dark:text-slate-300 hover:text-primary transition-colors py-2 border-b border-slate-50 dark:border-slate-800">Inspiración</a>
-                <a href="#tendencias-section"
+                <a id="mobile-link-trending" href="#tendencias-section"
                     class="mobile-nav-link text-lg font-bold text-slate-700 dark:text-slate-300 hover:text-primary transition-colors py-2 border-b border-slate-50 dark:border-slate-800">Tendencias</a>
                 <button id="mobile-nav-favoritos"
                     class="text-lg font-bold text-slate-700 dark:text-slate-300 hover:text-primary transition-colors py-2 border-b border-slate-50 dark:border-slate-800 text-left flex items-center gap-3">
@@ -2688,7 +2690,7 @@
                             d="M3.172 5.172a4 4 0 015.656 0L10 6.343l1.172-1.171a4 4 0 115.656 5.656L10 17.657l-6.828-6.829a4 4 0 010-5.656z"
                             clip-rule="evenodd"></path>
                     </svg>
-                    Mis Favoritos
+                    <span id="mobile-favorites-label">Mis Favoritos</span>
                 </button>
                 <button id="mobile-nav-b2b"
                     class="text-lg font-bold text-amber-600 hover:text-amber-500 transition-colors py-2 flex items-center gap-3 text-left">
@@ -2697,43 +2699,43 @@
                             d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z">
                         </path>
                     </svg>
-                    Plan Reseller (B2B)
+                    <span id="mobile-b2b-label">Plan Reseller (B2B)</span>
                 </button>
             </nav>
 
             <!-- CATEGORÍAS - Estilo Mercado Libre -->
             <div class="mt-6 mb-4">
-                <h3 class="text-xs font-black text-slate-400 uppercase tracking-widest mb-3 px-1">Categorías</h3>
+                <h3 id="mobile-categories-title" class="text-xs font-black text-slate-400 uppercase tracking-widest mb-3 px-1">Categorías</h3>
                 <div class="grid grid-cols-2 gap-2">
                     <button onclick="window.quickSearch('Tecnología celulares laptops'); document.getElementById('close-mobile-menu').click();"
                         class="flex items-center gap-2 p-3 bg-slate-50 dark:bg-slate-800 hover:bg-emerald-50 dark:hover:bg-emerald-900/30 rounded-xl transition-all group text-left">
                         <span class="text-xl">📱</span>
-                        <span class="text-sm font-bold text-slate-700 dark:text-slate-300 group-hover:text-emerald-700 dark:group-hover:text-emerald-400">Tecnología</span>
+                        <span id="mobile-cat-tech" class="text-sm font-bold text-slate-700 dark:text-slate-300 group-hover:text-emerald-700 dark:group-hover:text-emerald-400">Tecnología</span>
                     </button>
                     <button onclick="window.quickSearch('Ropa moda calzado'); document.getElementById('close-mobile-menu').click();"
                         class="flex items-center gap-2 p-3 bg-slate-50 dark:bg-slate-800 hover:bg-emerald-50 dark:hover:bg-emerald-900/30 rounded-xl transition-all group text-left">
                         <span class="text-xl">👕</span>
-                        <span class="text-sm font-bold text-slate-700 dark:text-slate-300 group-hover:text-emerald-700 dark:group-hover:text-emerald-400">Moda</span>
+                        <span id="mobile-cat-fashion" class="text-sm font-bold text-slate-700 dark:text-slate-300 group-hover:text-emerald-700 dark:group-hover:text-emerald-400">Moda</span>
                     </button>
                     <button onclick="window.quickSearch('Hogar muebles cocina'); document.getElementById('close-mobile-menu').click();"
                         class="flex items-center gap-2 p-3 bg-slate-50 dark:bg-slate-800 hover:bg-emerald-50 dark:hover:bg-emerald-900/30 rounded-xl transition-all group text-left">
                         <span class="text-xl">🏠</span>
-                        <span class="text-sm font-bold text-slate-700 dark:text-slate-300 group-hover:text-emerald-700 dark:group-hover:text-emerald-400">Hogar</span>
+                        <span id="mobile-cat-home" class="text-sm font-bold text-slate-700 dark:text-slate-300 group-hover:text-emerald-700 dark:group-hover:text-emerald-400">Hogar</span>
                     </button>
                     <button onclick="window.quickSearch('Deportes fitness'); document.getElementById('close-mobile-menu').click();"
                         class="flex items-center gap-2 p-3 bg-slate-50 dark:bg-slate-800 hover:bg-emerald-50 dark:hover:bg-emerald-900/30 rounded-xl transition-all group text-left">
                         <span class="text-xl">⚽</span>
-                        <span class="text-sm font-bold text-slate-700 dark:text-slate-300 group-hover:text-emerald-700 dark:group-hover:text-emerald-400">Deportes</span>
+                        <span id="mobile-cat-sports" class="text-sm font-bold text-slate-700 dark:text-slate-300 group-hover:text-emerald-700 dark:group-hover:text-emerald-400">Deportes</span>
                     </button>
                     <button onclick="window.quickSearch('Belleza cuidado personal'); document.getElementById('close-mobile-menu').click();"
                         class="flex items-center gap-2 p-3 bg-slate-50 dark:bg-slate-800 hover:bg-emerald-50 dark:hover:bg-emerald-900/30 rounded-xl transition-all group text-left">
                         <span class="text-xl">✨</span>
-                        <span class="text-sm font-bold text-slate-700 dark:text-slate-300 group-hover:text-emerald-700 dark:group-hover:text-emerald-400">Belleza</span>
+                        <span id="mobile-cat-beauty" class="text-sm font-bold text-slate-700 dark:text-slate-300 group-hover:text-emerald-700 dark:group-hover:text-emerald-400">Belleza</span>
                     </button>
                     <button onclick="window.quickSearch('Juguetes consolas'); document.getElementById('close-mobile-menu').click();"
                         class="flex items-center gap-2 p-3 bg-slate-50 dark:bg-slate-800 hover:bg-emerald-50 dark:hover:bg-emerald-900/30 rounded-xl transition-all group text-left">
                         <span class="text-xl">🎮</span>
-                        <span class="text-sm font-bold text-slate-700 dark:text-slate-300 group-hover:text-emerald-700 dark:group-hover:text-emerald-400">Juguetes</span>
+                        <span id="mobile-cat-toys" class="text-sm font-bold text-slate-700 dark:text-slate-300 group-hover:text-emerald-700 dark:group-hover:text-emerald-400">Juguetes</span>
                     </button>
                     <button onclick="window.quickSearch('Autos accesorios'); document.getElementById('close-mobile-menu').click();"
                         class="flex items-center gap-2 p-3 bg-slate-50 dark:bg-slate-800 hover:bg-emerald-50 dark:hover:bg-emerald-900/30 rounded-xl transition-all group text-left">
@@ -2777,7 +2779,7 @@
         class="fixed inset-0 bg-black/60 backdrop-blur-sm z-[60] hidden items-center justify-center p-4">
         <div class="bg-white rounded-3xl shadow-2xl max-w-4xl w-full max-h-[85vh] overflow-auto">
             <div class="flex items-center justify-between p-5 border-b border-slate-200">
-                <h2 class="text-lg font-black text-slate-800">Comparador de Productos</h2>
+                <h2 id="compare-modal-title" class="text-lg font-black text-slate-800">Comparador de Productos</h2>
                 <button id="compare-modal-close"
                     class="text-slate-400 hover:text-slate-600 p-1 rounded-full hover:bg-slate-100 transition-colors">
                     <svg class="w-6 h-6" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
@@ -2798,26 +2800,26 @@
                 <div class="flex items-center gap-3 mb-4">
                     <span class="text-3xl">🎁</span>
                     <div>
-                        <h2 class="text-xl font-black text-slate-800">Compartir mi Wishlist</h2>
-                        <p class="text-sm text-slate-500">Comparte tus productos favoritos con un link</p>
+                        <h2 id="wishlist-share-title" class="text-xl font-black text-slate-800">Compartir mi Wishlist</h2>
+                        <p id="wishlist-share-copy" class="text-sm text-slate-500">Comparte tus productos favoritos con un link</p>
                     </div>
                     <button id="wishlist-modal-close" class="ml-auto text-slate-400 hover:text-slate-600 p-1 rounded-full hover:bg-slate-100 transition-colors">
                         <svg class="w-6 h-6" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
                     </button>
                 </div>
                 <div id="wishlist-share-body">
-                    <p class="text-slate-500 text-sm mb-3">Tus productos guardados:</p>
+                    <p id="wishlist-share-saved-label" class="text-slate-500 text-sm mb-3">Tus productos guardados:</p>
                     <div id="wishlist-preview" class="space-y-2 mb-4 max-h-48 overflow-auto"></div>
                     <div class="flex gap-2">
                         <input id="wishlist-share-link" readonly class="flex-1 bg-slate-100 px-3 py-2 rounded-xl text-sm text-slate-700 font-mono truncate border border-slate-200" value="" />
                         <button id="wishlist-copy-btn" class="bg-emerald-500 hover:bg-emerald-600 text-white px-4 py-2 rounded-xl text-sm font-bold transition-colors flex items-center gap-1.5">
                             <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M8 5H6a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2v-1M8 5a2 2 0 002 2h2a2 2 0 002-2M8 5a2 2 0 012-2h2a2 2 0 012 2m0 0h2a2 2 0 012 2v3m2 4H10m0 0l3-3m-3 3l3 3"/></svg>
-                            Copiar
+                            <span id="wishlist-copy-label">Copiar</span>
                         </button>
                     </div>
                     <a id="wishlist-wa-btn" href="#" target="_blank" class="mt-3 w-full flex items-center justify-center gap-2 bg-[#25D366] hover:bg-[#1da855] text-white font-bold py-2.5 rounded-xl text-sm transition-colors">
                         <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 24 24"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.878-.788-1.47-1.761-1.643-2.06-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52C14.78 9.3 14.187 7.837 13.94 7.242c-.242-.579-.487-.5-.669-.51a12.8 12.8 0 00-.57-.01c-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413Z"/></svg>
-                        Compartir por WhatsApp
+                        <span id="wishlist-wa-label">Compartir por WhatsApp</span>
                     </a>
                 </div>
             </div>
@@ -2828,8 +2830,8 @@
     <div id="post-buy-prompt" class="fixed bottom-24 right-4 z-[60] hidden max-w-xs">
         <div class="bg-white rounded-2xl shadow-2xl border border-slate-200 p-4 animate-bounce-once">
             <button id="post-buy-close" class="absolute top-2 right-2 text-slate-400 hover:text-slate-600 p-1"><svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" /></svg></button>
-            <p class="text-sm font-bold text-slate-700 mb-1">🛍️ ¿Compraste el producto?</p>
-            <p class="text-xs text-slate-500 mb-3">Cuéntanos tu experiencia y ayuda a otros compradores</p>
+            <p id="post-buy-title" class="text-sm font-bold text-slate-700 mb-1">🛍️ ¿Compraste el producto?</p>
+            <p id="post-buy-copy" class="text-xs text-slate-500 mb-3">Cuéntanos tu experiencia y ayuda a otros compradores</p>
             <div class="flex gap-2">
                 <button id="post-buy-yes" class="flex-1 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 font-bold text-xs py-2 rounded-xl border border-emerald-200 transition-colors">✅ Sí, la visité</button>
                 <button id="post-buy-no" class="flex-1 bg-slate-50 hover:bg-slate-100 text-slate-500 font-bold text-xs py-2 rounded-xl border border-slate-200 transition-colors">Todavía no</button>
@@ -2843,7 +2845,7 @@
             <div class="p-6">
                 <div class="flex items-center gap-3 mb-5">
                     <span class="text-3xl">🏆</span>
-                    <h2 class="text-xl font-black text-slate-800">Mis Logros</h2>
+                    <h2 id="achievements-title" class="text-xl font-black text-slate-800">Mis Logros</h2>
                     <button id="achievements-modal-close" class="ml-auto text-slate-400 hover:text-slate-600 p-1 rounded-full hover:bg-slate-100 transition-colors">
                         <svg class="w-6 h-6" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
                     </button>
@@ -2852,7 +2854,7 @@
                     <!-- Populated by JS -->
                 </div>
                 <div class="mt-5 pt-4 border-t border-slate-100">
-                    <p class="text-xs text-slate-400 text-center">Los logros se basan en tus búsquedas con Lumu</p>
+                    <p id="achievements-copy" class="text-xs text-slate-400 text-center">Los logros se basan en tus búsquedas con Lumu</p>
                 </div>
             </div>
         </div>
@@ -2863,8 +2865,8 @@
             <div class="flex items-center gap-3 mb-8">
                 <div class="h-10 w-2 bg-emerald-500 rounded-full"></div>
                 <div>
-                    <h2 class="text-2xl font-display font-black text-slate-900">Guías de Compra Lumu</h2>
-                    <p class="text-slate-500 text-sm font-medium">Aprende a encontrar las mejores ofertas y ahorrar como un experto</p>
+                    <h2 id="seo-guides-title" class="text-2xl font-display font-black text-slate-900">Guías de Compra Lumu</h2>
+                    <p id="seo-guides-copy" class="text-slate-500 text-sm font-medium">Aprende a encontrar las mejores ofertas y ahorrar como un experto</p>
                 </div>
             </div>
             
@@ -2872,37 +2874,37 @@
                 <!-- Guía 1 -->
                 <div class="bg-white p-6 rounded-3xl border border-slate-100 shadow-sm hover:shadow-xl transition-all group cursor-pointer" onclick="document.getElementById('search-input').value='mejores laptops 2026'; document.getElementById('search-form').dispatchEvent(new Event('submit', { cancelable: true, bubbles: true }));">
                     <div class="text-3xl mb-4 group-hover:scale-110 transition-transform w-fit">💻</div>
-                    <h4 class="font-bold text-slate-800 mb-2 group-hover:text-emerald-600 transition-colors">Cómo elegir tu próxima Laptop</h4>
-                    <p class="text-slate-500 text-xs leading-relaxed mb-4">Descubre qué procesador y memoria RAM necesitas realmente para trabajar o estudiar sin pagar de más en 2026.</p>
-                    <span class="text-emerald-600 text-xs font-black uppercase tracking-widest flex items-center gap-1">Leer más <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M9 5l7 7-7 7"/></svg></span>
+                    <h4 id="seo-guide-1-title" class="font-bold text-slate-800 mb-2 group-hover:text-emerald-600 transition-colors">Cómo elegir tu próxima Laptop</h4>
+                    <p id="seo-guide-1-copy" class="text-slate-500 text-xs leading-relaxed mb-4">Descubre qué procesador y memoria RAM necesitas realmente para trabajar o estudiar sin pagar de más en 2026.</p>
+                    <span id="seo-guide-1-cta" class="text-emerald-600 text-xs font-black uppercase tracking-widest flex items-center gap-1">Leer más <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M9 5l7 7-7 7"/></svg></span>
                 </div>
                 
                 <!-- Guía 2 -->
                 <div class="bg-white p-6 rounded-3xl border border-slate-100 shadow-sm hover:shadow-xl transition-all group cursor-pointer" onclick="document.getElementById('search-input').value='refrigeradores eficientes'; document.getElementById('search-form').dispatchEvent(new Event('submit', { cancelable: true, bubbles: true }));">
                     <div class="text-3xl mb-4 group-hover:scale-110 transition-transform w-fit">🏠</div>
-                    <h4 class="font-bold text-slate-800 mb-2 group-hover:text-emerald-600 transition-colors">Electrodomésticos Inteligentes</h4>
-                    <p class="text-slate-500 text-xs leading-relaxed mb-4">Ahorra en tu recibo de luz eligiendo aparatos con certificación de eficiencia energética y tecnología Inverter.</p>
-                    <span class="text-emerald-600 text-xs font-black uppercase tracking-widest flex items-center gap-1">Leer más <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M9 5l7 7-7 7"/></svg></span>
+                    <h4 id="seo-guide-2-title" class="font-bold text-slate-800 mb-2 group-hover:text-emerald-600 transition-colors">Electrodomésticos Inteligentes</h4>
+                    <p id="seo-guide-2-copy" class="text-slate-500 text-xs leading-relaxed mb-4">Ahorra en tu recibo de luz eligiendo aparatos con certificación de eficiencia energética y tecnología Inverter.</p>
+                    <span id="seo-guide-2-cta" class="text-emerald-600 text-xs font-black uppercase tracking-widest flex items-center gap-1">Leer más <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M9 5l7 7-7 7"/></svg></span>
                 </div>
                 
                 <!-- Guía 3 -->
                 <div class="bg-white p-6 rounded-3xl border border-slate-100 shadow-sm hover:shadow-xl transition-all group cursor-pointer" onclick="document.getElementById('search-input').value='mejores cupones de descuento'; document.getElementById('search-form').dispatchEvent(new Event('submit', { cancelable: true, bubbles: true }));">
                     <div class="text-3xl mb-4 group-hover:scale-110 transition-transform w-fit">🏷️</div>
-                    <h4 class="font-bold text-slate-800 mb-2 group-hover:text-emerald-600 transition-colors">El Arte de Usar Cupones</h4>
-                    <p class="text-slate-500 text-xs leading-relaxed mb-4">Aprende a combinar ofertas relámpago con cupones bancarios para obtener descuentos reales de hasta el 70%.</p>
-                    <span class="text-emerald-600 text-xs font-black uppercase tracking-widest flex items-center gap-1">Leer más <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M9 5l7 7-7 7"/></svg></span>
+                    <h4 id="seo-guide-3-title" class="font-bold text-slate-800 mb-2 group-hover:text-emerald-600 transition-colors">El Arte de Usar Cupones</h4>
+                    <p id="seo-guide-3-copy" class="text-slate-500 text-xs leading-relaxed mb-4">Aprende a combinar ofertas relámpago con cupones bancarios para obtener descuentos reales de hasta el 70%.</p>
+                    <span id="seo-guide-3-cta" class="text-emerald-600 text-xs font-black uppercase tracking-widest flex items-center gap-1">Leer más <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M9 5l7 7-7 7"/></svg></span>
                 </div>
             </div>
             
             <!-- Tags SEO de cola larga -->
             <div class="mt-12 pt-8 border-t border-slate-100">
-                <p class="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-4">Búsquedas Populares en México</p>
+                <p id="popular-searches-title" class="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-4">Búsquedas Populares en México</p>
                 <div class="flex flex-wrap gap-2 text-slate-400">
-                    <span class="text-[10px] bg-slate-50 px-3 py-1.5 rounded-full border border-slate-100 transition-all cursor-default">iPhone 16 en oferta</span>
-                    <span class="text-[10px] bg-slate-50 px-3 py-1.5 rounded-full border border-slate-100 transition-all cursor-default">Audífonos noise cancelling baratos</span>
-                    <span class="text-[10px] bg-slate-50 px-3 py-1.5 rounded-full border border-slate-100 transition-all cursor-default">Comprar Smart TV 4K online</span>
-                    <span class="text-[10px] bg-slate-50 px-3 py-1.5 rounded-full border border-slate-100 transition-all cursor-default">Freidoras de Aire Ninja mejor precio</span>
-                    <span class="text-[10px] bg-slate-50 px-3 py-1.5 rounded-full border border-slate-100 transition-all cursor-default">Tenis Nike Originales en liquidación</span>
+                    <span id="popular-search-1" class="text-[10px] bg-slate-50 px-3 py-1.5 rounded-full border border-slate-100 transition-all cursor-default">iPhone 16 en oferta</span>
+                    <span id="popular-search-2" class="text-[10px] bg-slate-50 px-3 py-1.5 rounded-full border border-slate-100 transition-all cursor-default">Audífonos noise cancelling baratos</span>
+                    <span id="popular-search-3" class="text-[10px] bg-slate-50 px-3 py-1.5 rounded-full border border-slate-100 transition-all cursor-default">Comprar Smart TV 4K online</span>
+                    <span id="popular-search-4" class="text-[10px] bg-slate-50 px-3 py-1.5 rounded-full border border-slate-100 transition-all cursor-default">Freidoras de Aire Ninja mejor precio</span>
+                    <span id="popular-search-5" class="text-[10px] bg-slate-50 px-3 py-1.5 rounded-full border border-slate-100 transition-all cursor-default">Tenis Nike Originales en liquidación</span>
                 </div>
             </div>
         </div>
@@ -2924,7 +2926,7 @@
                 d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z">
             </path>
         </svg>
-        <span
+        <span id="feedback-floating-label"
             class="max-w-0 overflow-hidden group-hover:max-w-xs transition-all duration-300 ease-in-out whitespace-nowrap font-bold text-sm pr-2">Danos
             tu Opinión</span>
     </button>
@@ -2946,10 +2948,10 @@
                 <div class="flex items-start gap-3 md:gap-4">
                     <div class="hidden sm:flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-emerald-500 to-green-500 text-white shadow-[0_10px_24px_rgba(16,185,129,0.24)]">🍪</div>
                     <div class="cookie-banner-copy">
-                        <p class="text-[11px] font-black uppercase tracking-[0.22em] text-emerald-700 mb-1">Privacidad Lumu</p>
-                        <p class="text-[12px] md:text-[13px] text-slate-600 font-medium">
+                        <p id="cookie-banner-title" class="text-[11px] font-black uppercase tracking-[0.22em] text-emerald-700 mb-1">Privacidad Lumu</p>
+                        <p id="cookie-banner-copy" class="text-[12px] md:text-[13px] text-slate-600 font-medium">
                             Usamos cookies necesarias para sesión, favoritos y seguridad. Con tu permiso activamos analítica para mejorar recomendaciones y medir rendimiento.
-                            <a href="/privacidad.html" class="text-emerald-700 hover:text-emerald-800 underline font-bold">Ver política</a>.
+                            <a id="cookie-banner-link" href="/privacidad.html" class="text-emerald-700 hover:text-emerald-800 underline font-bold">Ver política</a>.
                         </p>
                     </div>
                 </div>

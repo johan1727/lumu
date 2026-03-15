@@ -15,7 +15,7 @@ window.addEventListener('unhandledrejection', function (event) {
     const msg = String(event.reason?.message || event.reason || '');
     if (msg.includes('Failed to fetch') || msg.includes('NetworkError') || msg.includes('net::ERR_')) {
         if (typeof showGlobalFeedback === 'function') {
-            showGlobalFeedback('Error de conexión. Verifica tu internet e intenta de nuevo.', 'error');
+            showGlobalFeedback(detectRegion() === 'US' ? 'Connection error. Check your internet and try again.' : 'Error de conexión. Verifica tu internet e intenta de nuevo.', 'error');
         }
     }
 });
@@ -136,6 +136,473 @@ const REGION_LABELS = {
             categories: 'Categories',
             company: 'Company',
             rights: 'All rights reserved.'
+        }
+    }
+};
+
+const REGION_UI_COPY = {
+    MX: {
+        nav: {
+            inspiration: 'Inspiración',
+            trending: 'Tendencias',
+            pricing: 'Precios',
+            favorites: 'Favoritos',
+            miniFavoritesTitle: 'Tus Favoritos Recientes',
+            miniFavoritesEmpty: 'Inicia sesión y pasa el cursor para cargar tus favoritos.',
+            miniFavoritesOpen: 'Abrir Galería Completa →',
+            b2b: 'Distribuidor B2B',
+            priceAlertTitle: 'Mis Alertas de Precio',
+            login: 'Ingresar'
+        },
+        hero: {
+            titleHtml: 'El precio perfecto,<br/><span class="text-transparent bg-clip-text bg-gradient-to-r from-emerald-500 to-teal-400">en un instante.</span>',
+            subtitle: 'Comparamos precios en Amazon, Mercado Libre y tiendas locales con IA.',
+            assistant: 'Describe lo que necesitas y Lumu compara precios, tiendas confiables y opciones cerca de ti.',
+            attachImageTitle: 'Adjuntar Imagen',
+            voiceInputTitle: 'Dictado por Voz'
+        },
+        guidedSearch: {
+            title: 'Búsqueda guiada',
+            copy: 'Elige cómo quieres buscar sin perderte entre tantos botones.',
+            toggleShow: 'Mostrar filtros',
+            toggleHide: 'Ocultar filtros',
+            condition: 'Condición',
+            location: 'Ubicación',
+            shortcuts: 'Atajos IA',
+            promptCheapest: 'Lo más barato',
+            promptBest: '¿Cuál conviene?',
+            promptNearby: 'Cerca de mí',
+            promptCheapestData: 'Quiero la opción más barata disponible',
+            promptBestData: 'Compárame precios y dime cuál conviene más',
+            promptNearbyData: 'Buscar opciones en tiendas locales cerca de mí'
+        },
+        categoryBar: {
+            tech: 'Tecnología',
+            fashion: 'Moda',
+            home: 'Hogar',
+            sports: 'Deportes',
+            beauty: 'Belleza',
+            toys: 'Juguetes',
+            cars: 'Autos'
+        },
+        home: {
+            popularCategories: 'Categorías Populares',
+            phones: 'Celulares',
+            laptops: 'Laptops',
+            audio: 'Audio',
+            consoles: 'Consolas',
+            shoes: 'Tenis',
+            kitchen: 'Cocina',
+            perfumes: 'Perfumes',
+            furniture: 'Muebles',
+            trendingTitle: 'Lo Más Buscado',
+            dayDealsTitle: 'Ofertas del Día',
+            flashDealsTitle: 'Ofertas Relámpago',
+            viewAll: 'Ver todas',
+            flashBadge1: 'MÁS BUSCADO',
+            flashMeta1: 'Llega gratis mañana',
+            flashBadge2: 'OFERTA DEL DÍA',
+            flashMeta2: 'Llega gratis mañana',
+            flashMeta3: 'Importación segura',
+            flashBadge4: 'LIQUIDACIÓN',
+            flashMeta4: 'Últimas 5 unidades',
+            coinsSubtitle: 'Sube con cada búsqueda útil'
+        },
+        historyModal: {
+            title: 'Mis Búsquedas',
+            copy: 'Historial de productos que le has pedido a Lumu AI.'
+        },
+        priceAlerts: {
+            title: '🔔 Alertas de Precio',
+            copy: 'Te avisamos cuando baje el precio.',
+            productPlaceholder: 'Ej: iPhone 15 Pro',
+            currencyLabel: 'MXN $',
+            maxPricePlaceholder: 'Precio máximo (ej: 18000)',
+            submit: '➕ Agregar Alerta',
+            activeTitle: 'Alertas Activas',
+            empty: 'Aún no tienes alertas configuradas.'
+        },
+        profile: {
+            titleHtml: 'Mi Perfil<span class="text-primary">.ai</span>',
+            loadingName: 'Cargando Nombre...',
+            loadingPlan: 'Cargando plan...',
+            currentPlan: 'Plan Actual',
+            statusFree: 'Gratis',
+            planVip: 'Acceso Ilimitado',
+            planFree: 'Plan Básico (Gratis)',
+            searchesLeftUnlimited: 'Búsquedas restantes: ∞ Ilimitadas',
+            searchesLeft: 'Búsquedas restantes: {count}/5',
+            upgradeTitle: '¡Sube de Nivel AHORA!',
+            upgradeCopy: 'Hazte VIP y accede a las búsquedas ilimitadas e internacionales.',
+            upgradeButton: 'Comprar Acceso VIP ($39)',
+            historyTitle: 'Historial de Búsquedas',
+            historySubtitle: 'Revisa tus compras pasadas',
+            logout: 'Cerrar Sesión Segura'
+        },
+        pricing: {
+            badge: 'Más valor por menos',
+            title: '¿Quieres búsquedas ilimitadas?',
+            copyHtml: 'Desde <strong class="text-emerald-600">$39 MXN/mes</strong> — sin anuncios, con alertas de precio y cupones exclusivos para encontrar más rápido las mejores ofertas.',
+            chipAds: 'Sin anuncios',
+            chipAlerts: 'Alertas de precio',
+            chipCoupons: 'Cupones exclusivos',
+            button: 'Ver Planes y Precios'
+        },
+        footer: {
+            supporting: 'Compara más claro. Decide más rápido.',
+            rights: '© 2026 Lumu AI. Todos los derechos reservados.',
+            explore: 'Explora',
+            cheapPhones: 'Celulares baratos',
+            phonePrices: 'Precios de celulares',
+            valuePhones: 'Celulares calidad-precio',
+            workStudy: 'Trabajo y estudio',
+            gaming: 'Gaming',
+            styleHome: 'Estilo y hogar',
+            about: 'Sobre Nosotros',
+            privacy: 'Privacidad',
+            terms: 'Términos',
+            savingsGuide: 'Guía de Ahorro',
+            tutorial: 'Tutorial',
+            trustPrivacy: 'Privacidad clara',
+            trustStores: 'Tiendas seguras',
+            trustNoSpam: 'Sin spam'
+        },
+        b2b: {
+            title: 'Plan Revendedor (B2B)',
+            copy: 'Búsqueda masiva en lote para importar a Excel.',
+            copyHighlight: '(Máximo 10 items por vez en Beta)',
+            inputLabel: 'Lista de Productos (Uno por línea)',
+            placeholder: 'Pega tu lista de inventario aquí:\n\nNintendo Switch OLED\nConsola PS5\niPhone 15 Pro Max 256GB\nAspiradora Dyson V15\nMonitor LG Ultrawide 34',
+            process: 'Procesar Lote',
+            resultsTitle: 'Resultados de Búsqueda Masiva',
+            export: 'Exportar CSV',
+            loader: 'Analizando mercados globales...',
+            thQuery: 'Tu Query',
+            thPrice: 'Mejor Precio',
+            thStore: 'Tienda',
+            thAction: 'Acción',
+            empty: 'Pega tu lista y haz clic en procesar para ver los resultados aquí.'
+        },
+        feedback: {
+            title: 'Danos tu opinión',
+            copy: 'Ayúdanos a mejorar Lumu AI.',
+            label: 'Tu sugerencia o comentario',
+            placeholder: 'Ej. Deberían agregar más tiendas como Zara o H&M...',
+            submit: 'Enviar Feedback',
+            successTitle: '¡Gracias por tu apoyo!',
+            successCopy: 'Hemos recibido tu mensaje correctamente.'
+        },
+        ad: {
+            title: 'Enlace Bloqueado',
+            copy: 'Para mantener Lumu 100% gratis, mira este breve anuncio patrocinado para desbloquear la oferta.',
+            waiting: 'Esperando anuncio...',
+            vipPrefix: '¿Cansado de los anuncios?',
+            vipButton: 'Hazte VIP'
+        },
+        favorites: {
+            title: 'Mis Favoritos',
+            subtitle: 'Tu Wishlist Personal',
+            cloud: 'Guardado en la Nube via Supabase',
+            close: 'Cerrar'
+        },
+        auth: {
+            title: 'Bienvenido',
+            copy: 'Inicia sesión para guardar tus favoritos y ver tu historial.',
+            google: 'Continuar con Google',
+            termsHtml: 'Al continuar, aceptas nuestros <a href="/terminos.html" class="underline hover:text-primary">Términos</a> y <a href="/privacidad.html" class="underline hover:text-primary">Privacidad</a>.'
+        },
+        mobileMenu: {
+            title: 'Menú',
+            inspiration: 'Inspiración',
+            trending: 'Tendencias',
+            favorites: 'Mis Favoritos',
+            b2b: 'Plan Reseller (B2B)',
+            categories: 'Categorías',
+            tech: 'Tecnología',
+            fashion: 'Moda',
+            home: 'Hogar',
+            sports: 'Deportes',
+            beauty: 'Belleza',
+            toys: 'Juguetes'
+        },
+        compare: {
+            title: 'Comparador de Productos',
+            clear: 'Limpiar',
+            open: 'Comparar'
+        },
+        seoGuides: {
+            title: 'Guías de Compra Lumu',
+            copy: 'Aprende a encontrar las mejores ofertas y ahorrar como un experto',
+            guide1Title: 'Cómo elegir tu próxima Laptop',
+            guide1Copy: 'Descubre qué procesador y memoria RAM necesitas realmente para trabajar o estudiar sin pagar de más en 2026.',
+            guide2Title: 'Electrodomésticos Inteligentes',
+            guide2Copy: 'Ahorra en tu recibo de luz eligiendo aparatos con certificación de eficiencia energética y tecnología Inverter.',
+            guide3Title: 'El Arte de Usar Cupones',
+            guide3Copy: 'Aprende a combinar ofertas relámpago con cupones bancarios para obtener descuentos reales de hasta el 70%.',
+            cta: 'Leer más',
+            popularTitle: 'Búsquedas Populares en México',
+            popular1: 'iPhone 16 en oferta',
+            popular2: 'Audífonos noise cancelling baratos',
+            popular3: 'Comprar Smart TV 4K online',
+            popular4: 'Freidoras de Aire Ninja mejor precio',
+            popular5: 'Tenis Nike Originales en liquidación'
+        },
+        cookies: {
+            title: 'Privacidad Lumu',
+            copyHtml: 'Usamos cookies necesarias para sesión, favoritos y seguridad. Con tu permiso activamos analítica para mejorar recomendaciones y medir rendimiento. <a href="/privacidad.html" class="text-emerald-700 hover:text-emerald-800 underline font-bold">Ver política</a>.',
+            reject: 'Solo necesarias',
+            accept: 'Aceptar y continuar',
+            backToTop: 'Volver arriba',
+            floatingFeedback: 'Danos tu Opinión'
+        },
+        wishlistShare: {
+            title: 'Compartir mi Wishlist',
+            copy: 'Comparte tus productos favoritos con un link',
+            savedLabel: 'Tus productos guardados:',
+            copyButton: 'Copiar',
+            whatsapp: 'Compartir por WhatsApp'
+        },
+        postBuy: {
+            title: '🛍️ ¿Compraste el producto?',
+            copy: 'Cuéntanos tu experiencia y ayuda a otros compradores',
+            yes: '✅ Sí, la visité',
+            no: 'Todavía no'
+        },
+        achievements: {
+            title: 'Mis Logros',
+            copy: 'Los logros se basan en tus búsquedas con Lumu'
+        }
+    },
+    US: {
+        nav: {
+            inspiration: 'Inspiration',
+            trending: 'Trending',
+            pricing: 'Pricing',
+            favorites: 'Favorites',
+            miniFavoritesTitle: 'Your Recent Favorites',
+            miniFavoritesEmpty: 'Sign in and hover to load your favorites.',
+            miniFavoritesOpen: 'Open Full Gallery →',
+            b2b: 'B2B Distributor',
+            priceAlertTitle: 'My Price Alerts',
+            login: 'Sign In'
+        },
+        hero: {
+            titleHtml: 'The perfect price,<br/><span class="text-transparent bg-clip-text bg-gradient-to-r from-emerald-500 to-teal-400">in an instant.</span>',
+            subtitle: 'We compare prices across Amazon, Mercado Libre, and local stores with AI.',
+            assistant: 'Describe what you need and Lumu compares prices, trusted stores, and nearby options for you.',
+            attachImageTitle: 'Attach Image',
+            voiceInputTitle: 'Voice Dictation'
+        },
+        guidedSearch: {
+            title: 'Guided search',
+            copy: 'Choose how you want to search without getting lost between too many buttons.',
+            toggleShow: 'Show filters',
+            toggleHide: 'Hide filters',
+            condition: 'Condition',
+            location: 'Location',
+            shortcuts: 'AI shortcuts',
+            promptCheapest: 'Cheapest option',
+            promptBest: 'Best value?',
+            promptNearby: 'Near me',
+            promptCheapestData: 'I want the cheapest option available',
+            promptBestData: 'Compare prices and tell me which option is best',
+            promptNearbyData: 'Search for options in local stores near me'
+        },
+        categoryBar: {
+            tech: 'Tech',
+            fashion: 'Fashion',
+            home: 'Home',
+            sports: 'Sports',
+            beauty: 'Beauty',
+            toys: 'Toys',
+            cars: 'Cars'
+        },
+        home: {
+            popularCategories: 'Popular Categories',
+            phones: 'Phones',
+            laptops: 'Laptops',
+            audio: 'Audio',
+            consoles: 'Consoles',
+            shoes: 'Sneakers',
+            kitchen: 'Kitchen',
+            perfumes: 'Fragrances',
+            furniture: 'Furniture',
+            trendingTitle: 'Most Searched',
+            dayDealsTitle: 'Deals of the Day',
+            flashDealsTitle: 'Flash Deals',
+            viewAll: 'View all',
+            flashBadge1: 'MOST WANTED',
+            flashMeta1: 'Free delivery tomorrow',
+            flashBadge2: 'DEAL OF THE DAY',
+            flashMeta2: 'Free delivery tomorrow',
+            flashMeta3: 'Safe import',
+            flashBadge4: 'CLEARANCE',
+            flashMeta4: 'Last 5 units',
+            coinsSubtitle: 'Progress grows with every useful search'
+        },
+        historyModal: {
+            title: 'My Searches',
+            copy: 'History of products you have asked Lumu AI to compare.'
+        },
+        priceAlerts: {
+            title: '🔔 Price Alerts',
+            copy: 'We will notify you when the price drops.',
+            productPlaceholder: 'Ex: iPhone 15 Pro',
+            currencyLabel: 'USD $',
+            maxPricePlaceholder: 'Maximum price (ex: 999)',
+            submit: '➕ Add Alert',
+            activeTitle: 'Active Alerts',
+            empty: 'You have no alerts configured yet.'
+        },
+        profile: {
+            titleHtml: 'My Profile<span class="text-primary">.ai</span>',
+            loadingName: 'Loading name...',
+            loadingPlan: 'Loading plan...',
+            currentPlan: 'Current Plan',
+            statusFree: 'Free',
+            planVip: 'Unlimited Access',
+            planFree: 'Basic Plan (Free)',
+            searchesLeftUnlimited: 'Searches left: ∞ Unlimited',
+            searchesLeft: 'Searches left: {count}/5',
+            upgradeTitle: 'Upgrade NOW!',
+            upgradeCopy: 'Go VIP and unlock unlimited and international searches.',
+            upgradeButton: 'Buy VIP Access ($39)',
+            historyTitle: 'Search History',
+            historySubtitle: 'Review your past searches',
+            logout: 'Secure Sign Out'
+        },
+        pricing: {
+            badge: 'More value for less',
+            title: 'Want unlimited searches?',
+            copyHtml: 'Starting at <strong class="text-emerald-600">$39 USD/month</strong> — ad-free, with price alerts and exclusive coupons to find the best deals faster.',
+            chipAds: 'No ads',
+            chipAlerts: 'Price alerts',
+            chipCoupons: 'Exclusive coupons',
+            button: 'View Plans & Pricing'
+        },
+        footer: {
+            supporting: 'Compare with more clarity. Decide faster.',
+            rights: '© 2026 Lumu AI. All rights reserved.',
+            explore: 'Explore',
+            cheapPhones: 'Budget phones',
+            phonePrices: 'Phone prices',
+            valuePhones: 'Best value phones',
+            workStudy: 'Work and study',
+            gaming: 'Gaming',
+            styleHome: 'Style and home',
+            about: 'About Us',
+            privacy: 'Privacy',
+            terms: 'Terms',
+            savingsGuide: 'Savings Guide',
+            tutorial: 'Tutorial',
+            trustPrivacy: 'Clear privacy',
+            trustStores: 'Trusted stores',
+            trustNoSpam: 'No spam'
+        },
+        b2b: {
+            title: 'Reseller Plan (B2B)',
+            copy: 'Bulk search in batches to export into Excel.',
+            copyHighlight: '(Maximum 10 items per batch in Beta)',
+            inputLabel: 'Product List (One per line)',
+            placeholder: 'Paste your inventory list here:\n\nNintendo Switch OLED\nPS5 Console\niPhone 15 Pro Max 256GB\nDyson V15 Vacuum\nLG Ultrawide 34 Monitor',
+            process: 'Process Batch',
+            resultsTitle: 'Bulk Search Results',
+            export: 'Export CSV',
+            loader: 'Analyzing global markets...',
+            thQuery: 'Your Query',
+            thPrice: 'Best Price',
+            thStore: 'Store',
+            thAction: 'Action',
+            empty: 'Paste your list and click process to see the results here.'
+        },
+        feedback: {
+            title: 'Share your feedback',
+            copy: 'Help us improve Lumu AI.',
+            label: 'Your suggestion or comment',
+            placeholder: 'Ex. You should add more stores like Zara or H&M...',
+            submit: 'Send Feedback',
+            successTitle: 'Thanks for your support!',
+            successCopy: 'We received your message successfully.'
+        },
+        ad: {
+            title: 'Link Locked',
+            copy: 'To keep Lumu 100% free, watch this short sponsored ad to unlock the offer.',
+            waiting: 'Waiting for ad...',
+            vipPrefix: 'Tired of ads?',
+            vipButton: 'Go VIP'
+        },
+        favorites: {
+            title: 'My Favorites',
+            subtitle: 'Your Personal Wishlist',
+            cloud: 'Cloud saved via Supabase',
+            close: 'Close'
+        },
+        auth: {
+            title: 'Welcome',
+            copy: 'Sign in to save your favorites and view your history.',
+            google: 'Continue with Google',
+            termsHtml: 'By continuing, you agree to our <a href="/terms.html" class="underline hover:text-primary">Terms</a> and <a href="/privacy.html" class="underline hover:text-primary">Privacy</a>.'
+        },
+        mobileMenu: {
+            title: 'Menu',
+            inspiration: 'Inspiration',
+            trending: 'Trending',
+            favorites: 'My Favorites',
+            b2b: 'Reseller Plan (B2B)',
+            categories: 'Categories',
+            tech: 'Tech',
+            fashion: 'Fashion',
+            home: 'Home',
+            sports: 'Sports',
+            beauty: 'Beauty',
+            toys: 'Toys'
+        },
+        compare: {
+            title: 'Product Comparison',
+            clear: 'Clear',
+            open: 'Compare'
+        },
+        seoGuides: {
+            title: 'Lumu Buying Guides',
+            copy: 'Learn how to find the best deals and save like an expert',
+            guide1Title: 'How to choose your next laptop',
+            guide1Copy: 'Discover which processor and RAM you really need to work or study without overpaying in 2026.',
+            guide2Title: 'Smart Home Appliances',
+            guide2Copy: 'Save on your electric bill by choosing appliances with energy efficiency certification and Inverter technology.',
+            guide3Title: 'The Art of Using Coupons',
+            guide3Copy: 'Learn to combine flash deals with bank coupons to get real discounts of up to 70%.',
+            cta: 'Read more',
+            popularTitle: 'Popular Searches in the US',
+            popular1: 'iPhone 16 on sale',
+            popular2: 'Cheap noise-cancelling headphones',
+            popular3: 'Buy a 4K Smart TV online',
+            popular4: 'Best price on Ninja Air Fryers',
+            popular5: 'Nike sneakers on clearance'
+        },
+        cookies: {
+            title: 'Lumu Privacy',
+            copyHtml: 'We use essential cookies for session, favorites, and security. With your permission, we enable analytics to improve recommendations and measure performance. <a href="/privacidad.html" class="text-emerald-700 hover:text-emerald-800 underline font-bold">View policy</a>.',
+            reject: 'Essential only',
+            accept: 'Accept and continue',
+            backToTop: 'Back to top',
+            floatingFeedback: 'Share your feedback'
+        },
+        wishlistShare: {
+            title: 'Share my Wishlist',
+            copy: 'Share your favorite products with a link',
+            savedLabel: 'Your saved products:',
+            copyButton: 'Copy',
+            whatsapp: 'Share on WhatsApp'
+        },
+        postBuy: {
+            title: '🛍️ Did you check out the product?',
+            copy: 'Tell us about your experience and help other shoppers',
+            yes: '✅ Yes, I checked it out',
+            no: 'Not yet'
+        },
+        achievements: {
+            title: 'My Achievements',
+            copy: 'Achievements are based on your searches with Lumu'
         }
     }
 };
@@ -298,6 +765,39 @@ function getRegionConfig() {
     return REGION_LABELS[currentRegion] || REGION_LABELS.MX;
 }
 
+function getRegionUICopy() {
+    return REGION_UI_COPY[currentRegion] || REGION_UI_COPY.MX;
+}
+
+function setTextById(id, value) {
+    const element = document.getElementById(id);
+    if (element && typeof value === 'string') element.textContent = value;
+}
+
+function setHTMLById(id, value) {
+    const element = document.getElementById(id);
+    if (element && typeof value === 'string') element.innerHTML = value;
+}
+
+function setPlaceholderById(id, value) {
+    const element = document.getElementById(id);
+    if (element && typeof value === 'string') element.placeholder = value;
+}
+
+function setTitleById(id, value) {
+    const element = document.getElementById(id);
+    if (element && typeof value === 'string') element.title = value;
+}
+
+function setFirstTextNodeById(id, value) {
+    const element = document.getElementById(id);
+    if (!element || typeof value !== 'string') return;
+    const textNode = Array.from(element.childNodes).find(node => node.nodeType === Node.TEXT_NODE && node.textContent.trim());
+    if (textNode) {
+        textNode.textContent = ` ${value}`;
+    }
+}
+
 function formatCurrencyByRegion(amount) {
     const config = getRegionConfig();
     return new Intl.NumberFormat(config.locale, {
@@ -318,6 +818,7 @@ function detectRegion() {
 function applyRegionalCopy() {
     currentRegion = detectRegion();
     const config = getRegionConfig();
+    const ui = getRegionUICopy();
 
     const searchInputEl = document.getElementById('search-input');
     if (searchInputEl) searchInputEl.placeholder = config.searchPlaceholder;
@@ -370,6 +871,220 @@ function applyRegionalCopy() {
     if (freeShippingLabel && config.toolbar) {
         freeShippingLabel.textContent = config.toolbar.freeShipping;
     }
+
+    setTextById('nav-ofertas', ui.nav.inspiration);
+    setTextById('nav-tendencias', ui.nav.trending);
+    setTextById('nav-precios', ui.nav.pricing);
+    setTextById('nav-favorites-label', ui.nav.favorites);
+    setTextById('mini-favorites-title', ui.nav.miniFavoritesTitle);
+    setTextById('mini-favorites-empty', ui.nav.miniFavoritesEmpty);
+    setTextById('mini-favorites-open', ui.nav.miniFavoritesOpen);
+    setTextById('nav-b2b-label', ui.nav.b2b);
+    setTitleById('btn-price-alert', ui.nav.priceAlertTitle);
+    setTextById('nav-login-label', ui.nav.login);
+
+    setHTMLById('hero-title', ui.hero.titleHtml);
+    setTextById('hero-subtitle', ui.hero.subtitle);
+    setTextById('search-assistant-copy', ui.hero.assistant);
+    setTitleById('btn-attach-image', ui.hero.attachImageTitle);
+    setTitleById('btn-voice-input', ui.hero.voiceInputTitle);
+
+    setTextById('guided-search-title', ui.guidedSearch.title);
+    setTextById('guided-search-copy', ui.guidedSearch.copy);
+    setTextById('filter-section-condition', ui.guidedSearch.condition);
+    setTextById('filter-section-location', ui.guidedSearch.location);
+    setTextById('filter-section-ai-shortcuts', ui.guidedSearch.shortcuts);
+    setTextById('search-prompt-cheapest', ui.guidedSearch.promptCheapest);
+    setTextById('search-prompt-best', ui.guidedSearch.promptBest);
+    setTextById('search-prompt-nearby', ui.guidedSearch.promptNearby);
+
+    const promptCheapest = document.getElementById('search-prompt-cheapest');
+    const promptBest = document.getElementById('search-prompt-best');
+    const promptNearby = document.getElementById('search-prompt-nearby');
+    if (promptCheapest) promptCheapest.dataset.prompt = ui.guidedSearch.promptCheapestData;
+    if (promptBest) promptBest.dataset.prompt = ui.guidedSearch.promptBestData;
+    if (promptNearby) promptNearby.dataset.prompt = ui.guidedSearch.promptNearbyData;
+
+    document.querySelectorAll('.condition-chip').forEach(chip => {
+        const mode = chip.getAttribute('data-condition') || 'all';
+        chip.textContent = getConditionLabel(mode);
+    });
+
+    setTextById('category-chip-tech', ui.categoryBar.tech);
+    setTextById('category-chip-fashion', ui.categoryBar.fashion);
+    setTextById('category-chip-home', ui.categoryBar.home);
+    setTextById('category-chip-sports', ui.categoryBar.sports);
+    setTextById('category-chip-beauty', ui.categoryBar.beauty);
+    setTextById('category-chip-toys', ui.categoryBar.toys);
+    setTextById('category-chip-cars', ui.categoryBar.cars);
+
+    setTextById('flash-deals-title', ui.home.flashDealsTitle);
+    setTextById('flash-deals-view-all', ui.home.viewAll);
+    setTextById('flash-deal-badge-1', ui.home.flashBadge1);
+    setTextById('flash-deal-meta-1', ui.home.flashMeta1);
+    setTextById('flash-deal-badge-2', ui.home.flashBadge2);
+    setTextById('flash-deal-meta-2', ui.home.flashMeta2);
+    setTextById('flash-deal-meta-3', ui.home.flashMeta3);
+    setTextById('flash-deal-badge-4', ui.home.flashBadge4);
+    setTextById('flash-deal-meta-4', ui.home.flashMeta4);
+    setTextById('extra-categories-title', ui.home.popularCategories);
+    setTextById('extra-category-phones', ui.home.phones);
+    setTextById('extra-category-laptops', ui.home.laptops);
+    setTextById('extra-category-audio', ui.home.audio);
+    setTextById('extra-category-consoles', ui.home.consoles);
+    setTextById('extra-category-shoes', ui.home.shoes);
+    setTextById('extra-category-kitchen', ui.home.kitchen);
+    setTextById('extra-category-perfumes', ui.home.perfumes);
+    setTextById('extra-category-furniture', ui.home.furniture);
+    setTextById('extra-trending-title', ui.home.trendingTitle);
+    setTextById('extra-deals-title', ui.home.dayDealsTitle);
+    setTextById('coins-progress-subtitle', ui.home.coinsSubtitle);
+
+    setTextById('history-modal-title', ui.historyModal.title);
+    setTextById('history-modal-copy', ui.historyModal.copy);
+
+    setTextById('price-alert-title', ui.priceAlerts.title);
+    setTextById('price-alert-copy', ui.priceAlerts.copy);
+    setPlaceholderById('alert-product', ui.priceAlerts.productPlaceholder);
+    setTextById('alert-currency-label', ui.priceAlerts.currencyLabel);
+    setPlaceholderById('alert-price', ui.priceAlerts.maxPricePlaceholder);
+    setTextById('alert-submit-label', ui.priceAlerts.submit);
+    setTextById('alerts-active-title', ui.priceAlerts.activeTitle);
+    setTextById('alerts-empty-copy', ui.priceAlerts.empty);
+
+    setHTMLById('profile-modal-title', ui.profile.titleHtml);
+    setTextById('profile-plan-current-label', ui.profile.currentPlan);
+    setTextById('upgrade-title', ui.profile.upgradeTitle);
+    setTextById('upgrade-copy', ui.profile.upgradeCopy);
+    setTextById('upgrade-button-label', ui.profile.upgradeButton);
+    setTextById('history-title', ui.profile.historyTitle);
+    setTextById('history-subtitle', ui.profile.historySubtitle);
+    setTextById('logout-label', ui.profile.logout);
+
+    setTextById('pricing-badge', ui.pricing.badge);
+    setTextById('pricing-title', ui.pricing.title);
+    setHTMLById('pricing-copy', ui.pricing.copyHtml);
+    setTextById('pricing-chip-ads', ui.pricing.chipAds);
+    setTextById('pricing-chip-alerts', ui.pricing.chipAlerts);
+    setTextById('pricing-chip-coupons', ui.pricing.chipCoupons);
+    setTextById('pricing-button-label', ui.pricing.button);
+
+    setTextById('footer-brand-tagline', config.footer.tagline);
+    setTextById('footer-brand-supporting', ui.footer.supporting);
+    setTextById('footer-rights-copy', ui.footer.rights);
+    setTextById('footer-explore-title', ui.footer.explore);
+    setTextById('footer-link-celulares', ui.footer.cheapPhones);
+    setTextById('footer-link-precios', ui.footer.phonePrices);
+    setTextById('footer-link-calidad-precio', ui.footer.valuePhones);
+    setTextById('footer-link-work', ui.footer.workStudy);
+    setTextById('footer-link-gaming', ui.footer.gaming);
+    setTextById('footer-link-style', ui.footer.styleHome);
+    setTextById('footer-company-title', config.footer.company);
+    setTextById('footer-link-about', ui.footer.about);
+    setTextById('footer-link-privacy', ui.footer.privacy);
+    setTextById('footer-link-terms', ui.footer.terms);
+    setTextById('footer-link-guide', ui.footer.savingsGuide);
+    setTextById('footer-link-tutorial', ui.footer.tutorial);
+    setTextById('footer-trust-privacy', ui.footer.trustPrivacy);
+    setTextById('footer-trust-stores', ui.footer.trustStores);
+    setTextById('footer-trust-no-spam', ui.footer.trustNoSpam);
+
+    setTextById('b2b-title', ui.b2b.title);
+    setFirstTextNodeById('b2b-copy', ui.b2b.copy);
+    setTextById('b2b-copy-highlight', ui.b2b.copyHighlight);
+    setTextById('b2b-input-label', ui.b2b.inputLabel);
+    setPlaceholderById('b2b-textarea', ui.b2b.placeholder);
+    setTextById('b2b-process-label', ui.b2b.process);
+    setTextById('b2b-results-title', ui.b2b.resultsTitle);
+    setTextById('b2b-export-label', ui.b2b.export);
+    setTextById('b2b-loader-text', ui.b2b.loader);
+    setTextById('b2b-th-query', ui.b2b.thQuery);
+    setTextById('b2b-th-price', ui.b2b.thPrice);
+    setTextById('b2b-th-store', ui.b2b.thStore);
+    setTextById('b2b-th-action', ui.b2b.thAction);
+    setTextById('b2b-empty-state', ui.b2b.empty);
+
+    setTextById('feedback-title', ui.feedback.title);
+    setTextById('feedback-copy', ui.feedback.copy);
+    setTextById('feedback-label', ui.feedback.label);
+    setPlaceholderById('feedback-text', ui.feedback.placeholder);
+    setTextById('feedback-submit-label', ui.feedback.submit);
+    setTextById('feedback-success-title', ui.feedback.successTitle);
+    setTextById('feedback-success-copy', ui.feedback.successCopy);
+
+    setTextById('ad-gateway-title', ui.ad.title);
+    setTextById('ad-gateway-copy', ui.ad.copy);
+    setTextById('btn-skip-ad', ui.ad.waiting);
+    setFirstTextNodeById('ad-vip-copy', ui.ad.vipPrefix);
+    setTextById('ad-vip-button', ui.ad.vipButton);
+
+    setTextById('favorites-title', ui.favorites.title);
+    setTextById('favorites-subtitle', ui.favorites.subtitle);
+    setTextById('favorites-cloud-copy', ui.favorites.cloud);
+    setTextById('favorites-close-label', ui.favorites.close);
+
+    setTextById('auth-title', ui.auth.title);
+    setTextById('auth-copy', ui.auth.copy);
+    setTextById('google-login-label', ui.auth.google);
+    setHTMLById('auth-terms-copy', ui.auth.termsHtml);
+
+    setTextById('mobile-menu-title', ui.mobileMenu.title);
+    setTextById('mobile-link-inspiration', ui.mobileMenu.inspiration);
+    setTextById('mobile-link-trending', ui.mobileMenu.trending);
+    setTextById('mobile-favorites-label', ui.mobileMenu.favorites);
+    setTextById('mobile-b2b-label', ui.mobileMenu.b2b);
+    setTextById('mobile-categories-title', ui.mobileMenu.categories);
+    setTextById('mobile-cat-tech', ui.mobileMenu.tech);
+    setTextById('mobile-cat-fashion', ui.mobileMenu.fashion);
+    setTextById('mobile-cat-home', ui.mobileMenu.home);
+    setTextById('mobile-cat-sports', ui.mobileMenu.sports);
+    setTextById('mobile-cat-beauty', ui.mobileMenu.beauty);
+    setTextById('mobile-cat-toys', ui.mobileMenu.toys);
+
+    setTextById('compare-modal-title', ui.compare.title);
+    setTextById('compare-clear-btn', ui.compare.clear);
+    setTextById('compare-open-btn', ui.compare.open);
+
+    setTextById('seo-guides-title', ui.seoGuides.title);
+    setTextById('seo-guides-copy', ui.seoGuides.copy);
+    setTextById('seo-guide-1-title', ui.seoGuides.guide1Title);
+    setTextById('seo-guide-1-copy', ui.seoGuides.guide1Copy);
+    setTextById('seo-guide-1-cta', ui.seoGuides.cta);
+    setTextById('seo-guide-2-title', ui.seoGuides.guide2Title);
+    setTextById('seo-guide-2-copy', ui.seoGuides.guide2Copy);
+    setTextById('seo-guide-2-cta', ui.seoGuides.cta);
+    setTextById('seo-guide-3-title', ui.seoGuides.guide3Title);
+    setTextById('seo-guide-3-copy', ui.seoGuides.guide3Copy);
+    setTextById('seo-guide-3-cta', ui.seoGuides.cta);
+    setTextById('popular-searches-title', ui.seoGuides.popularTitle);
+    setTextById('popular-search-1', ui.seoGuides.popular1);
+    setTextById('popular-search-2', ui.seoGuides.popular2);
+    setTextById('popular-search-3', ui.seoGuides.popular3);
+    setTextById('popular-search-4', ui.seoGuides.popular4);
+    setTextById('popular-search-5', ui.seoGuides.popular5);
+
+    setTextById('feedback-floating-label', ui.cookies.floatingFeedback);
+    setTitleById('btn-back-to-top', ui.cookies.backToTop);
+    const backToTopBtn = document.getElementById('btn-back-to-top');
+    if (backToTopBtn) backToTopBtn.setAttribute('aria-label', ui.cookies.backToTop);
+    setTextById('cookie-banner-title', ui.cookies.title);
+    setHTMLById('cookie-banner-copy', ui.cookies.copyHtml);
+    setTextById('btn-reject-cookies', ui.cookies.reject);
+    setTextById('btn-accept-cookies', ui.cookies.accept);
+
+    setTextById('wishlist-share-title', ui.wishlistShare.title);
+    setTextById('wishlist-share-copy', ui.wishlistShare.copy);
+    setTextById('wishlist-share-saved-label', ui.wishlistShare.savedLabel);
+    setTextById('wishlist-copy-label', ui.wishlistShare.copyButton);
+    setTextById('wishlist-wa-label', ui.wishlistShare.whatsapp);
+
+    setTextById('post-buy-title', ui.postBuy.title);
+    setTextById('post-buy-copy', ui.postBuy.copy);
+    setTextById('post-buy-yes', ui.postBuy.yes);
+    setTextById('post-buy-no', ui.postBuy.no);
+
+    setTextById('achievements-title', ui.achievements.title);
+    setTextById('achievements-copy', ui.achievements.copy);
 
     syncLocationFilterLabels();
 }
@@ -538,7 +1253,8 @@ function restoreHomeSections() {
         errorMessage.classList.add('hidden');
     }
     if (resultsTitle) {
-        resultsTitle.innerHTML = `Análisis completado. <span class="text-slate-500 font-medium">Mejores opciones seguras:</span>`;
+        const config = getRegionConfig();
+        resultsTitle.innerHTML = `${config.sections.analysisComplete} <span class="text-slate-500 font-medium">${config.sections.bestOptions}</span>`;
     }
     removeTypingIndicator();
 }
@@ -549,7 +1265,7 @@ async function renderFavoritesList() {
     const sb = window.supabaseClient || null;
     const user = window.currentUser || null;
     if (!sb || !user) {
-        favoritesList.innerHTML = '<p class="text-slate-400 text-center py-8">Inicia sesión para ver tus favoritos.</p>';
+        favoritesList.innerHTML = `<p class="text-slate-400 text-center py-8">${currentRegion === 'US' ? 'Sign in to view your favorites.' : 'Inicia sesión para ver tus favoritos.'}</p>`;
         return;
     }
 
@@ -560,13 +1276,13 @@ async function renderFavoritesList() {
         if (error) throw error;
 
         if (!data || data.length === 0) {
-            favoritesList.innerHTML = '<p class="text-slate-400 text-center py-8">Aún no tienes productos guardados.</p>';
+            favoritesList.innerHTML = `<p class="text-slate-400 text-center py-8">${currentRegion === 'US' ? 'You do not have saved products yet.' : 'Aún no tienes productos guardados.'}</p>`;
             return;
         }
 
         favoritesList.innerHTML = data.map(item => {
             const favPrice = typeof item.product_price === 'number' ? item.product_price : parseFloat(String(item.product_price || '0').replace(/[^0-9.-]+/g, ''));
-            const safeTitle = sanitize(item.product_title || 'Producto sin título');
+            const safeTitle = sanitize(item.product_title || (currentRegion === 'US' ? 'Untitled product' : 'Producto sin título'));
             const safeUrl = sanitize(item.product_url || '#');
             const safeImage = sanitize(item.product_image || '');
             return `
@@ -577,9 +1293,9 @@ async function renderFavoritesList() {
                         </div>
                         <div class="flex-grow min-w-0">
                             <h4 class="font-bold text-slate-800 text-sm mb-1 truncate">${safeTitle}</h4>
-                            <p class="text-emerald-600 font-black text-lg mb-2">$${Number(favPrice || 0).toLocaleString('es-MX')} <span class="text-[10px] text-slate-400 font-bold uppercase">MXN</span></p>
+                            <p class="text-emerald-600 font-black text-lg mb-2">${formatCurrencyByRegion(favPrice || 0)}</p>
                             <div class="flex gap-2">
-                                <a href="${safeUrl}" target="_blank" rel="noopener noreferrer" class="flex-grow bg-slate-900 text-white text-[11px] font-black py-2 rounded-lg text-center hover:bg-emerald-600 transition-colors">Ver Producto</a>
+                                <a href="${safeUrl}" target="_blank" rel="noopener noreferrer" class="flex-grow bg-slate-900 text-white text-[11px] font-black py-2 rounded-lg text-center hover:bg-emerald-600 transition-colors">${currentRegion === 'US' ? 'View Product' : 'Ver Producto'}</a>
                                 <button onclick="window.removeFavoriteFromList('${encodeURIComponent(item.product_url)}')" class="p-2 bg-rose-50 text-rose-500 rounded-lg hover:bg-rose-100 transition-colors">
                                     <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M3.172 5.172a4 4 0 015.656 0L10 6.343l1.172-1.171a4 4 0 115.656 5.656L10 17.657l-6.828-6.829a4 4 0 010-5.656z" clip-rule="evenodd"></path></svg>
                                 </button>
@@ -591,7 +1307,7 @@ async function renderFavoritesList() {
         }).join('');
     } catch (err) {
         console.error('Error rendering favorites:', err);
-        favoritesList.innerHTML = '<p class="text-rose-500 text-center py-8">Error cargando favoritos.</p>';
+        favoritesList.innerHTML = `<p class="text-rose-500 text-center py-8">${currentRegion === 'US' ? 'Error loading favorites.' : 'Error cargando favoritos.'}</p>`;
     }
 };
 
@@ -605,7 +1321,7 @@ window.renderMiniFavorites = async () => {
     const user = window.currentUser || null;
 
     if (!sb || !user) {
-        list.innerHTML = '<p class="text-xs text-slate-400 text-center py-4 font-medium">Inicia sesión para ver tus favoritos.</p>';
+        list.innerHTML = `<p class="text-xs text-slate-400 text-center py-4 font-medium">${currentRegion === 'US' ? 'Sign in to view your favorites.' : 'Inicia sesión para ver tus favoritos.'}</p>`;
         return;
     }
 
@@ -616,14 +1332,14 @@ window.renderMiniFavorites = async () => {
         if (error) throw error;
 
         if (!data || data.length === 0) {
-            list.innerHTML = '<p class="text-xs text-slate-400 text-center py-4 font-medium">Aún no tienes productos guardados.</p>';
+            list.innerHTML = `<p class="text-xs text-slate-400 text-center py-4 font-medium">${currentRegion === 'US' ? 'You do not have saved products yet.' : 'Aún no tienes productos guardados.'}</p>`;
             list.setAttribute('data-loaded', 'true');
             return;
         }
 
         list.innerHTML = data.map(item => {
             const favPrice = typeof item.product_price === 'number' ? item.product_price : parseFloat(String(item.product_price || '0').replace(/[^0-9.-]+/g, ''));
-            const safeTitle = sanitize(item.product_title || 'Producto sin título');
+            const safeTitle = sanitize(item.product_title || (currentRegion === 'US' ? 'Untitled product' : 'Producto sin título'));
             const safeUrl = sanitize(item.product_url || '#');
             const safeImage = sanitize(item.product_image || '');
             return `
@@ -633,7 +1349,7 @@ window.renderMiniFavorites = async () => {
                     </div>
                     <div class="flex flex-col justify-center min-w-0">
                         <h4 class="font-bold text-slate-800 text-[11px] mb-0.5 truncate group-hover:text-primary transition-colors">${safeTitle}</h4>
-                        <p class="text-emerald-600 font-extrabold text-xs">$${Number(favPrice || 0).toLocaleString('es-MX')} MXN</p>
+                        <p class="text-emerald-600 font-extrabold text-xs">${formatCurrencyByRegion(favPrice || 0)}</p>
                     </div>
                 </a>
             `;
@@ -642,7 +1358,7 @@ window.renderMiniFavorites = async () => {
         list.setAttribute('data-loaded', 'true');
     } catch (err) {
         console.error('Error rendering mini favorites:', err);
-        list.innerHTML = '<p class="text-xs text-rose-500 text-center py-4 font-medium">Error cargando favoritos.</p>';
+        list.innerHTML = `<p class="text-xs text-rose-500 text-center py-4 font-medium">${currentRegion === 'US' ? 'Error loading favorites.' : 'Error cargando favoritos.'}</p>`;
     }
 };
 
@@ -774,10 +1490,10 @@ async function initApp() {
             if (!SpeechRecognition) {
                 btnVoiceInput.disabled = true;
                 btnVoiceInput.classList.add('opacity-40', 'cursor-not-allowed');
-                btnVoiceInput.title = 'Tu navegador no soporta dictado por voz';
+                btnVoiceInput.title = detectRegion() === 'US' ? 'Your browser does not support voice dictation' : 'Tu navegador no soporta dictado por voz';
             } else {
                 const recognition = new SpeechRecognition();
-                recognition.lang = 'es-MX';
+                recognition.lang = detectRegion() === 'US' ? 'en-US' : 'es-MX';
                 recognition.interimResults = true;
                 recognition.maxAlternatives = 1;
                 recognition.continuous = false;
@@ -792,7 +1508,7 @@ async function initApp() {
                     isRecording = true;
                     btnVoiceInput.classList.add('text-rose-500', 'animate-pulse');
                     btnVoiceInput.classList.remove('text-slate-400');
-                    if (typeof showGlobalFeedback === 'function') showGlobalFeedback('Escuchando... habla ahora.', 'info');
+                    if (typeof showGlobalFeedback === 'function') showGlobalFeedback(currentRegion === 'US' ? 'Listening... speak now.' : 'Escuchando... habla ahora.', 'info');
                 };
 
                 recognition.onresult = (event) => {
@@ -811,13 +1527,13 @@ async function initApp() {
                     stopRecording();
                     if (typeof showGlobalFeedback !== 'function') return;
                     if (event.error === 'not-allowed' || event.error === 'service-not-allowed') {
-                        showGlobalFeedback('Activa el permiso del micrófono en tu navegador.', 'error');
+                        showGlobalFeedback(currentRegion === 'US' ? 'Enable microphone permission in your browser.' : 'Activa el permiso del micrófono en tu navegador.', 'error');
                     } else if (event.error === 'no-speech') {
-                        showGlobalFeedback('No detecté voz. Intenta de nuevo.', 'error');
+                        showGlobalFeedback(currentRegion === 'US' ? 'No speech detected. Try again.' : 'No detecté voz. Intenta de nuevo.', 'error');
                     } else if (event.error === 'audio-capture') {
-                        showGlobalFeedback('No pude acceder a tu micrófono.', 'error');
+                        showGlobalFeedback(currentRegion === 'US' ? 'I could not access your microphone.' : 'No pude acceder a tu micrófono.', 'error');
                     } else {
-                        showGlobalFeedback('Error con el micrófono. Intenta otra vez.', 'error');
+                        showGlobalFeedback(currentRegion === 'US' ? 'Microphone error. Try again.' : 'Error con el micrófono. Intenta otra vez.', 'error');
                     }
                 };
 
@@ -830,7 +1546,7 @@ async function initApp() {
                     }
 
                     if (window.isSecureContext === false && location.hostname !== 'localhost' && location.hostname !== '127.0.0.1') {
-                        if (typeof showGlobalFeedback === 'function') showGlobalFeedback('El micrófono requiere HTTPS o localhost.', 'error');
+                        if (typeof showGlobalFeedback === 'function') showGlobalFeedback(currentRegion === 'US' ? 'Microphone requires HTTPS or localhost.' : 'El micrófono requiere HTTPS o localhost.', 'error');
                         return;
                     }
 
@@ -842,7 +1558,7 @@ async function initApp() {
                         recognition.start();
                     } catch (err) {
                         console.error('Microphone permission error:', err);
-                        if (typeof showGlobalFeedback === 'function') showGlobalFeedback('No se concedió permiso al micrófono.', 'error');
+                        if (typeof showGlobalFeedback === 'function') showGlobalFeedback(currentRegion === 'US' ? 'Microphone permission was not granted.' : 'No se concedió permiso al micrófono.', 'error');
                     }
                 });
             }
@@ -933,25 +1649,15 @@ async function initApp() {
         const renderActiveFiltersSummary = () => {
             if (!activeFiltersSummary) return;
 
-            const conditionLabels = {
-                all: 'Nuevo y usado',
-                new: 'Solo nuevo',
-                used: 'Usado / reacond.'
-            };
-
-            const locationLabels = {
-                global: 'Todas partes',
-                local_only: 'Tiendas locales',
-                '5': 'Cerca de mí'
-            };
+            const config = getRegionConfig();
 
             const items = [
-                conditionLabels[conditionModeInput?.value || 'all'] || 'Nuevo y usado',
-                locationLabels[locRadiusInput?.value || 'global'] || 'Todas partes'
+                getConditionLabel(conditionModeInput?.value || 'all'),
+                config.scopes[locRadiusInput?.value === 'local_only' ? 'local_only' : (locRadiusInput?.value !== 'global' ? 'nearby' : 'global')]
             ];
 
             if (document.getElementById('btn-safe-stores')?.getAttribute('data-safe') === 'true') {
-                items.push('Solo seguras');
+                items.push(config.filters.safe);
             }
 
             activeFiltersSummary.innerHTML = items.map(label => `
@@ -1041,7 +1747,7 @@ async function initApp() {
             const syncFiltersPanel = (collapsed) => {
                 filtersCollapsible.classList.toggle('filters-collapsed', collapsed);
                 if (toggleFiltersLabel) {
-                    toggleFiltersLabel.textContent = collapsed ? 'Mostrar filtros' : 'Ocultar filtros';
+                    toggleFiltersLabel.textContent = collapsed ? getRegionUICopy().guidedSearch.toggleShow : getRegionUICopy().guidedSearch.toggleHide;
                 }
                 if (toggleFiltersIcon) {
                     toggleFiltersIcon.classList.toggle('rotate-180', !collapsed);
@@ -1302,7 +2008,10 @@ async function initApp() {
             }
         };
 
-        // --- Removed duplicate listener bindings for favorites ---
+        // --- Favorites modal bindings ---
+        if (closeFavoritesBtn) closeFavoritesBtn.addEventListener('click', closeFavorites);
+        if (favoritesBackdrop) favoritesBackdrop.addEventListener('click', closeFavorites);
+        window.closeFavorites = closeFavorites;
 
 
         // --- PROFILE MODAL LOGIC ---
@@ -1340,9 +2049,14 @@ async function initApp() {
                 }
             }
 
-            if (planName) planName.textContent = isVIP ? 'Acceso Ilimitado' : 'Plan Básico (Gratis)';
-            if (statusBadge) statusBadge.textContent = isVIP ? 'VIP' : 'Gratis';
-            if (searchesLeft) searchesLeft.textContent = isVIP ? 'Búsquedas restantes: ∞ Ilimitadas' : `Búsquedas restantes: ${Math.max(0, 5 - searchData.count)}/5`;
+            const ui = getRegionUICopy();
+            if (planName) planName.textContent = isVIP ? ui.profile.planVip : ui.profile.planFree;
+            if (statusBadge) statusBadge.textContent = isVIP ? 'VIP' : ui.profile.statusFree;
+            if (searchesLeft) {
+                searchesLeft.textContent = isVIP
+                    ? ui.profile.searchesLeftUnlimited
+                    : ui.profile.searchesLeft.replace('{count}', Math.max(0, 5 - searchData.count));
+            }
 
             profileModal.classList.remove('invisible', 'opacity-0');
             const panel = profileModal.querySelector('.glass-panel');
@@ -1381,6 +2095,7 @@ async function initApp() {
             currentUser = user;
             window.currentUser = user; // Expose for Ad Gateway
             if (!authContainer) return;
+            const ui = getRegionUICopy();
 
             if (user) {
                 // Usuario logueado
@@ -1395,25 +2110,25 @@ async function initApp() {
                     <div class="absolute top-full mt-2 right-0 bg-white border border-slate-100 shadow-xl rounded-xl p-2 w-48 opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all">
                         <button id="btn-history" class="w-full text-left px-3 py-2 text-sm text-slate-700 font-bold hover:bg-slate-50 hover:text-primary rounded-lg transition-colors flex items-center gap-2 mb-1">
                             <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
-                            Mis Búsquedas
+                            ${ui.historyModal.title}
                         </button>
                         <button id="btn-mis-favoritos" class="w-full text-left px-3 py-2 text-sm text-slate-700 font-bold hover:bg-slate-50 hover:text-primary rounded-lg transition-colors flex items-center gap-2 mb-1">
                             <svg class="w-4 h-4 text-red-500" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M3.172 5.172a4 4 0 015.656 0L10 6.343l1.172-1.171a4 4 0 115.656 5.656L10 17.657l-6.828-6.829a4 4 0 010-5.656z" clip-rule="evenodd"></path></svg>
-                            Mis Favoritos
+                            ${ui.favorites.title}
                         </button>
                         <button id="btn-mi-ahorro" class="w-full text-left px-3 py-2 text-sm text-slate-700 font-bold hover:bg-slate-50 hover:text-emerald-600 rounded-lg transition-colors flex items-center gap-2 mb-1">
                             <svg class="w-4 h-4 text-emerald-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
-                            Mi Ahorro 
+                            ${currentRegion === 'US' ? 'My Savings' : 'Mi Ahorro'} 
                             <span id="savings-count" class="ml-auto bg-emerald-100 text-emerald-700 text-[10px] px-1.5 py-0.5 rounded-full font-black hidden">$0</span>
                         </button>
                         <button id="btn-mi-perfil" class="w-full text-left px-3 py-2 text-sm text-slate-700 font-bold hover:bg-slate-50 hover:text-primary rounded-lg transition-colors flex items-center gap-2">
                             <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"></path></svg>
-                            Mi Perfil VIP
+                            ${currentRegion === 'US' ? 'My VIP Profile' : 'Mi Perfil VIP'}
                         </button>
                         <div class="h-px bg-slate-100 my-1"></div>
                         <button id="btn-logout" class="w-full text-left px-3 py-2 text-sm text-red-600 font-bold hover:bg-red-50 rounded-lg transition-colors flex items-center gap-2">
                             <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"></path></svg>
-                            Salir
+                            ${currentRegion === 'US' ? 'Sign Out' : 'Salir'}
                         </button>
                     </div>
                 </div>
@@ -1456,7 +2171,9 @@ async function initApp() {
                             coinsBadge = document.createElement('div');
                             coinsBadge.id = 'lumu-coins-nav';
                             coinsBadge.className = 'hidden sm:flex items-center gap-1.5 px-3 py-1 bg-amber-50 border border-amber-200 rounded-full text-xs font-bold text-amber-700 shadow-sm transition-all hover:bg-amber-100 cursor-pointer';
-                            coinsBadge.title = `${data.coins}/${data.next_goal} para VIP gratis`;
+                            coinsBadge.title = currentRegion === 'US'
+                                ? `${data.coins}/${data.next_goal} for free VIP`
+                                : `${data.coins}/${data.next_goal} para VIP gratis`;
                             // Insert before pro-badge if possible, else append to authContainer
                             if (proBadge && proBadge.parentNode) {
                                 proBadge.parentNode.insertBefore(coinsBadge, proBadge);
@@ -1469,7 +2186,7 @@ async function initApp() {
                         if (data.is_premium_temp && proBadge && proBadge.classList.contains('hidden')) {
                             proBadge.classList.remove('hidden');
                             proBadge.classList.add('flex');
-                            proBadge.innerHTML = `⭐ VIP TEMPORAL`;
+                            proBadge.innerHTML = currentRegion === 'US' ? '⭐ TEMP VIP' : '⭐ VIP TEMPORAL';
                         }
                     }
                 }).catch(e => console.error('Error fetching coins:', e));
@@ -1479,7 +2196,7 @@ async function initApp() {
                 authContainer.innerHTML = `
                 <button id="btn-login" class="bg-slate-100 hover:bg-slate-200 text-slate-800 px-4 py-1.5 rounded-lg border border-slate-200 transition-colors flex items-center gap-2 font-bold shadow-sm">
                     <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 16l-4-4m0 0l4-4m-4 4h14m-5 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"></path></svg>
-                    Ingresar
+                    ${ui.nav.login}
                 </button>
             `;
                 document.getElementById('btn-login').addEventListener('click', openModal);
@@ -1501,7 +2218,7 @@ async function initApp() {
                         </div>
                         <button id="btn-mobile-logout" class="w-full text-sm font-bold text-red-500 hover:bg-red-50 py-2 px-3 rounded-xl transition-colors text-left flex items-center gap-2">
                             <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"></path></svg>
-                            Cerrar Sesión
+                            ${currentRegion === 'US' ? 'Sign Out' : 'Cerrar Sesión'}
                         </button>
                     `;
                     document.getElementById('btn-mobile-logout')?.addEventListener('click', async () => {
@@ -1512,7 +2229,7 @@ async function initApp() {
                     mobileAuthContainer.innerHTML = `
                         <button id="btn-mobile-login" class="w-full bg-emerald-500 hover:bg-emerald-600 text-white font-bold py-3 px-4 rounded-xl transition-colors flex items-center justify-center gap-2">
                             <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 16l-4-4m0 0l4-4m-4 4h14m-5 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h7a3 3 0 013 3v1"></path></svg>
-                            Ingresar con Google
+                            ${currentRegion === 'US' ? 'Sign in with Google' : 'Ingresar con Google'}
                         </button>
                     `;
                     document.getElementById('btn-mobile-login')?.addEventListener('click', () => {
@@ -1607,7 +2324,7 @@ async function initApp() {
             });
             await renderProducts(snapshot.results);
             if (typeof showGlobalFeedback === 'function') {
-                showGlobalFeedback('Vista previa restaurada sin gastar otra búsqueda.', 'success');
+                showGlobalFeedback(currentRegion === 'US' ? 'Preview restored without using another search.' : 'Vista previa restaurada sin gastar otra búsqueda.', 'success');
             }
         }
 
@@ -1615,9 +2332,10 @@ async function initApp() {
             const renderHistoryEntry = (query, createdAt = null) => {
                 const snapshot = getSearchSnapshot(query);
                 const labelDate = createdAt || snapshot?.savedAt;
+                const config = getRegionConfig();
                 const prettyDate = labelDate
-                    ? new Date(labelDate).toLocaleDateString('es-MX', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })
-                    : 'Guardado local';
+                    ? new Date(labelDate).toLocaleDateString(config.locale, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })
+                    : (currentRegion === 'US' ? 'Saved locally' : 'Guardado local');
                 const card = document.createElement('div');
                 card.className = 'rounded-2xl border border-slate-200 bg-white p-4 shadow-sm';
                 card.innerHTML = `
@@ -1625,13 +2343,13 @@ async function initApp() {
                         <div class="min-w-0">
                             <p class="text-sm font-black text-slate-800 truncate">${sanitize(query)}</p>
                             <p class="text-[11px] text-slate-400 font-medium mt-1">${prettyDate}</p>
-                            <p class="text-xs font-bold mt-1 ${snapshot?.results?.length ? 'text-emerald-700' : 'text-slate-400'}">${snapshot?.results?.length ? `${snapshot.results.length} resultados guardados` : 'Sin vista previa guardada'}</p>
+                            <p class="text-xs font-bold mt-1 ${snapshot?.results?.length ? 'text-emerald-700' : 'text-slate-400'}">${snapshot?.results?.length ? (currentRegion === 'US' ? `${snapshot.results.length} saved results` : `${snapshot.results.length} resultados guardados`) : (currentRegion === 'US' ? 'No saved preview' : 'Sin vista previa guardada')}</p>
                         </div>
-                        <span class="rounded-full bg-emerald-50 px-2.5 py-1 text-[10px] font-black uppercase tracking-widest text-emerald-700">Historial</span>
+                        <span class="rounded-full bg-emerald-50 px-2.5 py-1 text-[10px] font-black uppercase tracking-widest text-emerald-700">${currentRegion === 'US' ? 'History' : 'Historial'}</span>
                     </div>
                     <div class="mt-3 flex flex-wrap gap-2">
-                        <button type="button" class="btn-history-preview px-3.5 py-2 rounded-xl bg-emerald-500 text-white text-xs font-black hover:bg-emerald-600 transition-colors ${snapshot?.results?.length ? '' : 'opacity-50 cursor-not-allowed'}" ${snapshot?.results?.length ? '' : 'disabled'}>Ver vista previa</button>
-                        <button type="button" class="btn-history-refresh px-3.5 py-2 rounded-xl border border-slate-200 bg-white text-slate-700 text-xs font-black hover:bg-slate-50 transition-colors">Actualizar búsqueda</button>
+                        <button type="button" class="btn-history-preview px-3.5 py-2 rounded-xl bg-emerald-500 text-white text-xs font-black hover:bg-emerald-600 transition-colors ${snapshot?.results?.length ? '' : 'opacity-50 cursor-not-allowed'}" ${snapshot?.results?.length ? '' : 'disabled'}>${currentRegion === 'US' ? 'Preview' : 'Ver vista previa'}</button>
+                        <button type="button" class="btn-history-refresh px-3.5 py-2 rounded-xl border border-slate-200 bg-white text-slate-700 text-xs font-black hover:bg-slate-50 transition-colors">${currentRegion === 'US' ? 'Refresh search' : 'Actualizar búsqueda'}</button>
                     </div>
                 `;
                 const previewBtn = card.querySelector('.btn-history-preview');
@@ -1652,7 +2370,7 @@ async function initApp() {
             if (!supabaseClient || !currentUser) {
                 const localHist = JSON.parse(localStorage.getItem('lumu_local_history') || '[]');
                 if (localHist.length === 0) {
-                    historyList.innerHTML = '<div class="text-center py-6 text-slate-400 font-medium text-sm">No hay búsquedas recientes.</div>';
+                    historyList.innerHTML = `<div class="text-center py-6 text-slate-400 font-medium text-sm">${currentRegion === 'US' ? 'No recent searches.' : 'No hay búsquedas recientes.'}</div>`;
                     return;
                 }
                 historyList.innerHTML = '';
@@ -1673,7 +2391,7 @@ async function initApp() {
                 if (error) throw error;
 
                 if (!data || data.length === 0) {
-                    historyList.innerHTML = '<p class="text-center text-slate-400 py-8 font-medium">Aún no has realizado ninguna búsqueda guardada.</p>';
+                    historyList.innerHTML = `<p class="text-center text-slate-400 py-8 font-medium">${currentRegion === 'US' ? 'You have not saved any searches yet.' : 'Aún no has realizado ninguna búsqueda guardada.'}</p>`;
                     return;
                 }
 
@@ -1682,7 +2400,7 @@ async function initApp() {
 
             } catch (err) {
                 console.error('Error cargando historial:', err);
-                historyList.innerHTML = '<p class="text-center text-red-400 py-8 font-medium">Error al cargar el historial.</p>';
+                historyList.innerHTML = `<p class="text-center text-red-400 py-8 font-medium">${currentRegion === 'US' ? 'Error loading history.' : 'Error al cargar el historial.'}</p>`;
             }
         }
 
@@ -1700,7 +2418,7 @@ async function initApp() {
             searchInput.value = query;
 
             // Feedback visual
-            addChatBubble('ai', `Buscando las mejores ofertas en **${query}**... ⚡`, false);
+            addChatBubble('ai', currentRegion === 'US' ? `Searching the best deals for **${query}**... ⚡` : `Buscando las mejores ofertas en **${query}**... ⚡`, false);
 
             // Ejecutar búsqueda con skipLLM
             executeSearch(query, true);
@@ -2572,7 +3290,7 @@ async function initApp() {
                 return `
                 <div class="chat-product-item flex items-center gap-3 p-3 rounded-xl hover:bg-emerald-50/80 cursor-pointer group/item transition-all duration-200 ${isCheapest ? 'bg-emerald-50/50 border border-emerald-200/50' : 'border border-slate-100 hover:border-emerald-200'}"
                      data-target-url="${targetUrl}" style="animation: slideInUp 0.3s ease-out ${idx * 80}ms both">
-                    ${isCheapest ? '<div class="absolute -top-1.5 -left-1 bg-emerald-500 text-white text-[8px] font-black px-2 py-0.5 rounded-md shadow-sm z-10">💰 MEJOR PRECIO</div>' : ''}
+                    ${isCheapest ? `<div class="absolute -top-1.5 -left-1 bg-emerald-500 text-white text-[8px] font-black px-2 py-0.5 rounded-md shadow-sm z-10">💰 ${currentRegion === 'US' ? 'BEST PRICE' : 'MEJOR PRECIO'}</div>` : ''}
                     <div class="relative flex-shrink-0">
                         <img src="${imgUrl}" alt="" class="w-14 h-14 object-contain rounded-xl bg-white shadow-sm mix-blend-multiply"
                              onerror="this.onerror=null; this.src='data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 width=%2780%27 height=%2780%27 viewBox=%270 0 80 80%27%3E%3Crect width=%2780%27 height=%2780%27 fill=%27%23f1f5f9%27 rx=%2712%27/%3E%3Ctext x=%2740%27 y=%2748%27 text-anchor=%27middle%27 font-size=%2724%27 fill=%2794a3b8%27%3E📦%3C/text%3E%3C/svg%3E'">
@@ -2591,7 +3309,7 @@ async function initApp() {
                     </div>
                     <button class="chat-product-btn flex-shrink-0 bg-transparent text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50 active:scale-95 text-[11px] font-bold px-3 py-2 rounded-xl border border-emerald-200 transition-all duration-150 whitespace-nowrap"
                             data-target-url="${targetUrl}">
-                        Ver →
+                        ${currentRegion === 'US' ? 'View →' : 'Ver →'}
                     </button>
                 </div>`;
             }).join('');
@@ -2684,8 +3402,8 @@ async function initApp() {
                 <div class="absolute inset-0 rounded-full border-4 border-emerald-200"></div>
                 <div class="absolute inset-0 rounded-full border-4 border-primary border-t-transparent animate-spin"></div>
             </div>
-            <h4 id="loading-text" class="text-lg font-bold text-emerald-800 transition-opacity duration-300">Iniciando búsqueda profunda...</h4>
-            <p class="text-sm text-emerald-600 mt-2 font-medium">Por favor espera, estamos encontrando el mejor precio real para ti.</p>
+            <h4 id="loading-text" class="text-lg font-bold text-emerald-800 transition-opacity duration-300">${currentRegion === 'US' ? 'Starting deep search...' : 'Iniciando búsqueda profunda...'}</h4>
+            <p class="text-sm text-emerald-600 mt-2 font-medium">${currentRegion === 'US' ? 'Please wait, we are finding the best real price for you.' : 'Por favor espera, estamos encontrando el mejor precio real para ti.'}</p>
         `;
             resultsContainer.appendChild(loadingStatus);
 
@@ -2796,11 +3514,11 @@ async function initApp() {
                             <img src="${p.imagen || "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='150' height='150' viewBox='0 0 150 150'%3E%3Crect width='150' height='150' fill='%23f1f5f9' rx='12'/%3E%3Ctext x='75' y='82' text-anchor='middle' font-size='30' fill='%2394a3b8'%3E📦%3C/text%3E%3C/svg%3E"}" class="w-28 h-28 object-contain mb-3 rounded-xl" alt="">
                             <span class="text-[10px] font-black text-emerald-600 uppercase tracking-widest bg-emerald-50 px-2 py-0.5 rounded-md mb-2">${sanitize(p.tienda || '')}</span>
                             <h4 class="text-sm font-bold text-slate-800 line-clamp-3 mb-3 min-h-[3.5rem]">${sanitize(p.titulo || '')}</h4>
-                            <div class="text-2xl font-black text-slate-900 mb-2">${p._precioNum > 0 ? p._precioFmt : '<span class=&quot;text-base text-amber-600&quot;>Ver en tienda</span>'}</div>
-                            ${p.cupon ? `<span class="text-xs font-bold text-amber-600 bg-amber-50 px-2 py-1 rounded-lg mb-2">Cupón: ${sanitize(p.cupon)}</span>` : ''}
+                            <div class="text-2xl font-black text-slate-900 mb-2">${p._precioNum > 0 ? p._precioFmt : `<span class=&quot;text-base text-amber-600&quot;>${currentRegion === 'US' ? 'View in store' : 'Ver en tienda'}</span>`}</div>
+                            ${p.cupon ? `<span class="text-xs font-bold text-amber-600 bg-amber-50 px-2 py-1 rounded-lg mb-2">${currentRegion === 'US' ? 'Coupon' : 'Cupón'}: ${sanitize(p.cupon)}</span>` : ''}
                             <button class="mt-auto w-full bg-emerald-500 hover:bg-emerald-600 text-white text-sm font-bold py-2 px-4 rounded-xl transition-colors"
                                 onclick="window.openAdGateway('${encodeURIComponent(p.urlMonetizada || p.urlOriginal || p.link)}')">
-                                Ver Oferta →
+                                ${currentRegion === 'US' ? 'View Offer →' : 'Ver Oferta →'}
                             </button>
                         </div>
                     `).join('')}
@@ -2810,19 +3528,19 @@ async function initApp() {
                     <table class="w-full text-sm border-collapse">
                         <thead>
                             <tr class="border-b border-slate-200">
-                                <th class="text-left py-2 px-3 text-slate-500 font-bold text-xs uppercase">Atributo</th>
+                                <th class="text-left py-2 px-3 text-slate-500 font-bold text-xs uppercase">${currentRegion === 'US' ? 'Attribute' : 'Atributo'}</th>
                                 ${_compareProducts.map(p => `<th class="py-2 px-3 text-slate-700 font-bold text-xs">${sanitize((p.tienda || '').substring(0, 15))}</th>`).join('')}
                             </tr>
                         </thead>
                         <tbody>
-                            <tr class="border-b border-slate-100"><td class="py-2 px-3 text-slate-500 font-medium">Precio</td>${_compareProducts.map(p => {
+                            <tr class="border-b border-slate-100"><td class="py-2 px-3 text-slate-500 font-medium">${currentRegion === 'US' ? 'Price' : 'Precio'}</td>${_compareProducts.map(p => {
                 const best = Math.min(..._compareProducts.filter(x => x._precioNum > 0).map(x => x._precioNum));
                 const isBest = p._precioNum === best && p._precioNum > 0;
                 return `<td class="py-2 px-3 font-bold ${isBest ? 'text-emerald-600' : 'text-slate-800'}">${p._precioNum > 0 ? p._precioFmt : '—'}${isBest ? ' ✓' : ''}</td>`;
             }).join('')}</tr>
-                            <tr class="border-b border-slate-100"><td class="py-2 px-3 text-slate-500 font-medium">Tienda</td>${_compareProducts.map(p => `<td class="py-2 px-3 text-slate-700">${sanitize(p.tienda || '—')}</td>`).join('')}</tr>
-                            <tr class="border-b border-slate-100"><td class="py-2 px-3 text-slate-500 font-medium">Cupón</td>${_compareProducts.map(p => `<td class="py-2 px-3 text-slate-700">${p.cupon ? sanitize(p.cupon) : '—'}</td>`).join('')}</tr>
-                            <tr><td class="py-2 px-3 text-slate-500 font-medium">Tienda local</td>${_compareProducts.map(p => `<td class="py-2 px-3 text-slate-700">${p.isLocalStore ? '📍 Sí' : 'No'}</td>`).join('')}</tr>
+                            <tr class="border-b border-slate-100"><td class="py-2 px-3 text-slate-500 font-medium">${currentRegion === 'US' ? 'Store' : 'Tienda'}</td>${_compareProducts.map(p => `<td class="py-2 px-3 text-slate-700">${sanitize(p.tienda || '—')}</td>`).join('')}</tr>
+                            <tr class="border-b border-slate-100"><td class="py-2 px-3 text-slate-500 font-medium">${currentRegion === 'US' ? 'Coupon' : 'Cupón'}</td>${_compareProducts.map(p => `<td class="py-2 px-3 text-slate-700">${p.cupon ? sanitize(p.cupon) : '—'}</td>`).join('')}</tr>
+                            <tr><td class="py-2 px-3 text-slate-500 font-medium">${currentRegion === 'US' ? 'Local store' : 'Tienda local'}</td>${_compareProducts.map(p => `<td class="py-2 px-3 text-slate-700">${p.isLocalStore ? (currentRegion === 'US' ? '📍 Yes' : '📍 Sí') : (currentRegion === 'US' ? 'No' : 'No')}</td>`).join('')}</tr>
                         </tbody>
                     </table>
                 </div>` : ''}
@@ -2958,6 +3676,7 @@ async function initApp() {
 
         function renderProductCards(products, userFavorites) {
             resultsContainer.innerHTML = '';
+            const isUS = currentRegion === 'US';
 
             // --- NUEVO: Comparador Local vs Online ---
             const localProducts = products.filter(p => p.isLocalStore && typeof p.precio === 'number' && p.precio > 0);
@@ -2972,13 +3691,19 @@ async function initApp() {
                 
                 let comparisonMsg = '';
                 if (bestLocal.precio <= bestOnline.precio) {
-                    comparisonMsg = `<span class="text-emerald-700 font-bold">¡Sale mejor comprar local hoy!</span> Ahorras ${formatCurrencyByRegion(bestOnline.precio - bestLocal.precio)} y lo tienes al instante.`;
+                    comparisonMsg = isUS
+                        ? `<span class="text-emerald-700 font-bold">Buying local is better today!</span> You save ${formatCurrencyByRegion(bestOnline.precio - bestLocal.precio)} and get it right away.`
+                        : `<span class="text-emerald-700 font-bold">¡Sale mejor comprar local hoy!</span> Ahorras ${formatCurrencyByRegion(bestOnline.precio - bestLocal.precio)} y lo tienes al instante.`;
                 } else if (bestOnline.precio < bestLocal.precio) {
                     const diff = bestLocal.precio - bestOnline.precio;
                     if (diff > 50) {
-                        comparisonMsg = `<span class="text-blue-700 font-bold">Comprar online es más barato.</span> Ahorras ${formatCurrencyByRegion(diff)}, pero debes esperar el envío.`;
+                        comparisonMsg = isUS
+                            ? `<span class="text-blue-700 font-bold">Buying online is cheaper.</span> You save ${formatCurrencyByRegion(diff)}, but you have to wait for shipping.`
+                            : `<span class="text-blue-700 font-bold">Comprar online es más barato.</span> Ahorras ${formatCurrencyByRegion(diff)}, pero debes esperar el envío.`;
                     } else {
-                        comparisonMsg = `<span class="text-slate-700 font-bold">Precio similar.</span> Cómpralo local si te urge, o pide online sin salir de casa.`;
+                        comparisonMsg = isUS
+                            ? `<span class="text-slate-700 font-bold">Similar price.</span> Buy local if you need it fast, or order online from home.`
+                            : `<span class="text-slate-700 font-bold">Precio similar.</span> Cómpralo local si te urge, o pide online sin salir de casa.`;
                     }
                 }
                 
@@ -2989,11 +3714,11 @@ async function initApp() {
                         <span class="text-3xl">⚖️</span>
                     </div>
                     <div class="flex-grow flex flex-col items-center md:items-start text-center md:text-left w-full">
-                        <h4 class="text-sm font-black text-slate-800 uppercase tracking-wide mb-1 flex items-center gap-2">Análisis Local vs Online <span class="bg-indigo-100 text-indigo-700 text-[9px] px-2 py-0.5 rounded-full font-bold">BETA</span></h4>
+                        <h4 class="text-sm font-black text-slate-800 uppercase tracking-wide mb-1 flex items-center gap-2">${isUS ? 'Local vs Online Analysis' : 'Análisis Local vs Online'} <span class="bg-indigo-100 text-indigo-700 text-[9px] px-2 py-0.5 rounded-full font-bold">BETA</span></h4>
                         <p class="text-sm text-slate-600 mb-3">${comparisonMsg}</p>
                         <div class="flex flex-wrap items-center justify-center md:justify-start gap-3 w-full">
                             <div class="bg-emerald-50 text-emerald-800 px-3 py-1.5 rounded-lg border border-emerald-100 flex items-center gap-2 shadow-sm transition-transform hover:-translate-y-0.5" title="${bestLocal.tienda}">
-                                <span class="text-xs">📍 Local:</span> <span class="font-black text-base">${fmtLocal}</span>
+                                <span class="text-xs">📍 ${isUS ? 'Local:' : 'Local:'}</span> <span class="font-black text-base">${fmtLocal}</span>
                             </div>
                             <span class="text-slate-300 font-black text-[10px] mx-1">VS</span>
                             <div class="bg-blue-50 text-blue-800 px-3 py-1.5 rounded-lg border border-blue-100 flex items-center gap-2 shadow-sm transition-transform hover:-translate-y-0.5" title="${bestOnline.tienda}">
@@ -3038,7 +3763,7 @@ async function initApp() {
                     const oldPrice = typeof rawFavPrice === 'number' ? rawFavPrice : parseFloat(String(rawFavPrice).replace(/[^0-9.-]+/g, ""));
                     if (precioNumerico < oldPrice && precioNumerico > 0) {
                         const ahorro = oldPrice - precioNumerico;
-                        priceDropBadge = `<div class="absolute top-2 left-2 bg-emerald-500 text-white text-[10px] font-black px-2 py-1 rounded-md z-30 shadow-lg animate-bounce">¡BAJÓ $${ahorro.toFixed(0)}!</div>`;
+                        priceDropBadge = `<div class="absolute top-2 left-2 bg-emerald-500 text-white text-[10px] font-black px-2 py-1 rounded-md z-30 shadow-lg animate-bounce">${isUS ? `DOWN ${formatCurrencyByRegion(ahorro)}!` : `¡BAJÓ $${ahorro.toFixed(0)}!`}</div>`;
                     }
                 }
 
@@ -3095,7 +3820,7 @@ async function initApp() {
                 const isLocal = product.isLocalStore;
                 let priceDisplay;
                 if (isLocal || precioNumerico === 0) {
-                    priceDisplay = `<span class="text-base md:text-lg font-black text-amber-600">Ver precio en tienda</span>`;
+                    priceDisplay = `<span class="text-base md:text-lg font-black text-amber-600">${isUS ? 'Check in-store price' : 'Ver precio en tienda'}</span>`;
                 } else {
                     const formattedFull = formatCurrencyByRegion(precioNumerico);
                     const numericMatch = formattedFull.match(/[\d,.]+/);
@@ -3108,7 +3833,7 @@ async function initApp() {
                     priceDisplay = `<span class="text-xs md:text-sm font-bold text-slate-500">${currencySymbol}</span><span class="text-[1.7rem] md:text-3xl font-black text-slate-900 leading-none">${integerPart}</span><span class="text-xs md:text-sm font-bold text-slate-900">.${decimalPart}</span>`;
                     
                     if (product.isSuspicious) {
-                        priceDisplay += `<div class="mt-2 inline-flex items-center gap-1.5 px-2 py-1 rounded-md bg-rose-50 border border-rose-200 text-rose-700 text-[10px] font-black uppercase tracking-wider tooltip" data-tip="El precio es anormalmente bajo comparado con el mercado"><span class="text-xs">⚠️</span> SOSPECHOSO</div>`;
+                        priceDisplay += `<div class="mt-2 inline-flex items-center gap-1.5 px-2 py-1 rounded-md bg-rose-50 border border-rose-200 text-rose-700 text-[10px] font-black uppercase tracking-wider tooltip" data-tip="${isUS ? 'The price is unusually low compared to the market' : 'El precio es anormalmente bajo comparado con el mercado'}"><span class="text-xs">⚠️</span> ${isUS ? 'SUSPICIOUS' : 'SOSPECHOSO'}</div>`;
                     }
                 }
 
@@ -3140,7 +3865,7 @@ async function initApp() {
                             const strokeColor = trend.direction === 'down' ? '#10b981' : (trend.direction === 'up' ? '#f43f5e' : '#94a3b8');
                             
                             sparklineHtml = `
-                                <div class="tooltip tooltip-left ml-auto" data-tip="Tendencia (7 días)">
+                                <div class="tooltip tooltip-left ml-auto" data-tip="${isUS ? 'Trend (7 days)' : 'Tendencia (7 días)'}">
                                     <svg width="${w}" height="${h}" class="overflow-visible opacity-80 mix-blend-multiply">
                                         <path d="${pathD}" fill="none" stroke="${strokeColor}" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" />
                                         <circle cx="${pad + ((dps.length - 1) * ((w - pad*2) / (dps.length - 1)))}" cy="${pad + (h - pad*2) - (((precioNumerico - minP) / diff) * (h - pad*2))}" r="2.5" fill="${strokeColor}" />
@@ -3167,7 +3892,7 @@ async function initApp() {
                     if (isPlaceholder) {
                         // Skip coupon display if it's a placeholder
                     } else {
-                        const discountText = (typeof cuponObj === 'object' && cuponObj.discount) ? cuponObj.discount : (product.couponDetails || 'CUPÓN DISPONIBLE');
+                        const discountText = (typeof cuponObj === 'object' && cuponObj.discount) ? cuponObj.discount : (product.couponDetails || (isUS ? 'COUPON AVAILABLE' : 'CUPÓN DISPONIBLE'));
                         const isPremium = window.currentUser && (window.currentUser.is_premium || window.currentUser.plan === 'personal_vip' || window.currentUser.plan === 'b2b');
                     
                         if (isPremium) {
@@ -3179,19 +3904,19 @@ async function initApp() {
                                         <span class="text-[9px] font-black text-emerald-800 uppercase tracking-widest leading-none mb-1">${discountText}</span>
                                         <span class="text-[13px] font-black text-emerald-600 font-mono tracking-tighter leading-none">${code}</span>
                                     </div>
-                                    <button onclick="event.preventDefault(); event.stopPropagation(); navigator.clipboard.writeText('${code}'); const orig=this.innerHTML; this.innerHTML='¡Copiado!'; setTimeout(()=>this.innerHTML=orig, 2000);" class="text-[10px] font-bold bg-white text-emerald-600 hover:bg-emerald-600 hover:text-white px-2 py-1 rounded-lg shadow-sm transition-all border border-emerald-100 z-20 cursor-pointer">Copiar</button>
+                                    <button onclick="event.preventDefault(); event.stopPropagation(); navigator.clipboard.writeText('${code}'); const orig=this.innerHTML; this.innerHTML='${isUS ? 'Copied!' : '¡Copiado!'}'; setTimeout(()=>this.innerHTML=orig, 2000);" class="text-[10px] font-bold bg-white text-emerald-600 hover:bg-emerald-600 hover:text-white px-2 py-1 rounded-lg shadow-sm transition-all border border-emerald-100 z-20 cursor-pointer">${isUS ? 'Copy' : 'Copiar'}</button>
                                 </div>
                             </div>`;
                         } else {
                             couponHtml = `
-                            <div class="mt-2 w-full p-2.5 bg-gradient-to-r from-amber-50 to-orange-50 border border-amber-200 rounded-xl relative overflow-hidden group/upsell cursor-pointer hover:shadow-sm" onclick="event.preventDefault(); event.stopPropagation(); const btn = document.getElementById('stripe-checkout-btn') || document.querySelector('a[href*=\\'buy.stripe.com\\']'); if(btn) btn.click(); else alert('Hazte PRO para ver cupones')">
+                            <div class="mt-2 w-full p-2.5 bg-gradient-to-r from-amber-50 to-orange-50 border border-amber-200 rounded-xl relative overflow-hidden group/upsell cursor-pointer hover:shadow-sm" onclick="event.preventDefault(); event.stopPropagation(); const btn = document.getElementById('stripe-checkout-btn') || document.querySelector('a[href*=\\'buy.stripe.com\\']'); if(btn) btn.click(); else alert('${isUS ? 'Go PRO to view coupons' : 'Hazte PRO para ver cupones'}')">
                                 <div class="absolute inset-0 border-2 border-dashed border-amber-300/50 rounded-xl pointer-events-none"></div>
                                 <div class="flex items-center justify-between relative z-10">
                                     <div class="flex flex-col w-full relative">
                                         <span class="text-[9px] font-black text-amber-800 uppercase tracking-widest leading-none mb-1 flex items-center justify-between w-full"><span>${discountText}</span> <span class="bg-amber-100 px-1 rounded">⭐ PRO</span></span>
                                         <span class="text-[13px] font-black text-slate-800 font-mono tracking-tighter leading-none blur-[4px] select-none text-center">XXXXXXXX</span>
                                         <div class="absolute inset-0 flex items-center justify-center opacity-0 group-hover/upsell:opacity-100 transition-opacity drop-shadow-md">
-                                            <span class="bg-gradient-to-r from-amber-500 to-orange-500 text-white text-[10px] font-bold px-3 py-1.5 rounded-full shadow-lg flex items-center gap-1">🔒 Desbloquear</span>
+                                            <span class="bg-gradient-to-r from-amber-500 to-orange-500 text-white text-[10px] font-bold px-3 py-1.5 rounded-full shadow-lg flex items-center gap-1">🔒 ${isUS ? 'Unlock' : 'Desbloquear'}</span>
                                         </div>
                                     </div>
                                 </div>
@@ -3215,7 +3940,7 @@ async function initApp() {
                         <div class="absolute inset-0 bg-[url('data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjAiIGhlaWdodD0iMjAiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+PGNpcmNsZSBjeD0iMiIgY3k9IjIiIHI9IjIiIGZpbGw9IiNmZWMwYTIiIGZpbGwtb3BhY2l0eT0iMC4yIi8+PC9zdmc+')] opacity-50"></div>
                         <span class="text-[10px] font-black text-rose-600 uppercase tracking-widest flex items-center gap-1.5 relative z-10">
                             <svg class="w-3.5 h-3.5 animate-pulse text-rose-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
-                            Expira en
+                            ${isUS ? 'Ends in' : 'Expira en'}
                         </span>
                         <span class="text-[11px] font-mono font-bold text-rose-700 bg-white/80 backdrop-blur px-2 py-0.5 rounded-md shadow-sm border border-rose-100/80 relative z-10">${pad(hours)}h ${pad(mins)}m ${pad(secs)}s</span>
                     </div>`;
@@ -3225,7 +3950,7 @@ async function initApp() {
                 const localMeta = product.localDetails || {};
                 const localDetailHtml = isLocal ? `
                 <div class="mt-2 space-y-1">
-                    ${localMeta.distance != null ? `<p class="text-xs text-emerald-600 dark:text-emerald-400 font-bold flex items-center gap-1">📍 A ${localMeta.distance} km de ti</p>` : ''}
+                    ${localMeta.distance != null ? `<p class="text-xs text-emerald-600 dark:text-emerald-400 font-bold flex items-center gap-1">📍 ${isUS ? `${localMeta.distance} km from you` : `A ${localMeta.distance} km de ti`}</p>` : ''}
                     ${localMeta.address ? `<p class="text-xs text-slate-500 dark:text-slate-400 flex items-center gap-1"><svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"/></svg>${sanitize(localMeta.address)}</p>` : ''}
                     ${localMeta.rating ? `<p class="text-xs text-amber-500 font-bold">⭐ ${localMeta.rating} / 5.0</p>` : ''}
                     ${localMeta.phone ? `<p class="text-xs text-slate-500 dark:text-slate-400">📞 ${sanitize(localMeta.phone)}</p>` : ''}
@@ -3238,15 +3963,15 @@ async function initApp() {
                 };
                 const conditionBadgeClass = conditionBadgeMap[product.conditionLabel] || 'bg-slate-100 text-slate-600 ring-1 ring-slate-200';
                 const conditionBadgeText = product.conditionLabel === 'used'
-                    ? 'USADO'
+                    ? (isUS ? 'USED' : 'USADO')
                     : product.conditionLabel === 'refurbished'
-                        ? 'REACOND.'
-                        : 'NUEVO';
+                        ? (isUS ? 'REFURB.' : 'REACOND.')
+                        : (isUS ? 'NEW' : 'NUEVO');
                 const c2cBadgeHtml = product.isC2C
                     ? '<span class="text-[9px] font-bold text-rose-700 bg-rose-50 px-2 py-0.5 rounded-full ring-1 ring-rose-200">C2C</span>'
                     : '';
 
-                const productAlt = sanitize(product.titulo || 'Producto') + ' - ' + sanitize(product.tienda || 'Tienda');
+                const productAlt = sanitize(product.titulo || (isUS ? 'Product' : 'Producto')) + ' - ' + sanitize(product.tienda || (isUS ? 'Store' : 'Tienda'));
                 card.innerHTML = `
                 ${priceDropBadge}
                 <!-- Image Section -->
@@ -3256,7 +3981,7 @@ async function initApp() {
                         <svg class="w-5 h-5 drop-shadow-sm" fill="currentColor" viewBox="0 0 24 24"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/></svg>
                     </button>
                     ${!isLocal ? `
-                    <button class="btn-compare absolute top-2 left-2 p-2 bg-white/80 dark:bg-slate-800/80 backdrop-blur rounded-full ${_compareProducts.some(cp => (cp.urlMonetizada || cp.urlOriginal) === (product.urlMonetizada || product.urlOriginal)) ? 'text-emerald-600 bg-emerald-100' : 'text-slate-400'} hover:text-emerald-600 hover:bg-white dark:hover:bg-slate-800 shadow-sm transition-all z-20 hover:scale-110" title="Comparar" data-compare-url="${product.urlMonetizada || product.urlOriginal}">
+                    <button class="btn-compare absolute top-2 left-2 p-2 bg-white/80 dark:bg-slate-800/80 backdrop-blur rounded-full ${_compareProducts.some(cp => (cp.urlMonetizada || cp.urlOriginal) === (product.urlMonetizada || product.urlOriginal)) ? 'text-emerald-600 bg-emerald-100' : 'text-slate-400'} hover:text-emerald-600 hover:bg-white dark:hover:bg-slate-800 shadow-sm transition-all z-20 hover:scale-110" title="${isUS ? 'Compare' : 'Comparar'}" data-compare-url="${product.urlMonetizada || product.urlOriginal}">
                         <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/></svg>
                     </button>` : ''}
                 </div>
@@ -3266,11 +3991,11 @@ async function initApp() {
                     <div class="flex items-start justify-between mb-2 gap-2">
                         <div class="flex items-center gap-1.5">
                             <span class="text-[10px] font-black text-slate-500 uppercase tracking-widest bg-slate-100 px-2 py-1 rounded-full max-w-[70%] truncate">${sanitize(product.tienda)}</span>
-                            ${(tiendaLower.includes('amazon') || tiendaLower.includes('walmart') || tiendaLower.includes('liverpool') || tiendaLower.includes('mercado') || tiendaLower.includes('bodega aurrera') || tiendaLower.includes('linio') || tiendaLower.includes('claro shop') || tiendaLower.includes('sanborns') || tiendaLower.includes('costco') || tiendaLower.includes('best buy')) ? '<span class="text-emerald-600" title="Tienda verificada">✓</span>' : ''}
+                            ${(tiendaLower.includes('amazon') || tiendaLower.includes('walmart') || tiendaLower.includes('liverpool') || tiendaLower.includes('mercado') || tiendaLower.includes('bodega aurrera') || tiendaLower.includes('linio') || tiendaLower.includes('claro shop') || tiendaLower.includes('sanborns') || tiendaLower.includes('costco') || tiendaLower.includes('best buy')) ? `<span class="text-emerald-600" title="${isUS ? 'Verified store' : 'Tienda verificada'}">✓</span>` : ''}
                         </div>
                         <div class="flex items-center gap-1">
-                            ${isBestPrice ? '<span class="text-[9px] font-bold text-white bg-gradient-to-r from-emerald-500 to-teal-500 px-2 py-0.5 rounded-full ring-2 ring-emerald-200 shadow-sm animate-pulse">💰 MEJOR PRECIO</span>' : ''}
-                            ${product.isLocalStore ? '<span class="text-[9px] font-bold text-emerald-700 bg-emerald-100 px-2 py-0.5 rounded-full ring-1 ring-emerald-200">📍 LOCAL</span>' : ''}
+                            ${isBestPrice ? `<span class="text-[9px] font-bold text-white bg-gradient-to-r from-emerald-500 to-teal-500 px-2 py-0.5 rounded-full ring-2 ring-emerald-200 shadow-sm animate-pulse">💰 ${isUS ? 'BEST PRICE' : 'MEJOR PRECIO'}</span>` : ''}
+                            ${product.isLocalStore ? `<span class="text-[9px] font-bold text-emerald-700 bg-emerald-100 px-2 py-0.5 rounded-full ring-1 ring-emerald-200">📍 ${isUS ? 'LOCAL' : 'LOCAL'}</span>` : ''}
                             <span class="text-[9px] font-bold px-2 py-0.5 rounded-full ${conditionBadgeClass}">${conditionBadgeText}</span>
                             ${c2cBadgeHtml}
                         </div>
@@ -3292,26 +4017,26 @@ async function initApp() {
                         <div class="flex flex-col gap-2 mt-3 w-full">
                             <button class="btn-open-offer w-full bg-primary hover:bg-emerald-600 text-white text-sm font-bold py-3 rounded-xl shadow-lg shadow-emerald-500/20 hover:shadow-xl hover:shadow-emerald-500/25 transition-all transform active:scale-95 flex items-center justify-center gap-2"
                                     data-target-url="${product.urlMonetizada || product.urlOriginal}">
-                                ${isLocal ? ((product.urlOriginal && product.urlOriginal.includes('maps')) ? 'Ver en Maps' : 'Ir a Tienda') : 'Ver Oferta'}
+                                ${isLocal ? ((product.urlOriginal && product.urlOriginal.includes('maps')) ? (isUS ? 'View in Maps' : 'Ver en Maps') : (isUS ? 'Go to Store' : 'Ir a Tienda')) : (isUS ? 'View Offer' : 'Ver Oferta')}
                                 <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M14 5l7 7m0 0l-7 7m7-7H3"/></svg>
                             </button>
                             
                             <!-- Acciones secundarias en botones Outline abajo -->
                             ${(!isLocal && precioNumerico > 0) ? `
                             <div class="grid grid-cols-2 gap-2 w-full mt-1">
-                                <button class="btn-quick-alert flex-1 py-1.5 flex justify-center items-center gap-1.5 bg-white text-slate-600 hover:text-amber-600 hover:bg-amber-50 rounded-xl border border-slate-200 hover:border-amber-300 transition-all text-xs font-bold shadow-sm" title="Alerta de precio"
+                                <button class="btn-quick-alert flex-1 py-1.5 flex justify-center items-center gap-1.5 bg-white text-slate-600 hover:text-amber-600 hover:bg-amber-50 rounded-xl border border-slate-200 hover:border-amber-300 transition-all text-xs font-bold shadow-sm" title="${isUS ? 'Price alert' : 'Alerta de precio'}"
                                         data-alert-name="${sanitize(product.titulo)}"
                                         data-alert-price="${precioNumerico}"
                                         data-alert-url="${product.urlMonetizada || product.urlOriginal}"
                                         data-alert-store="${sanitize(product.tienda)}">
                                     <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"/></svg>
-                                    Avisarme
+                                    ${isUS ? 'Alert me' : 'Avisarme'}
                                 </button>
-                                <button class="btn-margin-calc flex-1 py-1.5 flex justify-center items-center gap-1.5 bg-white text-slate-600 hover:text-blue-600 hover:bg-blue-50 rounded-xl border border-slate-200 hover:border-blue-300 transition-all text-xs font-bold shadow-sm" title="Calculadora Dropshipping"
+                                <button class="btn-margin-calc flex-1 py-1.5 flex justify-center items-center gap-1.5 bg-white text-slate-600 hover:text-blue-600 hover:bg-blue-50 rounded-xl border border-slate-200 hover:border-blue-300 transition-all text-xs font-bold shadow-sm" title="${isUS ? 'Dropshipping calculator' : 'Calculadora Dropshipping'}"
                                         data-cost-price="${precioNumerico}"
                                         data-product-name="${sanitize(product.titulo)}">
                                     <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M9 7h6m0 10v-3m-3 3h.01M9 17h.01M9 14h.01M12 14h.01M15 11h.01M12 11h.01M9 11h.01M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z"/></svg>
-                                    <span>Margen</span>
+                                    <span>${isUS ? 'Margin' : 'Margen'}</span>
                                 </button>
                             </div>` : ''}
                             
@@ -3329,7 +4054,7 @@ async function initApp() {
                         "image": [imgUrl],
                         "brand": {
                             "@type": "Brand",
-                            "name": product.tienda || "Tienda Online"
+                            "name": product.tienda || (isUS ? "Online Store" : "Tienda Online")
                         },
                         "offers": {
                             "@type": "Offer",
@@ -3340,7 +4065,7 @@ async function initApp() {
                             "priceValidUntil": new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
                             "seller": {
                                 "@type": "Organization",
-                                "name": product.tienda || "Tienda Online"
+                                "name": product.tienda || (isUS ? "Online Store" : "Tienda Online")
                             }
                         }
                     };
@@ -3379,7 +4104,7 @@ async function initApp() {
                                 window.open(target, '_blank');
                             }
                         } else {
-                            console.warn('URL de oferta no encontrada para este producto');
+                            console.warn(isUS ? 'Offer URL not found for this product' : 'URL de oferta no encontrada para este producto');
                         }
                     });
                 }
@@ -3429,7 +4154,7 @@ async function initApp() {
                             ], { duration: 300 });
                         }
                     } catch (err) {
-                        console.error('Error toggle favorito:', err);
+                        console.error(isUS ? 'Favorite toggle error:' : 'Error toggle favorito:', err);
                     }
                 });
 
@@ -3818,16 +4543,16 @@ function renderAlerts() {
     if (!alertsList) return;
     const alerts = _alertsCache;
     if (alerts.length === 0) {
-        alertsList.innerHTML = '<p class="text-sm text-slate-400 text-center py-4">Aún no tienes alertas configuradas.</p>';
+        alertsList.innerHTML = `<p class="text-sm text-slate-400 text-center py-4">${getRegionUICopy().priceAlerts.empty}</p>`;
         return;
     }
     alertsList.innerHTML = alerts.map((a, i) => `
         <div class="flex items-center justify-between p-3 ${a.triggered ? 'bg-emerald-100 border-emerald-300' : 'bg-emerald-50 border-emerald-100'} border rounded-xl">
             <div>
                 <p class="text-sm font-bold text-slate-800">${sanitize(a.product)}</p>
-                <p class="text-xs text-emerald-600 font-semibold">Meta: $${Number(a.price).toLocaleString('es-MX')} MXN</p>
-                ${a.last_price ? `<p class="text-xs text-slate-500">Último precio visto: $${Number(a.last_price).toLocaleString('es-MX')}</p>` : ''}
-                ${a.triggered ? '<p class="text-xs text-emerald-700 font-black">🎉 ¡Meta alcanzada!</p>' : ''}
+                <p class="text-xs text-emerald-600 font-semibold">${currentRegion === 'US' ? 'Target' : 'Meta'}: ${formatCurrencyByRegion(a.price)}</p>
+                ${a.last_price ? `<p class="text-xs text-slate-500">${currentRegion === 'US' ? 'Last price seen' : 'Último precio visto'}: ${formatCurrencyByRegion(a.last_price)}</p>` : ''}
+                ${a.triggered ? `<p class="text-xs text-emerald-700 font-black">🎉 ${currentRegion === 'US' ? 'Target reached!' : '¡Meta alcanzada!'}</p>` : ''}
             </div>
             <button class="text-slate-400 hover:text-red-500 transition-colors p-1 rounded-full" onclick="deleteAlert('${a.id || i}')">
                 <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
@@ -3895,7 +4620,7 @@ alertForm?.addEventListener('submit', async (e) => {
             });
             const json = await res.json();
             if (!res.ok) {
-                alert(json.error || 'Error al crear alerta');
+                alert(json.error || (currentRegion === 'US' ? 'Error creating alert' : 'Error al crear alerta'));
                 return;
             }
         } catch (err) {
@@ -3924,15 +4649,17 @@ window.checkPriceAlerts = (products) => {
             if (matchesProduct && price <= alert.price) {
                 const notif = document.createElement('div');
                 notif.className = 'fixed top-20 right-4 z-[200] bg-emerald-500 text-white px-5 py-3 rounded-2xl shadow-2xl font-bold text-sm fade-in flex items-center gap-2';
-                notif.innerHTML = `🎉 ¡Precio Meta Alcanzado! <span class="font-normal">${product.titulo?.slice(0, 30)} a $${price.toLocaleString('es-MX')}</span>`;
+                notif.innerHTML = `🎉 ${currentRegion === 'US' ? 'Target Price Reached!' : '¡Precio Meta Alcanzado!'} <span class="font-normal">${product.titulo?.slice(0, 30)} ${currentRegion === 'US' ? 'at' : 'a'} ${formatCurrencyByRegion(price)}</span>`;
                 document.body.appendChild(notif);
                 setTimeout(() => notif.remove(), 6000);
                 
                 // Native Push Notification
                 if ("Notification" in window && Notification.permission === "granted") {
                     try {
-                        new Notification("¡Alerta de Precio de Lumu!", {
-                            body: `Tu meta de $${alert.price} se cumplió. ${product.titulo?.slice(0, 40)} está ahora a $${price.toLocaleString('es-MX')}.`,
+                        new Notification(currentRegion === 'US' ? 'Lumu Price Alert!' : '¡Alerta de Precio de Lumu!', {
+                            body: currentRegion === 'US'
+                                ? `Your target of ${formatCurrencyByRegion(alert.price)} was reached. ${product.titulo?.slice(0, 40)} is now ${formatCurrencyByRegion(price)}.`
+                                : `Tu meta de ${formatCurrencyByRegion(alert.price)} se cumplió. ${product.titulo?.slice(0, 40)} está ahora a ${formatCurrencyByRegion(price)}.`,
                             icon: "/favicon.ico" // Ajustar ruta según corresponda
                         });
                     } catch (e) {
@@ -3966,23 +4693,23 @@ window.createQuickAlert = async (productName, currentPrice, productUrl, storeNam
                     <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"/></svg>
                 </div>
                 <div>
-                    <h3 class="text-lg font-black text-slate-900">Crear Alerta de Precio</h3>
-                    <p class="text-xs text-slate-500">Te avisaremos cuando baje</p>
+                    <h3 class="text-lg font-black text-slate-900">${currentRegion === 'US' ? 'Create Price Alert' : 'Crear Alerta de Precio'}</h3>
+                    <p class="text-xs text-slate-500">${currentRegion === 'US' ? 'We will notify you when it drops' : 'Te avisaremos cuando baje'}</p>
                 </div>
             </div>
             <p class="text-xs text-slate-600 mb-4 line-clamp-2 font-medium">${sanitize(productName)}</p>
             
             <div class="bg-slate-50 rounded-xl p-4 mb-5 border border-slate-100">
-                <p class="text-xs text-slate-500 mb-1">Precio actual: <strong class="text-slate-800">$${currentPrice.toLocaleString('es-MX')}</strong></p>
+                <p class="text-xs text-slate-500 mb-1">${currentRegion === 'US' ? 'Current price' : 'Precio actual'}: <strong class="text-slate-800">${formatCurrencyByRegion(currentPrice)}</strong></p>
                 <div class="relative mt-2">
-                    <label class="block text-xs font-bold text-slate-700 mb-1">Tu precio meta:</label>
+                    <label class="block text-xs font-bold text-slate-700 mb-1">${currentRegion === 'US' ? 'Your target price:' : 'Tu precio meta:'}</label>
                     <span class="absolute left-3 top-7 text-slate-400 font-bold">$</span>
                     <input type="number" id="qa-target-price" value="${suggestedPrice}" min="1" class="w-full pl-7 pr-3 py-3 border border-slate-200 rounded-xl text-lg font-black text-emerald-700 focus:ring-2 focus:ring-emerald-300 focus:border-emerald-400 outline-none shadow-sm">
                 </div>
             </div>
             
             <button id="qa-btn-save" class="w-full bg-emerald-500 hover:bg-emerald-600 text-white font-bold py-3.5 rounded-xl shadow-[0_4px_12px_rgba(16,185,129,0.2)] transition-all">
-                Activar Alerta
+                ${currentRegion === 'US' ? 'Activate Alert' : 'Activar Alerta'}
             </button>
         </div>
     `;
@@ -4017,7 +4744,7 @@ window.createQuickAlert = async (productName, currentPrice, productUrl, storeNam
                 if (res.ok) {
                     showToastAlert(targetPrice);
                 } else {
-                    alert(json.error || 'Error al crear alerta');
+                    alert(json.error || (currentRegion === 'US' ? 'Error creating alert' : 'Error al crear alerta'));
                 }
             } catch (err) {
                 console.error('[QuickAlert] Error:', err);
@@ -4035,8 +4762,8 @@ window.createQuickAlert = async (productName, currentPrice, productUrl, storeNam
         const toast = document.createElement('div');
         toast.className = 'fixed top-20 right-4 z-[200] bg-emerald-500 text-white px-5 py-3 rounded-2xl shadow-2xl font-bold text-sm fade-in';
         toast.textContent = isLocal
-            ? '🔔 Alerta local creada. Inicia sesión para alertas push.'
-            : `🔔 Alerta creada: te avisaremos cuando baje a $${price.toLocaleString('es-MX')}`;
+            ? (currentRegion === 'US' ? '🔔 Local alert created. Sign in for push alerts.' : '🔔 Alerta local creada. Inicia sesión para alertas push.')
+            : (currentRegion === 'US' ? `🔔 Alert created: we will notify you when it drops to ${formatCurrencyByRegion(price)}` : `🔔 Alerta creada: te avisaremos cuando baje a ${formatCurrencyByRegion(price)}`);
         document.body.appendChild(toast);
         setTimeout(() => toast.remove(), 4000);
         if (btnPriceAlert) btnPriceAlert.classList.remove('hidden');
@@ -4055,6 +4782,7 @@ window.openMarginCalculator = (costPrice, productName) => {
     // Remove existing modal if open
     document.getElementById('margin-calc-modal')?.remove();
 
+    const isUS = currentRegion === 'US';
     const shippingDefault = 99;
     const feeDefault = 13; // MercadoLibre average fee %
     const suggestedSell = Math.ceil(costPrice * 1.4); // 40% markup suggestion
@@ -4063,42 +4791,42 @@ window.openMarginCalculator = (costPrice, productName) => {
     modal.id = 'margin-calc-modal';
     modal.className = 'fixed inset-0 z-[200] flex items-center justify-center fade-in';
     modal.innerHTML = `
-                < div class="absolute inset-0 bg-slate-900/80 backdrop-blur-sm" onclick = "document.getElementById('margin-calc-modal')?.remove()" ></div >
-                    <div class="relative z-10 bg-white rounded-3xl shadow-2xl p-6 md:p-8 max-w-md w-full mx-4 border border-slate-200">
-                        <button onclick="document.getElementById('margin-calc-modal')?.remove()" class="absolute top-4 right-4 p-2 text-slate-400 hover:text-rose-500 bg-slate-100 hover:bg-rose-50 rounded-full transition-colors">
-                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" /></svg>
-                        </button>
-                        <div class="flex items-center gap-3 mb-5">
-                            <div class="w-10 h-10 bg-blue-100 text-blue-600 rounded-xl flex items-center justify-center">
-                                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 7h6m0 10v-3m-3 3h.01M9 17h.01M9 14h.01M12 14h.01M15 11h.01M12 11h.01M9 11h.01M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z" /></svg>
-                            </div>
-                            <div>
-                                <h3 class="text-lg font-black text-slate-900">Calculadora de Margen</h3>
-                                <p class="text-xs text-slate-500">Dropshipping / Reventa</p>
-                            </div>
-                        </div>
-                        <p class="text-xs text-slate-600 mb-4 line-clamp-1 font-medium">${productName}</p>
-                        <div class="space-y-3">
-                            <div class="flex items-center gap-3">
-                                <label class="text-sm font-bold text-slate-700 w-28 flex-shrink-0">Costo</label>
-                                <div class="relative flex-1"><span class="absolute left-3 top-2.5 text-slate-400 text-sm">$</span><input type="number" id="mc-cost" value="${costPrice}" class="w-full pl-7 pr-3 py-2 border border-slate-200 rounded-xl text-sm font-bold text-slate-800 focus:ring-2 focus:ring-blue-300 focus:border-blue-400 outline-none" readonly></div>
-                            </div>
-                            <div class="flex items-center gap-3">
-                                <label class="text-sm font-bold text-slate-700 w-28 flex-shrink-0">Precio venta</label>
-                                <div class="relative flex-1"><span class="absolute left-3 top-2.5 text-slate-400 text-sm">$</span><input type="number" id="mc-sell" value="${suggestedSell}" min="1" class="w-full pl-7 pr-3 py-2 border border-slate-200 rounded-xl text-sm font-bold text-slate-800 focus:ring-2 focus:ring-blue-300 focus:border-blue-400 outline-none"></div>
-                            </div>
-                            <div class="flex items-center gap-3">
-                                <label class="text-sm font-bold text-slate-700 w-28 flex-shrink-0">Envío</label>
-                                <div class="relative flex-1"><span class="absolute left-3 top-2.5 text-slate-400 text-sm">$</span><input type="number" id="mc-shipping" value="${shippingDefault}" min="0" class="w-full pl-7 pr-3 py-2 border border-slate-200 rounded-xl text-sm font-bold text-slate-800 focus:ring-2 focus:ring-blue-300 focus:border-blue-400 outline-none"></div>
-                            </div>
-                            <div class="flex items-center gap-3">
-                                <label class="text-sm font-bold text-slate-700 w-28 flex-shrink-0">Comisión %</label>
-                                <div class="relative flex-1"><input type="number" id="mc-fee" value="${feeDefault}" min="0" max="100" step="0.5" class="w-full px-3 py-2 border border-slate-200 rounded-xl text-sm font-bold text-slate-800 focus:ring-2 focus:ring-blue-300 focus:border-blue-400 outline-none"><span class="absolute right-3 top-2.5 text-slate-400 text-sm">%</span></div>
-                            </div>
-                        </div>
-                        <div id="mc-result" class="mt-5 p-4 bg-slate-50 rounded-2xl border border-slate-200"></div>
-                        <p class="text-[10px] text-slate-400 mt-3 text-center">Comisiones comunes: MercadoLibre ~13%, Amazon ~15%, Shopify ~3.9%</p>
-                    </div>
+        <div class="absolute inset-0 bg-slate-900/80 backdrop-blur-sm" onclick="document.getElementById('margin-calc-modal')?.remove()"></div>
+        <div class="relative z-10 bg-white rounded-3xl shadow-2xl p-6 md:p-8 max-w-md w-full mx-4 border border-slate-200">
+            <button onclick="document.getElementById('margin-calc-modal')?.remove()" class="absolute top-4 right-4 p-2 text-slate-400 hover:text-rose-500 bg-slate-100 hover:bg-rose-50 rounded-full transition-colors">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" /></svg>
+            </button>
+            <div class="flex items-center gap-3 mb-5">
+                <div class="w-10 h-10 bg-blue-100 text-blue-600 rounded-xl flex items-center justify-center">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 7h6m0 10v-3m-3 3h.01M9 17h.01M9 14h.01M12 14h.01M15 11h.01M12 11h.01M9 11h.01M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z" /></svg>
+                </div>
+                <div>
+                    <h3 class="text-lg font-black text-slate-900">${isUS ? 'Margin Calculator' : 'Calculadora de Margen'}</h3>
+                    <p class="text-xs text-slate-500">${isUS ? 'Dropshipping / Resale' : 'Dropshipping / Reventa'}</p>
+                </div>
+            </div>
+            <p class="text-xs text-slate-600 mb-4 line-clamp-1 font-medium">${sanitize(productName)}</p>
+            <div class="space-y-3">
+                <div class="flex items-center gap-3">
+                    <label class="text-sm font-bold text-slate-700 w-28 flex-shrink-0">${isUS ? 'Cost' : 'Costo'}</label>
+                    <div class="relative flex-1"><span class="absolute left-3 top-2.5 text-slate-400 text-sm">$</span><input type="number" id="mc-cost" value="${costPrice}" class="w-full pl-7 pr-3 py-2 border border-slate-200 rounded-xl text-sm font-bold text-slate-800 focus:ring-2 focus:ring-blue-300 focus:border-blue-400 outline-none" readonly></div>
+                </div>
+                <div class="flex items-center gap-3">
+                    <label class="text-sm font-bold text-slate-700 w-28 flex-shrink-0">${isUS ? 'Sell price' : 'Precio venta'}</label>
+                    <div class="relative flex-1"><span class="absolute left-3 top-2.5 text-slate-400 text-sm">$</span><input type="number" id="mc-sell" value="${suggestedSell}" min="1" class="w-full pl-7 pr-3 py-2 border border-slate-200 rounded-xl text-sm font-bold text-slate-800 focus:ring-2 focus:ring-blue-300 focus:border-blue-400 outline-none"></div>
+                </div>
+                <div class="flex items-center gap-3">
+                    <label class="text-sm font-bold text-slate-700 w-28 flex-shrink-0">${isUS ? 'Shipping' : 'Envío'}</label>
+                    <div class="relative flex-1"><span class="absolute left-3 top-2.5 text-slate-400 text-sm">$</span><input type="number" id="mc-shipping" value="${shippingDefault}" min="0" class="w-full pl-7 pr-3 py-2 border border-slate-200 rounded-xl text-sm font-bold text-slate-800 focus:ring-2 focus:ring-blue-300 focus:border-blue-400 outline-none"></div>
+                </div>
+                <div class="flex items-center gap-3">
+                    <label class="text-sm font-bold text-slate-700 w-28 flex-shrink-0">${isUS ? 'Fee %' : 'Comisión %'}</label>
+                    <div class="relative flex-1"><input type="number" id="mc-fee" value="${feeDefault}" min="0" max="100" step="0.5" class="w-full px-3 py-2 border border-slate-200 rounded-xl text-sm font-bold text-slate-800 focus:ring-2 focus:ring-blue-300 focus:border-blue-400 outline-none"><span class="absolute right-3 top-2.5 text-slate-400 text-sm">%</span></div>
+                </div>
+            </div>
+            <div id="mc-result" class="mt-5 p-4 bg-slate-50 rounded-2xl border border-slate-200"></div>
+            <p class="text-[10px] text-slate-400 mt-3 text-center">${isUS ? 'Common fees: MercadoLibre ~13%, Amazon ~15%, Shopify ~3.9%' : 'Comisiones comunes: MercadoLibre ~13%, Amazon ~15%, Shopify ~3.9%'}</p>
+        </div>
         `;
     document.body.appendChild(modal);
 
@@ -4115,27 +4843,31 @@ window.openMarginCalculator = (costPrice, productName) => {
         const isPositive = profit > 0;
         const color = isPositive ? 'emerald' : 'rose';
         document.getElementById('mc-result').innerHTML = `
-            < div class="grid grid-cols-3 gap-3 text-center" >
+            <div class="grid grid-cols-3 gap-3 text-center">
                 <div>
-                    <p class="text-[10px] text-slate-500 font-bold uppercase">Ganancia</p>
+                    <p class="text-[10px] text-slate-500 font-bold uppercase">${isUS ? 'Profit' : 'Ganancia'}</p>
                     <p class="text-lg font-black text-${color}-600">$${profit.toFixed(0)}</p>
                 </div>
                 <div>
-                    <p class="text-[10px] text-slate-500 font-bold uppercase">Margen</p>
+                    <p class="text-[10px] text-slate-500 font-bold uppercase">${isUS ? 'Margin' : 'Margen'}</p>
                     <p class="text-lg font-black text-${color}-600">${margin.toFixed(1)}%</p>
                 </div>
                 <div>
                     <p class="text-[10px] text-slate-500 font-bold uppercase">ROI</p>
                     <p class="text-lg font-black text-${color}-600">${roi.toFixed(1)}%</p>
                 </div>
-            </div >
-            <div class="mt-3 text-xs text-slate-500 space-y-1">
-                <div class="flex justify-between"><span>Costo producto</span><span class="font-bold">$${cost.toFixed(2)}</span></div>
-                <div class="flex justify-between"><span>+ Envío</span><span class="font-bold">$${shipping.toFixed(2)}</span></div>
-                <div class="flex justify-between"><span>+ Comisión (${feePct}%)</span><span class="font-bold">$${fee.toFixed(2)}</span></div>
-                <div class="flex justify-between border-t border-slate-200 pt-1 mt-1"><span class="font-bold">Total costos</span><span class="font-black text-slate-800">$${(cost + shipping + fee).toFixed(2)}</span></div>
             </div>
-            ${!isPositive ? '<p class="text-xs text-rose-600 font-bold mt-2 text-center">⚠️ Estás perdiendo dinero con estos números</p>' : margin < 15 ? '<p class="text-xs text-amber-600 font-bold mt-2 text-center">⚠️ Margen bajo — considera subir el precio</p>' : '<p class="text-xs text-emerald-600 font-bold mt-2 text-center">✅ Margen saludable para dropshipping</p>'}
+            <div class="mt-3 text-xs text-slate-500 space-y-1">
+                <div class="flex justify-between"><span>${isUS ? 'Product cost' : 'Costo producto'}</span><span class="font-bold">$${cost.toFixed(2)}</span></div>
+                <div class="flex justify-between"><span>+ ${isUS ? 'Shipping' : 'Envío'}</span><span class="font-bold">$${shipping.toFixed(2)}</span></div>
+                <div class="flex justify-between"><span>+ ${isUS ? 'Fee' : 'Comisión'} (${feePct}%)</span><span class="font-bold">$${fee.toFixed(2)}</span></div>
+                <div class="flex justify-between border-t border-slate-200 pt-1 mt-1"><span class="font-bold">${isUS ? 'Total costs' : 'Total costos'}</span><span class="font-black text-slate-800">$${(cost + shipping + fee).toFixed(2)}</span></div>
+            </div>
+            ${!isPositive
+                ? `<p class="text-xs text-rose-600 font-bold mt-2 text-center">⚠️ ${isUS ? 'You are losing money with these numbers' : 'Estás perdiendo dinero con estos números'}</p>`
+                : margin < 15
+                    ? `<p class="text-xs text-amber-600 font-bold mt-2 text-center">⚠️ ${isUS ? 'Low margin — consider raising the price' : 'Margen bajo — considera subir el precio'}</p>`
+                    : `<p class="text-xs text-emerald-600 font-bold mt-2 text-center">✅ ${isUS ? 'Healthy margin for dropshipping' : 'Margen saludable para dropshipping'}</p>`}
         `;
     };
 
@@ -4221,7 +4953,7 @@ window.openAdGateway = async function (targetUrlOriginal, isReward = false) {
     // RESET AD UI - FIX: Mejorar mensaje inicial y reducir timeout de seguridad
     btnSkipAd.disabled = true;
     btnSkipAd.className = 'w-full text-white bg-slate-800 border border-slate-700 font-bold rounded-xl text-sm px-5 py-4 text-center transition-all opacity-50 cursor-not-allowed';
-    btnSkipAd.innerHTML = '<span class="animate-pulse">⏳ Preparando acceso a la oferta...</span>';
+    btnSkipAd.innerHTML = `<span class="animate-pulse">⏳ ${currentRegion === 'US' ? 'Preparing access to the offer...' : 'Preparando acceso a la oferta...'}</span>`;
     
     // SAFETY FALLBACK: Reducido a 3 segundos para mejor UX pero con mensaje más claro
     if (window._adFallbackTimer) clearTimeout(window._adFallbackTimer);
@@ -4232,7 +4964,7 @@ window.openAdGateway = async function (targetUrlOriginal, isReward = false) {
 
     // Intentar cargar Video Ads via IMA
     if (typeof adsLoader !== 'undefined' && adsLoader && typeof google !== 'undefined' && google && google.ima) {
-        btnSkipAd.innerHTML = '<span class="animate-pulse">Cargando Anuncio...</span>';
+        btnSkipAd.innerHTML = `<span class="animate-pulse">${currentRegion === 'US' ? 'Loading Ad...' : 'Cargando Anuncio...'}</span>`;
         requestAd();
         btnSkipAd.onclick = null; 
     } else {
@@ -4300,10 +5032,10 @@ function onAdComplete() {
     if (btnSkipAd) {
         btnSkipAd.disabled = false;
         if (window.currentAdIsForReward) {
-            btnSkipAd.innerHTML = '🎉 Reclamar 3 Búsquedas Extra';
+            btnSkipAd.innerHTML = currentRegion === 'US' ? '🎉 Claim 3 Extra Searches' : '🎉 Reclamar 3 Búsquedas Extra';
             btnSkipAd.onclick = async () => {
                 btnSkipAd.disabled = true;
-                btnSkipAd.innerHTML = '<span class="animate-pulse">Procesando...</span>';
+                btnSkipAd.innerHTML = `<span class="animate-pulse">${currentRegion === 'US' ? 'Processing...' : 'Procesando...'}</span>`;
                 try {
                     const token = await (window.supabaseClient ? window.supabaseClient.auth.getSession().then(s => s.data?.session?.access_token) : Promise.resolve(null));
                     const headers = { 'Content-Type': 'application/json' };
@@ -4321,23 +5053,23 @@ function onAdComplete() {
 
                         const toast = document.createElement('div');
                         toast.className = 'fixed top-20 right-4 z-[200] bg-emerald-500 text-white px-5 py-4 rounded-2xl shadow-2xl font-bold text-sm fade-in flex items-center gap-3';
-                        toast.innerHTML = `<span class="text-2xl">🎉</span> ¡Ganaste 3 búsquedas extra! Puedes continuar buscando.`;
+                        toast.innerHTML = `<span class="text-2xl">🎉</span> ${currentRegion === 'US' ? 'You earned 3 extra searches! You can keep searching.' : '¡Ganaste 3 búsquedas extra! Puedes continuar buscando.'}`;
                         document.body.appendChild(toast);
                         setTimeout(() => toast.remove(), 5000);
 
                         document.getElementById('search-input').focus();
                     } else {
                         btnSkipAd.disabled = false;
-                        btnSkipAd.innerHTML = 'Error al reclamar. Reintentar';
+                        btnSkipAd.innerHTML = currentRegion === 'US' ? 'Claim failed. Retry' : 'Error al reclamar. Reintentar';
                     }
                 } catch (err) {
                     console.error('Reward claim error:', err);
                     btnSkipAd.disabled = false;
-                    btnSkipAd.innerHTML = 'Error al reclamar. Reintentar';
+                    btnSkipAd.innerHTML = currentRegion === 'US' ? 'Claim failed. Retry' : 'Error al reclamar. Reintentar';
                 }
             };
         } else {
-            btnSkipAd.innerHTML = 'Ir a la Oferta →';
+            btnSkipAd.innerHTML = currentRegion === 'US' ? 'Go to Offer →' : 'Ir a la Oferta →';
             btnSkipAd.onclick = () => {
                 if (window._pendingAdUrlOriginal) {
                     window.adsWatchedCache[window._pendingAdUrlOriginal] = true;
@@ -4371,8 +5103,8 @@ function startFallbackCountdown() {
     if (btnSkipAd) {
         btnSkipAd.disabled = true;
         btnSkipAd.innerHTML = window.currentAdIsForReward
-            ? '<span class="animate-pulse">⏳ Preparando recompensa...</span>'
-            : '<span class="animate-pulse">⏳ Cargando oferta...</span>';
+            ? `<span class="animate-pulse">⏳ ${currentRegion === 'US' ? 'Preparing reward...' : 'Preparando recompensa...'}</span>`
+            : `<span class="animate-pulse">⏳ ${currentRegion === 'US' ? 'Loading offer...' : 'Cargando oferta...'}</span>`;
     }
 
     if (adInterval) clearInterval(adInterval);
@@ -4426,6 +5158,7 @@ function initFeedback() {
         e.preventDefault();
         const text = document.getElementById('feedback-text').value.trim();
         if (!text) return;
+        const ui = getRegionUICopy();
 
         const btnSubmit = form.querySelector('button[type="submit"]');
         btnSubmit.disabled = true;
@@ -4453,8 +5186,20 @@ function initFeedback() {
                 })
             });
 
+            if (!response.ok) {
+                const data = await response.json().catch(() => ({}));
+                throw new Error(data.error || 'feedback_error');
+            }
+
             form.classList.add('hidden');
             successDiv.classList.remove('hidden');
+            successDiv.innerHTML = `
+                <div class="w-16 h-16 bg-emerald-100 text-primary rounded-full flex items-center justify-center mx-auto mb-3">
+                    <svg class="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>
+                </div>
+                <h4 class="text-lg font-bold text-slate-800">${ui.feedback.successTitle}</h4>
+                <p class="text-slate-500 text-sm">${ui.feedback.successCopy}</p>
+            `;
             if (typeof confetti === 'function') confetti({ particleCount: 100, spread: 70, origin: { y: 0.6 } });
 
             setTimeout(closeFeedback, 3000);
@@ -4462,11 +5207,12 @@ function initFeedback() {
             console.error('Feedback Error:', err);
             form.classList.add('hidden');
             // Show error instead of fake success
-            successDiv.innerHTML = '<div class="text-center py-6"><span class="text-3xl">😕</span><p class="font-bold text-slate-700 mt-2">No pudimos enviar tu opinión</p><p class="text-slate-500 text-sm">Intenta de nuevo más tarde.</p></div>';
+            successDiv.innerHTML = `<div class="text-center py-6"><span class="text-3xl">😕</span><p class="font-bold text-slate-700 mt-2">${currentRegion === 'US' ? 'We could not send your feedback' : 'No pudimos enviar tu opinión'}</p><p class="text-slate-500 text-sm">${currentRegion === 'US' ? 'Please try again later.' : 'Intenta de nuevo más tarde.'}</p></div>`;
             successDiv.classList.remove('hidden');
             setTimeout(closeFeedback, 3000);
         } finally {
             btnSubmit.disabled = false;
+            btnSubmit.innerHTML = `<span id="feedback-submit-label">${getRegionUICopy().feedback.submit}</span>`;
         }
     });
 }
@@ -4504,9 +5250,10 @@ async function processB2bQueries() {
     const tbody = document.getElementById('b2b-results-body');
     const loader = document.getElementById('b2b-loader');
     const btnExport = document.getElementById('btn-export-b2b');
+    const ui = getRegionUICopy();
 
     if (!textarea || !textarea.value.trim()) {
-        showGlobalFeedback('Por favor, ingresa al menos un producto a buscar.');
+        showGlobalFeedback(currentRegion === 'US' ? 'Please enter at least one product to search.' : 'Por favor, ingresa al menos un producto a buscar.');
         return;
     }
 
@@ -4516,13 +5263,13 @@ async function processB2bQueries() {
         if (typeof openModal === 'function') {
             closeB2b();
             openModal();
-            showGlobalFeedback('Debes ingresar para usar el Plan Reseller.', 'error');
+            showGlobalFeedback(currentRegion === 'US' ? 'You must sign in to use the Reseller Plan.' : 'Debes ingresar para usar el Plan Reseller.', 'error');
         }
         return;
     }
 
     loader.classList.remove('hidden');
-    tbody.innerHTML = '<tr><td colspan="4" class="px-4 py-8 text-center text-slate-500">Procesando lote...</td></tr>';
+    tbody.innerHTML = `<tr><td colspan="4" class="px-4 py-8 text-center text-slate-500">${currentRegion === 'US' ? 'Processing batch...' : 'Procesando lote...'}</td></tr>`;
     btnExport.disabled = true;
 
     try {
@@ -4553,13 +5300,13 @@ async function processB2bQueries() {
                 const baseB2bUrl = window.stripeB2bPaymentLink || window.stripePaymentLink || '#';
                 const stripeUrl = baseB2bUrl !== '#' ? `${baseB2bUrl}?client_reference_id = ${encodeURIComponent(window.currentUser.id)} ` : '#';
 
-                tbody.innerHTML = `< tr > <td colspan="4" class="px-4 py-12 text-center text-amber-600 font-bold bg-amber-50">
-                <p class="mb-4">⚡ Esta función es exclusiva del Plan Revendedor VIP.</p>
-                <a href="${stripeUrl}" target="_blank" onclick="if(typeof confetti === 'function') confetti({ particleCount: 200, spread: 90, origin: { y: 0.6 } })" class="inline-block bg-amber-500 hover:bg-amber-600 text-white px-6 py-2 rounded-xl transition-all shadow-md">Obtener Plan B2B Ahora</a>
-            </td></tr > `;
+                tbody.innerHTML = `<tr><td colspan="4" class="px-4 py-12 text-center text-amber-600 font-bold bg-amber-50">
+                <p class="mb-4">⚡ ${currentRegion === 'US' ? 'This feature is exclusive to the VIP Reseller Plan.' : 'Esta función es exclusiva del Plan Revendedor VIP.'}</p>
+                <a href="${stripeUrl}" target="_blank" onclick="if(typeof confetti === 'function') confetti({ particleCount: 200, spread: 90, origin: { y: 0.6 } })" class="inline-block bg-amber-500 hover:bg-amber-600 text-white px-6 py-2 rounded-xl transition-all shadow-md">${currentRegion === 'US' ? 'Get the B2B Plan Now' : 'Obtener Plan B2B Ahora'}</a>
+            </td></tr>`;
                 showGlobalFeedback(data.error, 'error');
             } else {
-                tbody.innerHTML = `< tr > <td colspan="4" class="px-4 py-12 text-center text-red-500 font-bold">Error: ${data.error || 'Fallo al procesar el lote.'}</td></tr > `;
+                tbody.innerHTML = `<tr><td colspan="4" class="px-4 py-12 text-center text-red-500 font-bold">${currentRegion === 'US' ? 'Error' : 'Error'}: ${data.error || (currentRegion === 'US' ? 'Failed to process the batch.' : 'Fallo al procesar el lote.')}</td></tr>`;
             }
             return;
         }
@@ -4570,17 +5317,17 @@ async function processB2bQueries() {
         data.resultados.forEach(res => {
             if (!res.encontrado && !res.mejor_oferta) {
                 tbody.innerHTML += `
-            < tr class="bg-white hover:bg-slate-50 border-b" >
+            <tr class="bg-white hover:bg-slate-50 border-b">
                         <td class="px-4 py-3 font-medium text-slate-900">${sanitize(res.query_original)}</td>
-                        <td class="px-4 py-3 text-slate-400 italic">No encontrado</td>
+                        <td class="px-4 py-3 text-slate-400 italic">${currentRegion === 'US' ? 'Not found' : 'No encontrado'}</td>
                         <td class="px-4 py-3">-</td>
                         <td class="px-4 py-3 text-center">-</td>
-                    </tr >
+                    </tr>
             `;
             } else {
-                const priceFormatted = new Intl.NumberFormat('es-MX', { style: 'currency', currency: 'MXN' }).format(res.mejor_oferta.precio || 0);
+                const priceFormatted = formatCurrencyByRegion(res.mejor_oferta.precio || 0);
                 tbody.innerHTML += `
-            < tr class="bg-white hover:bg-slate-50 border-b" >
+            <tr class="bg-white hover:bg-slate-50 border-b">
                         <td class="px-4 py-3 font-medium text-slate-900 truncate max-w-[200px]" title="${sanitize(res.query_original)}">${sanitize(res.query_original)}</td>
                         <td class="px-4 py-3 font-bold text-emerald-600">${priceFormatted}</td>
                         <td class="px-4 py-3" title="${sanitize(res.mejor_oferta.tienda)}">
@@ -4588,10 +5335,10 @@ async function processB2bQueries() {
                         </td>
                         <td class="px-4 py-3 text-center">
                             <a href="${sanitize(res.mejor_oferta.urlMonetizada || res.mejor_oferta.urlOriginal)}" target="_blank" class="text-blue-500 hover:text-blue-700 hover:underline font-bold text-xs inline-flex items-center gap-1">
-                                Comprar <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"></path></svg>
+                                ${currentRegion === 'US' ? 'Buy' : 'Comprar'} <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"></path></svg>
                             </a>
                         </td>
-                    </tr >
+                    </tr>
             `;
             }
         });
@@ -4602,12 +5349,13 @@ async function processB2bQueries() {
 
     } catch (err) {
         console.error("Error processB2bQueries:", err);
-        tbody.innerHTML = `< tr > <td colspan="4" class="px-4 py-12 text-center text-red-500 font-bold">🚨 Error de conexión. Intenta de nuevo.</td></tr > `;
+        tbody.innerHTML = `<tr><td colspan="4" class="px-4 py-8 text-center text-red-500 font-bold">${currentRegion === 'US' ? 'An error occurred during the bulk search.' : 'Ocurrió un error en la búsqueda masiva.'}</td></tr>`;
     } finally {
         loader.classList.add('hidden');
     }
 }
 
+// ... (rest of the code remains the same)
 function exportB2bToCSV() {
     if (!window.lastB2bData || window.lastB2bData.length === 0) return;
 
@@ -4706,7 +5454,7 @@ function initFavoritesHover() {
 
         const user = window.currentUser;
         if (!user || !window.supabaseClient) {
-            preview.innerHTML = '<div class="p-4 text-center text-xs font-bold text-slate-500">Ingresa para ver tus favoritos</div>';
+            preview.innerHTML = `<div class="p-4 text-center text-xs font-bold text-slate-500">${currentRegion === 'US' ? 'Sign in to view your favorites' : 'Ingresa para ver tus favoritos'}</div>`;
             showPreview();
             return;
         }
@@ -4718,18 +5466,20 @@ function initFavoritesHover() {
             const { data } = await window.supabaseClient.from('favorites').select('*').eq('user_id', user.id).order('created_at', { ascending: false }).limit(3);
 
             if (!data || data.length === 0) {
-                preview.innerHTML = '<div class="p-4 text-center text-xs font-bold text-slate-400">No tienes favoritos aún</div>';
+                preview.innerHTML = `<div class="p-4 text-center text-xs font-bold text-slate-400">${currentRegion === 'US' ? 'You have no favorites yet' : 'No tienes favoritos aún'}</div>`;
             } else {
-                let html = '<div class="p-3 border-b border-slate-50 font-black text-[10px] text-slate-400 uppercase tracking-widest">Tus últimos favoritos</div>';
+                let html = `<div class="p-3 border-b border-slate-50 font-black text-[10px] text-slate-400 uppercase tracking-widest">${currentRegion === 'US' ? 'Your latest favorites' : 'Tus últimos favoritos'}</div>`;
                 data.forEach((fav, idx) => {
                     const prod = fav.product_data || {};
-                    const priceFormatted = fav.product_price || (prod.precio ? '$' + prod.precio : 'Ver precio');
+                    const priceSource = fav.product_price || prod.precio || 0;
+                    const parsedPrice = typeof priceSource === 'number' ? priceSource : parseFloat(String(priceSource).replace(/[^0-9.-]+/g, ''));
+                    const priceFormatted = parsedPrice ? formatCurrencyByRegion(parsedPrice) : (currentRegion === 'US' ? 'View price' : 'Ver precio');
                     const safeUrl = sanitize(fav.product_url || '#');
-                    const safeTitle = sanitize(prod.titulo || fav.product_title || 'Producto');
+                    const safeTitle = sanitize(prod.titulo || fav.product_title || (currentRegion === 'US' ? 'Product' : 'Producto'));
                     const safeImg = sanitize(prod.imagen || fav.product_image || "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='50' height='50' viewBox='0 0 50 50'%3E%3Crect width='50' height='50' fill='%23f1f5f9' rx='8'/%3E%3Ctext x='25' y='32' text-anchor='middle' font-size='18' fill='%2394a3b8'%3E📦%3C/text%3E%3C/svg%3E");
 
                     html += `
-            < div class="p-3 flex items-center gap-3 hover:bg-slate-50 transition-colors cursor-pointer border-b border-slate-50 last:border-0 fav-preview-item" data - url="${encodeURI(safeUrl)}" >
+            <div class="p-3 flex items-center gap-3 hover:bg-slate-50 transition-colors cursor-pointer border-b border-slate-50 last:border-0 fav-preview-item" data-url="${encodeURI(safeUrl)}">
                 <img src="${safeImg}" class="w-10 h-10 object-contain rounded-lg bg-white border border-slate-100 p-0.5" onerror="this.onerror=null; this.src='data:image/svg+xml,%3Csvg xmlns=\\'http://www.w3.org/2000/svg\\' width=\\'10\\' height=\\'10\\' viewBox=\\'0 0 10 10\\'%3E%3Crect width=\\'10\\' height=\\'10\\' fill=\\'%23f1f5f9\\'/%3E%3C/svg%3E'">
                     <div class="overflow-hidden">
                         <p class="text-[11px] font-bold text-slate-800 truncate">${safeTitle}</p>
@@ -4738,7 +5488,7 @@ function initFavoritesHover() {
                 </div>
         `;
                 });
-                html += '<div class="p-2 bg-slate-50 text-center"><button onclick="if(typeof openFavorites===\'function\') openFavorites()" class="text-[10px] font-black text-primary hover:underline">Ver todos los favoritos</button></div>';
+                html += `<div class="p-2 bg-slate-50 text-center"><button onclick="if(typeof openFavorites===\'function\') openFavorites()" class="text-[10px] font-black text-primary hover:underline">${currentRegion === 'US' ? 'View all favorites' : 'Ver todos los favoritos'}</button></div>`;
                 preview.innerHTML = html;
 
                 // Add event listeners safely
@@ -4750,7 +5500,7 @@ function initFavoritesHover() {
                 });
             }
         } catch (err) {
-            preview.innerHTML = '<div class="p-4 text-center text-xs text-red-500">Error al cargar</div>';
+            preview.innerHTML = `<div class="p-4 text-center text-xs text-red-500">${currentRegion === 'US' ? 'Error loading' : 'Error al cargar'}</div>`;
         }
     });
 
@@ -4774,61 +5524,119 @@ window.watchRewardedAdForSearches = function () {
 // INTERACTIVE TUTORIAL (Spotlight Walkthrough)
 // ============================================
 
-const tutorialSteps = [
-    {
-        target: '#search-input',
-        title: '1. Escribe tu búsqueda',
-        text: 'Escribe lo que necesitas en lenguaje natural. Por ejemplo: "audífonos bluetooth baratos", "laptop para diseño gráfico" o "regalo para niña de 5 años".',
-        icon: '🔍',
-        position: 'bottom',
-        action: () => {
-            const el = document.getElementById('search-input');
-            if (el) { el.focus(); el.setAttribute('placeholder', 'Ej: audífonos bluetooth para correr...'); }
-        }
-    },
-    {
-        target: '#btn-attach-image',
-        title: '2. Busca con imagen',
-        text: '¿Viste algo que te gustó? Sube una foto y nuestra IA la analiza para encontrarte ese producto o uno similar al mejor precio.',
-        icon: '📷',
-        position: 'bottom'
-    },
-    {
-        target: '#btn-voice-input',
-        title: '3. Dictado por voz',
-        text: 'También puedes dictar tu búsqueda por voz. Presiona el micrófono y habla naturalmente.',
-        icon: '🎙️',
-        position: 'bottom'
-    },
-    {
-        target: '.loc-filter-btn[data-radius="global"]',
-        title: '4. Filtra por ubicación',
-        text: 'Elige entre buscar en todas las tiendas online, solo tiendas locales físicas, o ambas cerca de ti. Usamos tu ubicación de forma segura.',
-        icon: '📍',
-        position: 'bottom'
-    },
-    {
-        target: '#category-icon-bar',
-        title: '5. Categorías rápidas',
-        text: 'Explora por categoría con un toque: tecnología, hogar, moda, deportes y más. Es un atajo para búsquedas populares.',
-        icon: '🏷️',
-        position: 'top'
-    },
-    {
-        target: '#nav-favoritos',
-        title: '6. Tus Favoritos',
-        text: 'Cuando encuentres algo que te guste, dale al corazón ♡ para guardarlo. Aquí podrás ver todos tus productos guardados.',
-        icon: '❤️',
-        position: 'bottom'
-    },
-    {
-        target: '#nav-b2b',
-        title: '7. Modo Distribuidor B2B',
-        text: '¿Compras al mayoreo? El modo B2B te permite hacer múltiples cotizaciones a la vez y exportar a CSV para tu negocio.',
-        icon: '💼',
-        position: 'bottom'
-    }
-];
+function getTutorialSteps() {
+    return currentRegion === 'US'
+        ? [
+            {
+                target: '#search-input',
+                title: '1. Write your search',
+                text: 'Describe what you need in natural language. For example: "cheap bluetooth headphones", "laptop for graphic design", or "gift for a 5-year-old girl".',
+                icon: '🔍',
+                position: 'bottom',
+                action: () => {
+                    const el = document.getElementById('search-input');
+                    if (el) { el.focus(); el.setAttribute('placeholder', 'Ex: bluetooth headphones for running...'); }
+                }
+            },
+            {
+                target: '#btn-attach-image',
+                title: '2. Search with an image',
+                text: 'See something you like? Upload a photo and our AI will analyze it to find that product or a similar one at the best price.',
+                icon: '📷',
+                position: 'bottom'
+            },
+            {
+                target: '#btn-voice-input',
+                title: '3. Voice dictation',
+                text: 'You can also dictate your search by voice. Press the microphone and speak naturally.',
+                icon: '🎙️',
+                position: 'bottom'
+            },
+            {
+                target: '.loc-filter-btn[data-radius="global"]',
+                title: '4. Filter by location',
+                text: 'Choose between all online stores, only local physical stores, or both near you. We use your location securely.',
+                icon: '📍',
+                position: 'bottom'
+            },
+            {
+                target: '#category-icon-bar',
+                title: '5. Quick categories',
+                text: 'Explore by category with one tap: tech, home, fashion, sports and more. It is a shortcut for popular searches.',
+                icon: '🏷️',
+                position: 'top'
+            },
+            {
+                target: '#nav-favoritos',
+                title: '6. Your favorites',
+                text: 'When you find something you like, tap the heart ♡ to save it. Here you can see all your saved products.',
+                icon: '❤️',
+                position: 'bottom'
+            },
+            {
+                target: '#nav-b2b',
+                title: '7. B2B distributor mode',
+                text: 'Buying wholesale? B2B mode lets you run multiple quotes at once and export to CSV for your business.',
+                icon: '💼',
+                position: 'bottom'
+            }
+        ]
+        : [
+            {
+                target: '#search-input',
+                title: '1. Escribe tu búsqueda',
+                text: 'Escribe lo que necesitas en lenguaje natural. Por ejemplo: "audífonos bluetooth baratos", "laptop para diseño gráfico" o "regalo para niña de 5 años".',
+                icon: '🔍',
+                position: 'bottom',
+                action: () => {
+                    const el = document.getElementById('search-input');
+                    if (el) { el.focus(); el.setAttribute('placeholder', 'Ej: audífonos bluetooth para correr...'); }
+                }
+            },
+            {
+                target: '#btn-attach-image',
+                title: '2. Busca con imagen',
+                text: '¿Viste algo que te gustó? Sube una foto y nuestra IA la analiza para encontrarte ese producto o uno similar al mejor precio.',
+                icon: '📷',
+                position: 'bottom'
+            },
+            {
+                target: '#btn-voice-input',
+                title: '3. Dictado por voz',
+                text: 'También puedes dictar tu búsqueda por voz. Presiona el micrófono y habla naturalmente.',
+                icon: '🎙️',
+                position: 'bottom'
+            },
+            {
+                target: '.loc-filter-btn[data-radius="global"]',
+                title: '4. Filtra por ubicación',
+                text: 'Elige entre buscar en todas las tiendas online, solo tiendas locales físicas, o ambas cerca de ti. Usamos tu ubicación de forma segura.',
+                icon: '📍',
+                position: 'bottom'
+            },
+            {
+                target: '#category-icon-bar',
+                title: '5. Categorías rápidas',
+                text: 'Explora por categoría con un toque: tecnología, hogar, moda, deportes y más. Es un atajo para búsquedas populares.',
+                icon: '🏷️',
+                position: 'top'
+            },
+            {
+                target: '#nav-favoritos',
+                title: '6. Tus Favoritos',
+                text: 'Cuando encuentres algo que te guste, dale al corazón ♡ para guardarlo. Aquí podrás ver todos tus productos guardados.',
+                icon: '❤️',
+                position: 'bottom'
+            },
+            {
+                target: '#nav-b2b',
+                title: '7. Modo Distribuidor B2B',
+                text: '¿Compras al mayoreo? El modo B2B te permite hacer múltiples cotizaciones a la vez y exportar a CSV para tu negocio.',
+                icon: '💼',
+                position: 'bottom'
+            }
+        ];
+}
 
 function startInteractiveTutorial() {
     // Close the onboarding modal first (recursivity fixed)
@@ -4853,8 +5661,8 @@ function startInteractiveTutorial() {
                 <div class="flex items-center justify-between">
                     <div id="tutorial-progress" class="flex gap-1.5"></div>
                     <div class="flex gap-2">
-                        <button id="tutorial-skip" class="text-xs text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 font-bold px-3 py-2 rounded-lg transition-colors">Saltar</button>
-                        <button id="tutorial-next" class="text-xs bg-emerald-500 hover:bg-emerald-600 text-white font-bold px-5 py-2 rounded-xl transition-all shadow-lg shadow-emerald-500/20 active:scale-95">Siguiente →</button>
+                        <button id="tutorial-skip" class="text-xs text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 font-bold px-3 py-2 rounded-lg transition-colors">${currentRegion === 'US' ? 'Skip' : 'Saltar'}</button>
+                        <button id="tutorial-next" class="text-xs bg-emerald-500 hover:bg-emerald-600 text-white font-bold px-5 py-2 rounded-xl transition-all shadow-lg shadow-emerald-500/20 active:scale-95">${currentRegion === 'US' ? 'Next →' : 'Siguiente →'}</button>
                     </div>
                 </div>
             </div>
@@ -4875,6 +5683,7 @@ function startInteractiveTutorial() {
 }
 
 function showTutorialStep() {
+    const tutorialSteps = getTutorialSteps();
     const step = tutorialSteps[tutorialStep];
     if (!step) { endTutorial(); return; }
 
@@ -4921,7 +5730,9 @@ function showTutorialStep() {
 
         // Update button text
         const nextBtn = document.getElementById('tutorial-next');
-        nextBtn.textContent = tutorialStep === tutorialSteps.length - 1 ? '¡Listo! 🎉' : 'Siguiente →';
+        nextBtn.textContent = tutorialStep === tutorialSteps.length - 1
+            ? (currentRegion === 'US' ? 'Done! 🎉' : '¡Listo! 🎉')
+            : (currentRegion === 'US' ? 'Next →' : 'Siguiente →');
 
         const arrow = tooltip.querySelector('.tutorial-tooltip-arrow');
 
@@ -4967,6 +5778,7 @@ function showTutorialStep() {
 }
 
 function nextTutorialStep() {
+    const tutorialSteps = getTutorialSteps();
     const spotlight = document.getElementById('tutorial-spotlight');
     const tooltip = document.getElementById('tutorial-tooltip');
     spotlight.classList.remove('active');
@@ -4981,7 +5793,7 @@ function nextTutorialStep() {
         if (typeof confetti === 'function') {
             confetti({ particleCount: 80, spread: 60, origin: { y: 0.7 } });
         }
-        showGlobalFeedback('¡Tutorial completado! Ya sabes usar Lumu como un pro 🎉', 'success');
+        showGlobalFeedback(currentRegion === 'US' ? 'Tutorial completed! You already know how to use Lumu like a pro 🎉' : '¡Tutorial completado! Ya sabes usar Lumu como un pro 🎉', 'success');
     }
 }
 
@@ -5013,19 +5825,20 @@ window.startInteractiveTutorial = startInteractiveTutorial;
 
     function openWishlistModal() {
         if (!modal) return;
+        const isUS = currentRegion === 'US';
         const raw = localStorage.getItem('lumu_wishlist') || '[]';
         let items = [];
         try { items = JSON.parse(raw); } catch(e) {}
 
         if (items.length === 0) {
-            if (preview) preview.innerHTML = '<p class="text-slate-400 text-sm text-center py-4">Aún no tienes productos guardados ❤️</p>';
+            if (preview) preview.innerHTML = `<p class="text-slate-400 text-sm text-center py-4">${isUS ? 'You do not have saved products yet ❤️' : 'Aún no tienes productos guardados ❤️'}</p>`;
         } else {
             if (preview) {
                 preview.innerHTML = items.map(p => `
                     <div class="flex items-center gap-2 bg-slate-50 rounded-xl px-3 py-2">
                         ${p.img ? `<img src="${p.img}" class="w-10 h-10 object-contain rounded-lg" onerror="this.style.display='none'" />` : ''}
                         <div class="flex-1 min-w-0">
-                            <p class="text-xs font-bold text-slate-700 truncate">${p.name || 'Producto'}</p>
+                            <p class="text-xs font-bold text-slate-700 truncate">${p.name || (isUS ? 'Product' : 'Producto')}</p>
                             <p class="text-xs text-emerald-600 font-bold">${p.price || ''}</p>
                         </div>
                     </div>
@@ -5037,7 +5850,9 @@ window.startInteractiveTutorial = startInteractiveTutorial;
         const sharePayload = btoa(encodeURIComponent(JSON.stringify(items.slice(0, 10))));
         const shareUrl = `${location.origin}/?wishlist=${sharePayload}`;
         if (linkInput) linkInput.value = shareUrl;
-        const waMsg = encodeURIComponent(`🛍️ ¡Mira mi wishlist de Lumu! ${items.length} productos que quiero comprar:\n${shareUrl}`);
+        const waMsg = encodeURIComponent(isUS
+            ? `🛍️ Check out my Lumu wishlist! ${items.length} products I want to buy:\n${shareUrl}`
+            : `🛍️ ¡Mira mi wishlist de Lumu! ${items.length} productos que quiero comprar:\n${shareUrl}`);
         if (waBtn) waBtn.href = `https://wa.me/?text=${waMsg}`;
 
         modal.classList.remove('hidden');
@@ -5055,7 +5870,7 @@ window.startInteractiveTutorial = startInteractiveTutorial;
     copyBtn?.addEventListener('click', () => {
         navigator.clipboard.writeText(linkInput?.value || '').then(() => {
             const orig = copyBtn.textContent;
-            copyBtn.textContent = '¡Copiado!';
+            copyBtn.textContent = currentRegion === 'US' ? 'Copied!' : '¡Copiado!';
             setTimeout(() => { copyBtn.textContent = orig; }, 2000);
         });
     });
@@ -5184,7 +5999,7 @@ window.startInteractiveTutorial = startInteractiveTutorial;
         }
         hidePrompt();
         // Optionally thank user
-        if (typeof showToast === 'function') showToast('🎉 ¡Gracias! Tu experiencia ayuda a otros compradores');
+        if (typeof showToast === 'function') showToast(currentRegion === 'US' ? '🎉 Thanks! Your experience helps other shoppers' : '🎉 ¡Gracias! Tu experiencia ayuda a otros compradores');
     });
 
     // Hook into "Ver Oferta" clicks
@@ -5204,14 +6019,25 @@ window.startInteractiveTutorial = startInteractiveTutorial;
 // FASE 7 — Achievement Badge System
 // ============================================================
 (function initAchievements() {
-    const ACHIEVEMENTS = [
-        { id: 'explorer',  emoji: '🔍', label: 'Explorador',  desc: 'Tu primera búsqueda',  threshold: 1  },
-        { id: 'hunter',    emoji: '🎯', label: 'Cazador',     desc: '10 búsquedas',          threshold: 10 },
-        { id: 'detective', emoji: '🕵️', label: 'Detective',   desc: '25 búsquedas',          threshold: 25 },
-        { id: 'expert',    emoji: '⚡', label: 'Experto',     desc: '50 búsquedas',          threshold: 50 },
-        { id: 'legend',    emoji: '👑', label: 'Leyenda',     desc: '100 búsquedas',         threshold: 100 },
-        { id: 'lumuplus',  emoji: '💎', label: 'Lumu+',       desc: 'Usuario Premium',       threshold: null, premiumOnly: true },
-    ];
+    function getAchievementsConfig() {
+        return currentRegion === 'US'
+            ? [
+                { id: 'explorer',  emoji: '🔍', label: 'Explorer',  desc: 'Your first search', threshold: 1  },
+                { id: 'hunter',    emoji: '🎯', label: 'Hunter',    desc: '10 searches',       threshold: 10 },
+                { id: 'detective', emoji: '🕵️', label: 'Detective', desc: '25 searches',       threshold: 25 },
+                { id: 'expert',    emoji: '⚡', label: 'Expert',    desc: '50 searches',       threshold: 50 },
+                { id: 'legend',    emoji: '👑', label: 'Legend',    desc: '100 searches',      threshold: 100 },
+                { id: 'lumuplus',  emoji: '💎', label: 'Lumu+',     desc: 'Premium user',      threshold: null, premiumOnly: true },
+            ]
+            : [
+                { id: 'explorer',  emoji: '🔍', label: 'Explorador', desc: 'Tu primera búsqueda', threshold: 1  },
+                { id: 'hunter',    emoji: '🎯', label: 'Cazador',    desc: '10 búsquedas',       threshold: 10 },
+                { id: 'detective', emoji: '🕵️', label: 'Detective',  desc: '25 búsquedas',       threshold: 25 },
+                { id: 'expert',    emoji: '⚡', label: 'Experto',    desc: '50 búsquedas',       threshold: 50 },
+                { id: 'legend',    emoji: '👑', label: 'Leyenda',    desc: '100 búsquedas',      threshold: 100 },
+                { id: 'lumuplus',  emoji: '💎', label: 'Lumu+',      desc: 'Usuario Premium',    threshold: null, premiumOnly: true },
+            ];
+    }
 
     function getSearchCount() {
         const raw = localStorage.getItem('lumu_searches_data');
@@ -5222,6 +6048,7 @@ window.startInteractiveTutorial = startInteractiveTutorial;
     function renderAchievements() {
         const body = document.getElementById('achievements-body');
         if (!body) return;
+        const ACHIEVEMENTS = getAchievementsConfig();
         const count = getSearchCount();
         const isPremium = window.currentUser?.is_premium || window.currentUser?.plan === 'personal_vip' || window.currentUser?.plan === 'b2b';
 
@@ -5232,7 +6059,7 @@ window.startInteractiveTutorial = startInteractiveTutorial;
                     <span class="text-3xl mb-1">${a.emoji}</span>
                     <p class="text-xs font-black text-slate-800 leading-tight">${a.label}</p>
                     <p class="text-[9px] text-slate-500 leading-tight mt-0.5">${a.desc}</p>
-                    ${unlocked ? '<span class="text-[9px] font-bold text-emerald-600 mt-1">✓ Obtenido</span>' : ''}
+                    ${unlocked ? `<span class="text-[9px] font-bold text-emerald-600 mt-1">✓ ${currentRegion === 'US' ? 'Unlocked' : 'Obtenido'}</span>` : ''}
                 </div>
             `;
         }).join('');
@@ -5263,10 +6090,11 @@ window.startInteractiveTutorial = startInteractiveTutorial;
     // Check for newly unlocked achievements after each search
     let lastCheckedCount = getSearchCount();
     window.checkAchievementsOnSearch = () => {
+        const ACHIEVEMENTS = getAchievementsConfig();
         const count = getSearchCount();
         ACHIEVEMENTS.filter(a => !a.premiumOnly && a.threshold && lastCheckedCount < a.threshold && count >= a.threshold).forEach(a => {
             setTimeout(() => {
-                if (typeof showToast === 'function') showToast(`🏆 ¡Lograste el nivel "${a.label}"! ${a.emoji}`);
+                if (typeof showToast === 'function') showToast(currentRegion === 'US' ? `🏆 You reached the "${a.label}" level! ${a.emoji}` : `🏆 ¡Lograste el nivel "${a.label}"! ${a.emoji}`);
             }, 1500);
         });
         lastCheckedCount = count;

@@ -106,6 +106,60 @@
         <priority>0.8</priority>
     </url>
     <url>
+        <loc>https://lumu.dev/precios-de-celulares.html</loc>
+        <lastmod>2026-03-15</lastmod>
+        <changefreq>weekly</changefreq>
+        <priority>0.8</priority>
+    </url>
+    <url>
+        <loc>https://lumu.dev/mejores-celulares-calidad-precio.html</loc>
+        <lastmod>2026-03-15</lastmod>
+        <changefreq>weekly</changefreq>
+        <priority>0.8</priority>
+    </url>
+    <url>
+        <loc>https://lumu.dev/celulares-baratos-y-buenos-mexico-2026.html</loc>
+        <lastmod>2026-03-15</lastmod>
+        <changefreq>weekly</changefreq>
+        <priority>0.7</priority>
+    </url>
+    <url>
+        <loc>https://lumu.dev/comparar-precios-celulares-mexico.html</loc>
+        <lastmod>2026-03-15</lastmod>
+        <changefreq>weekly</changefreq>
+        <priority>0.7</priority>
+    </url>
+    <url>
+        <loc>https://lumu.dev/donde-comprar-celulares-baratos-mexico.html</loc>
+        <lastmod>2026-03-15</lastmod>
+        <changefreq>weekly</changefreq>
+        <priority>0.7</priority>
+    </url>
+    <url>
+        <loc>https://lumu.dev/mejores-celulares-gama-media-mexico-2026.html</loc>
+        <lastmod>2026-03-15</lastmod>
+        <changefreq>weekly</changefreq>
+        <priority>0.7</priority>
+    </url>
+    <url>
+        <loc>https://lumu.dev/mejores-audifonos-calidad-precio-mexico-2026.html</loc>
+        <lastmod>2026-03-15</lastmod>
+        <changefreq>weekly</changefreq>
+        <priority>0.7</priority>
+    </url>
+    <url>
+        <loc>https://lumu.dev/precios-de-laptops.html</loc>
+        <lastmod>2026-03-15</lastmod>
+        <changefreq>weekly</changefreq>
+        <priority>0.7</priority>
+    </url>
+    <url>
+        <loc>https://lumu.dev/mejores-laptops-calidad-precio.html</loc>
+        <lastmod>2026-03-15</lastmod>
+        <changefreq>weekly</changefreq>
+        <priority>0.7</priority>
+    </url>
+    <url>
         <loc>https://lumu.dev/guia-de-ahorro.html</loc>
         <lastmod>2026-03-14</lastmod>
         <changefreq>weekly</changefreq>
@@ -196,3 +250,4 @@
         <priority>0.6</priority>
     </url>
 </urlset>
+
