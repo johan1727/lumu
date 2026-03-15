@@ -228,12 +228,12 @@ const REGION_UI_COPY = {
             loadingPlan: 'Cargando plan...',
             currentPlan: 'Plan Actual',
             statusFree: 'Gratis',
-            planVip: 'Acceso Ilimitado',
+            planVip: 'Uso intensivo',
             planFree: 'Plan Básico (Gratis)',
-            searchesLeftUnlimited: 'Búsquedas restantes: ∞ Ilimitadas',
-            searchesLeft: 'Búsquedas restantes: {count}/5',
+            searchesLeftUnlimited: 'Búsquedas restantes: según tu plan',
+            searchesLeft: 'Búsquedas restantes hoy: {count}',
             upgradeTitle: '¡Sube de Nivel AHORA!',
-            upgradeCopy: 'Hazte VIP y accede a las búsquedas ilimitadas e internacionales.',
+            upgradeCopy: 'Hazte VIP y accede a más capacidad de búsqueda, sin anuncios y con mejores herramientas.',
             upgradeButton: 'Comprar Acceso VIP ($39)',
             historyTitle: 'Historial de Búsquedas',
             historySubtitle: 'Revisa tus compras pasadas',
@@ -241,8 +241,8 @@ const REGION_UI_COPY = {
         },
         pricing: {
             badge: 'Más valor por menos',
-            title: '¿Quieres búsquedas ilimitadas?',
-            copyHtml: 'Desde <strong class="text-emerald-600">$39 MXN/mes</strong> — sin anuncios, con alertas de precio y cupones exclusivos para encontrar más rápido las mejores ofertas.',
+            title: '¿Quieres más capacidad de búsqueda?',
+            copyHtml: 'Desde <strong class="text-emerald-600">$39 MXN/mes</strong> — sin anuncios, con alertas de precio y herramientas para encontrar más rápido las mejores ofertas.',
             chipAds: 'Sin anuncios',
             chipAlerts: 'Alertas de precio',
             chipCoupons: 'Cupones exclusivos',
@@ -460,12 +460,12 @@ const REGION_UI_COPY = {
             loadingPlan: 'Loading plan...',
             currentPlan: 'Current Plan',
             statusFree: 'Free',
-            planVip: 'Unlimited Access',
+            planVip: 'Intensive Use',
             planFree: 'Basic Plan (Free)',
-            searchesLeftUnlimited: 'Searches left: ∞ Unlimited',
-            searchesLeft: 'Searches left: {count}/5',
+            searchesLeftUnlimited: 'Searches left: based on your plan',
+            searchesLeft: 'Searches left today: {count}',
             upgradeTitle: 'Upgrade NOW!',
-            upgradeCopy: 'Go VIP and unlock unlimited and international searches.',
+            upgradeCopy: 'Go VIP and unlock more search capacity, no ads, and better tools.',
             upgradeButton: 'Buy VIP Access ($39)',
             historyTitle: 'Search History',
             historySubtitle: 'Review your past searches',
@@ -473,8 +473,8 @@ const REGION_UI_COPY = {
         },
         pricing: {
             badge: 'More value for less',
-            title: 'Want unlimited searches?',
-            copyHtml: 'Starting at <strong class="text-emerald-600">$39 USD/month</strong> — ad-free, with price alerts and exclusive coupons to find the best deals faster.',
+            title: 'Want more search capacity?',
+            copyHtml: 'Starting at <strong class="text-emerald-600">$39 USD/month</strong> — ad-free, with price alerts and tools to find the best deals faster.',
             chipAds: 'No ads',
             chipAlerts: 'Price alerts',
             chipCoupons: 'Exclusive coupons',
@@ -2786,18 +2786,22 @@ async function initApp() {
                         const vipLink = stripePaymentLink || '#';
                         const vipUrl = vipLink !== '#' && currentUser ? `${vipLink}?client_reference_id=${encodeURIComponent(currentUser.id)}` : vipLink;
                         if (isPaywall) {
-                            addChatBubble('ai', `🔒 **Límite de búsquedas gratuitas alcanzado.** Hazte VIP para búsquedas ilimitadas o mira un anuncio para 3 búsquedas gratis.`, [], false);
+                            const rewardAvailable = typeof hasRealRewardedAdConfigured === 'function' && hasRealRewardedAdConfigured();
+                            addChatBubble('ai', rewardAvailable
+                                ? `🔒 **Límite de búsquedas gratuitas alcanzado.** Hazte VIP para obtener mayor capacidad de búsqueda o mira un anuncio para 3 búsquedas gratis.`
+                                : `🔒 **Límite de búsquedas gratuitas alcanzado.** Hazte VIP para obtener mayor capacidad de búsqueda.`, [], false);
                             resultsContainer.innerHTML = `
                                 <div class="col-span-full flex flex-col items-center text-center py-12 px-6 bg-gradient-to-br from-amber-50 to-orange-50 rounded-3xl border border-amber-200">
                                     <div class="text-5xl mb-4">⚡</div>
                                     <h3 class="text-xl font-black text-slate-800 mb-2">Límite Alcanzado</h3>
-                                    <p class="text-slate-600 font-medium mb-6 max-w-sm">Desbloquea búsquedas ilimitadas con VIP o gana 3 búsquedas hoy patrocinadas por anuncios.</p>
+                                    <p class="text-slate-600 font-medium mb-6 max-w-sm">${rewardAvailable ? 'Desbloquea una mayor capacidad de búsqueda con VIP o gana 3 búsquedas hoy patrocinadas por anuncios.' : 'Desbloquea una mayor capacidad de búsqueda con VIP para seguir buscando sin esperar al próximo reinicio diario.'}</p>
                                     <div class="flex flex-col gap-3 w-full max-w-xs">
                                         <a href="${sanitize(vipUrl)}" target="_blank" class="w-full bg-amber-500 hover:bg-amber-600 text-white px-8 py-3.5 rounded-2xl font-bold transition-all shadow-lg shadow-amber-500/20">Obtener VIP - $39 MXN/mes</a>
-                                        <button onclick="window.currentAdIsForReward = true; window.openAdGateway('reward');" class="w-full bg-white hover:bg-slate-50 text-slate-700 border border-slate-200 px-8 py-3.5 rounded-2xl font-bold transition-all flex justify-center items-center gap-2">
+                                        ${rewardAvailable ? `
+                                        <button onclick="window.watchRewardedAdForSearches();" class="w-full bg-white hover:bg-slate-50 text-slate-700 border border-slate-200 px-8 py-3.5 rounded-2xl font-bold transition-all flex justify-center items-center gap-2">
                                             <svg class="w-5 h-5 text-emerald-500" fill="currentColor" viewBox="0 0 24 24"><path d="M10 8v8l6-4-6-4zm9-5H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm0 16H5V5h14v14z"/></svg>
                                             Ver anuncio (3 Gratis)
-                                        </button>
+                                        </button>` : ''}
                                     </div>
                                 </div>`;
                             resultsWrapper.classList.remove('hidden');
@@ -3353,14 +3357,14 @@ async function initApp() {
                 item.addEventListener('click', (e) => {
                     if (e.target.closest('.chat-product-btn')) return; // Let button handle its own
                     const url = item.getAttribute('data-target-url');
-                    if (url) window.openAdGateway(url);
+                    if (url) window.open(url, '_blank');
                 });
             });
             wrapper.querySelectorAll('.chat-product-btn').forEach(btn => {
                 btn.addEventListener('click', (e) => {
                     e.stopPropagation();
                     const url = btn.getAttribute('data-target-url');
-                    if (url) window.openAdGateway(url);
+                    if (url) window.open(url, '_blank');
                 });
             });
 
@@ -3517,7 +3521,7 @@ async function initApp() {
                             <div class="text-2xl font-black text-slate-900 mb-2">${p._precioNum > 0 ? p._precioFmt : `<span class=&quot;text-base text-amber-600&quot;>${currentRegion === 'US' ? 'View in store' : 'Ver en tienda'}</span>`}</div>
                             ${p.cupon ? `<span class="text-xs font-bold text-amber-600 bg-amber-50 px-2 py-1 rounded-lg mb-2">${currentRegion === 'US' ? 'Coupon' : 'Cupón'}: ${sanitize(p.cupon)}</span>` : ''}
                             <button class="mt-auto w-full bg-emerald-500 hover:bg-emerald-600 text-white text-sm font-bold py-2 px-4 rounded-xl transition-colors"
-                                onclick="window.openAdGateway('${encodeURIComponent(p.urlMonetizada || p.urlOriginal || p.link)}')">
+                                onclick="window.open('${sanitize(p.urlMonetizada || p.urlOriginal || p.link)}', '_blank')">
                                 ${currentRegion === 'US' ? 'View Offer →' : 'Ver Oferta →'}
                             </button>
                         </div>
@@ -4098,11 +4102,7 @@ async function initApp() {
                         }
                         
                         if (target && target !== 'undefined' && target !== 'null') {
-                            if (typeof window.openAdGateway === 'function') {
-                                window.openAdGateway(target);
-                            } else {
-                                window.open(target, '_blank');
-                            }
+                            window.open(target, '_blank');
                         } else {
                             console.warn(isUS ? 'Offer URL not found for this product' : 'URL de oferta no encontrada para este producto');
                         }
@@ -4883,6 +4883,19 @@ window.openMarginCalculator = (costPrice, productName) => {
 
 window.currentAdIsForReward = false;
 
+function hasRealRewardedAdConfigured() {
+    const tagUrl = window.__LUMU_CONFIG?.rewardedAdTagUrl;
+    return typeof tagUrl === 'string' && tagUrl.trim().length > 0;
+}
+
+function showRewardUnavailableToast() {
+    const toast = document.createElement('div');
+    toast.className = 'fixed top-20 right-4 z-[200] bg-amber-500 text-white px-5 py-4 rounded-2xl shadow-2xl font-bold text-sm fade-in flex items-center gap-3';
+    toast.innerHTML = `<span class="text-2xl">⚠️</span> ${currentRegion === 'US' ? 'Extra searches are temporarily unavailable.' : 'Las búsquedas extra por anuncio no están disponibles por ahora.'}`;
+    document.body.appendChild(toast);
+    setTimeout(() => toast.remove(), 5000);
+}
+
 window.openAdGateway = async function (targetUrlOriginal, isReward = false) {
     window._pendingAdUrlOriginal = targetUrlOriginal;
     
@@ -4890,6 +4903,12 @@ window.openAdGateway = async function (targetUrlOriginal, isReward = false) {
         window.currentAdIsForReward = true;
     } else {
         window.currentAdIsForReward = false;
+    }
+
+    if (window.currentAdIsForReward && !hasRealRewardedAdConfigured()) {
+        showRewardUnavailableToast();
+        window.currentAdIsForReward = false;
+        return;
     }
 
     let targetUrl = targetUrlOriginal;
@@ -4955,12 +4974,14 @@ window.openAdGateway = async function (targetUrlOriginal, isReward = false) {
     btnSkipAd.className = 'w-full text-white bg-slate-800 border border-slate-700 font-bold rounded-xl text-sm px-5 py-4 text-center transition-all opacity-50 cursor-not-allowed';
     btnSkipAd.innerHTML = `<span class="animate-pulse">⏳ ${currentRegion === 'US' ? 'Preparing access to the offer...' : 'Preparando acceso a la oferta...'}</span>`;
     
-    // SAFETY FALLBACK: Reducido a 3 segundos para mejor UX pero con mensaje más claro
+    // SAFETY FALLBACK: solo para anuncios de salida/oferta, nunca para recompensas
     if (window._adFallbackTimer) clearTimeout(window._adFallbackTimer);
-    window._adFallbackTimer = setTimeout(() => {
-        console.log('[Ad] Fallback activado: IMA no respondió a tiempo. Habilitando acceso directo.');
-        onAdComplete();
-    }, 3000);
+    if (!window.currentAdIsForReward) {
+        window._adFallbackTimer = setTimeout(() => {
+            console.log('[Ad] Fallback activado: IMA no respondió a tiempo. Habilitando acceso directo.');
+            onAdComplete();
+        }, 3000);
+    }
 
     // Intentar cargar Video Ads via IMA
     if (typeof adsLoader !== 'undefined' && adsLoader && typeof google !== 'undefined' && google && google.ima) {
@@ -4992,10 +5013,12 @@ function initIMA() {
 
 function requestAd() {
     if (!adsLoader) return;
+    if (window.currentAdIsForReward && !hasRealRewardedAdConfigured()) {
+        onAdError(null);
+        return;
+    }
     const adsRequest = new google.ima.AdsRequest();
-    // Rewarded Video ad tag — set REWARDED_AD_TAG_URL in your Google Ad Manager account
-    // IMPORTANT: The URL below is Google's TEST tag ($0 revenue). Replace with your production tag.
-    adsRequest.adTagUrl = window.__LUMU_CONFIG?.rewardedAdTagUrl || 'https://pubads.g.doubleclick.net/gampad/ads?sz=640x480&iu=/124319096/external/single_ad_samples&ciu_szs=300x250&impl=s&gdfp_req=1&env=vp&output=vast&unviewed_position_start=1&cust_params=deployment%3Ddevsite%26sample_ct%3Dlinear&correlator=';
+    adsRequest.adTagUrl = window.__LUMU_CONFIG?.rewardedAdTagUrl;
 
     adsRequest.linearAdSlotWidth = adContainer.clientWidth;
     adsRequest.linearAdSlotHeight = adContainer.clientHeight;
@@ -5085,15 +5108,36 @@ function onAdComplete() {
 }
 
 function onAdError(adErrorEvent) {
-    console.error('IMA Ad Error:', adErrorEvent ? adErrorEvent.getError() : 'Unknown error');
+    console.error('IMA Ad Error:', adErrorEvent && typeof adErrorEvent.getError === 'function' ? adErrorEvent.getError() : 'Unknown error');
     if (adsManager) {
         try { adsManager.destroy(); } catch (e) { }
     }
-    // Si falla IMA, activar fallback de 30s automáticamente
+    if (window.currentAdIsForReward) {
+        if (window._adFallbackTimer) {
+            clearTimeout(window._adFallbackTimer);
+            window._adFallbackTimer = null;
+        }
+        if (btnSkipAd) {
+            btnSkipAd.disabled = false;
+            btnSkipAd.className = 'w-full text-white bg-amber-500 hover:bg-amber-600 border border-transparent font-bold rounded-xl text-sm px-5 py-4 text-center transition-all cursor-pointer';
+            btnSkipAd.innerHTML = currentRegion === 'US' ? 'Reward unavailable right now' : 'La recompensa no está disponible ahora';
+            btnSkipAd.onclick = () => {
+                window.currentAdIsForReward = false;
+                closeAdGateway();
+                showRewardUnavailableToast();
+            };
+        }
+        return;
+    }
+    // Si falla IMA, activar fallback automáticamente solo para anuncios normales
     startFallbackCountdown();
 }
 
 function startFallbackCountdown() {
+    if (window.currentAdIsForReward) {
+        onAdError(null);
+        return;
+    }
     const countdownOverlay = document.getElementById('ad-countdown-overlay');
     if (countdownOverlay) countdownOverlay.classList.remove('hidden');
 
@@ -5515,6 +5559,10 @@ function initFavoritesHover() {
 }
 
 window.watchRewardedAdForSearches = function () {
+    if (!hasRealRewardedAdConfigured()) {
+        showRewardUnavailableToast();
+        return;
+    }
     if (typeof window.openAdGateway === 'function') {
         window.openAdGateway('reward', true);
     }

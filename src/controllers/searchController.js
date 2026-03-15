@@ -77,7 +77,7 @@ exports.searchProduct = async (req, res) => {
             } else {
                 // x-vercel-forwarded-for is authoritative on Vercel (can't be spoofed by client)
                 const ip = req.headers['x-vercel-forwarded-for']?.split(',')[0]?.trim() || req.headers['x-real-ip'] || req.headers['x-forwarded-for']?.split(',').pop()?.trim() || req.ip || 'unknown';
-                const ANON_DAILY_LIMIT = 5;
+                const ANON_DAILY_LIMIT = 3;
 
             if (supabase) {
                 try {
@@ -121,16 +121,16 @@ exports.searchProduct = async (req, res) => {
         if (userId && supabase) {
             const { data: profile } = await supabase.from('profiles').select('plan, is_premium').eq('id', userId).single();
             if (profile) {
-                let reqLimit = 5;
+                let reqLimit = 3;
                 let isDaily = true;
                 let planName = 'Gratis';
 
                 if (profile.plan === 'b2b') {
-                    reqLimit = 5000;
+                    reqLimit = 500;
                     isDaily = false;
                     planName = 'Revendedor B2B';
                 } else if (profile.is_premium || profile.plan === 'personal_vip') {
-                    reqLimit = 500;
+                    reqLimit = 100;
                     isDaily = false;
                     planName = 'VIP';
                 }
@@ -660,7 +660,7 @@ exports.bulkSearch = async (req, res) => {
         }
 
         // --- Verificación de Límite Mensual B2B ---
-        let reqLimit = 5000;
+        let reqLimit = 500;
         let queryDate = new Date();
         queryDate.setDate(1);
         queryDate.setHours(0, 0, 0, 0);
@@ -763,6 +763,11 @@ exports.claimReward = async (req, res) => {
     try {
         const userId = req.userId || null;
         const BONUS_SEARCHES = 3;
+        const rewardedAdTagUrl = process.env.REWARDED_AD_TAG_URL || '';
+
+        if (!rewardedAdTagUrl.trim()) {
+            return res.status(409).json({ error: 'Las búsquedas extra por anuncio no están disponibles actualmente.' });
+        }
 
         if (!supabase) {
             return res.json({ success: true, bonus: BONUS_SEARCHES, msg: 'Modo local (sin Supabase)' });

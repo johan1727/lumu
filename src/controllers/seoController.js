@@ -1,10 +1,10 @@
-// ============================================================
+﻿// ============================================================
 // SEO Controller — Dynamic category pages for Google ranking
 // Generates server-rendered HTML with proper meta tags,
 // structured data (JSON-LD), and pre-rendered content
 // ============================================================
 
-const SITE_URL = 'https://lumu.dev';
+const SITE_URL = 'https://www.lumu.dev';
 const SITE_NAME = 'Lumu';
 
 // Popular categories for Mexican e-commerce (SEO targets)
@@ -551,8 +551,8 @@ function generateCategoryHTML(slug, cat) {
     <div class="container">
         <section class="section">
             <h2>¿Por qué comparar precios de ${esc(cat.title.toLowerCase())} con Lumu?</h2>
-            <p><strong>Lumu</strong> es tu Personal Shopper con Inteligencia Artificial. En segundos comparamos precios en <strong>Amazon MX, MercadoLibre, Walmart, Coppel</strong> y más tiendas mexicanas para que siempre pagues el precio más bajo.</p>
-            <p>No más abrir 10 pestañas. Solo escribe lo que buscas y nuestra IA encuentra el mejor precio por ti.</p>
+            <p><strong>Lumu</strong> es un comparador de precios y ofertas con inteligencia artificial. En segundos comparamos precios en <strong>Amazon MX, MercadoLibre, Walmart, Coppel</strong> y más tiendas mexicanas para ayudarte a encontrar dónde comprar más barato.</p>
+            <p>No más abrir 10 pestañas. Solo escribe lo que buscas y Lumu te muestra mejores opciones, alertas de precio y resultados para ahorrar tiempo y dinero.</p>
             <div class="stores-grid">
                 <div class="store-badge">🛒 Amazon MX</div>
                 <div class="store-badge">🟡 MercadoLibre</div>
@@ -585,7 +585,7 @@ function generateCategoryHTML(slug, cat) {
     </div>
 
     <footer>
-        <p>&copy; ${new Date().getFullYear()} <a href="/">${SITE_NAME}</a> — Personal Shopper AI para México</p>
+        <p>&copy; ${new Date().getFullYear()} <a href="/">${SITE_NAME}</a> — Comparador de precios y ofertas con IA</p>
         <p style="margin-top:0.5rem"><a href="/terminos.html">Términos</a> · <a href="/privacidad.html">Privacidad</a></p>
     </footer>
 </body>
@@ -661,7 +661,7 @@ function generateCategoryIndex() {
         </div>
     </div>
     <footer>
-        <p>&copy; ${new Date().getFullYear()} <a href="/">${SITE_NAME}</a> — Personal Shopper AI para México</p>
+        <p>&copy; ${new Date().getFullYear()} <a href="/">${SITE_NAME}</a> — Comparador de precios y ofertas con IA</p>
     </footer>
 </body>
 </html>`;
@@ -697,3 +697,4 @@ exports.serveCategoryIndex = (req, res) => {
 // Export categories for sitemap generation
 exports.CATEGORIES = CATEGORIES;
 exports.SITE_URL = SITE_URL;
+
