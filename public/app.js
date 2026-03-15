@@ -1049,7 +1049,7 @@ async function initApp() {
                 btnToggleFilters.setAttribute('aria-expanded', collapsed ? 'false' : 'true');
             };
 
-            syncFiltersPanel(window.innerWidth < 640);
+            syncFiltersPanel(true);
 
             btnToggleFilters.addEventListener('click', () => {
                 const isCollapsed = filtersCollapsible.classList.contains('filters-collapsed');
