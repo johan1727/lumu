@@ -5,7 +5,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
     <meta name="robots" content="index, follow">
-    <title>Lumu - Comparador de precios y ofertas con IA | Amazon, Mercado Libre y más</title>
+    <title>Lumu - Comparador de precios y ofertas con IA en tu país</title>
     <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
     <meta name="theme-color" content="#080e1e" media="(prefers-color-scheme: dark)">
     <meta name="apple-mobile-web-app-capable" content="yes">
@@ -14,8 +14,8 @@
     <link rel="apple-touch-icon" href="/images/icon-192.png">
     <link rel="apple-touch-icon" sizes="512x512" href="/images/icon-512.png">
     <meta name="description"
-        content="Lumu es un comparador de precios y ofertas con IA. Encuentra dónde comprar más barato en Amazon, Mercado Libre, Walmart, Liverpool, Coppel y tiendas locales. Ahorra tiempo y dinero con alertas, comparativas y búsquedas inteligentes.">
-    <meta name="keywords" content="comparador de precios, buscar ofertas, donde comprar mas barato, mejor precio, comparar tiendas, Amazon Mexico, Mercado Libre, Walmart, Liverpool, Coppel, alertas de precio, ahorrar dinero">
+        content="Lumu compara precios y ofertas con IA según tu país, moneda y tiendas locales. Encuentra mejores resultados, marketplaces y tiendas cercanas sin mezclar regiones.">
+    <meta name="keywords" content="comparador de precios, buscar ofertas, donde comprar mas barato, mejor precio, comparar tiendas, mercado libre, amazon, falabella, ripley, walmart, alertas de precio, ahorrar dinero">
     <meta name="author" content="Lumu AI">
     <meta property="og:title" content="Lumu - Comparador de precios y ofertas con IA">
     <meta property="og:description"
@@ -1456,16 +1456,33 @@
                                 <p id="guided-search-title" class="text-[11px] font-black uppercase tracking-[0.22em] text-emerald-700">Búsqueda guiada</p>
                                 <p id="guided-search-copy" class="text-sm text-slate-500 font-medium">Elige cómo quieres buscar sin perderte entre tantos botones.</p>
                             </div>
-                            <button type="button" id="btn-toggle-filters"
-                                class="self-start sm:self-auto inline-flex items-center gap-2 rounded-full border border-emerald-100 bg-white/85 px-4 py-2 text-[11px] font-black uppercase tracking-[0.18em] text-slate-700 shadow-sm transition-all hover:border-emerald-200 hover:bg-emerald-50">
-                                <span id="toggle-filters-label">Ocultar filtros</span>
-                                <svg id="toggle-filters-icon" class="w-4 h-4 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="m6 9 6 6 6-6" />
-                                </svg>
-                            </button>
+                            <div class="flex items-center gap-2 flex-wrap">
+                                <div class="relative">
+                                    <button type="button" id="detected-region-pill"
+                                        class="inline-flex items-center gap-2 rounded-full border border-emerald-200 bg-emerald-50 px-3 py-2 text-[11px] font-black uppercase tracking-[0.18em] text-emerald-800 shadow-sm">
+                                        🌎 Región automática
+                                    </button>
+                                    <div id="region-selector-menu" class="hidden absolute right-0 top-full mt-2 min-w-[220px] rounded-2xl border border-emerald-100 bg-white shadow-xl p-2 z-30">
+                                        <button type="button" class="region-option-btn w-full text-left px-3 py-2 rounded-xl text-sm font-bold hover:bg-emerald-50" data-region="auto">🌐 Detectar automáticamente</button>
+                                        <button type="button" class="region-option-btn w-full text-left px-3 py-2 rounded-xl text-sm font-bold hover:bg-emerald-50" data-region="MX">🇲🇽 México</button>
+                                        <button type="button" class="region-option-btn w-full text-left px-3 py-2 rounded-xl text-sm font-bold hover:bg-emerald-50" data-region="CL">🇨🇱 Chile</button>
+                                        <button type="button" class="region-option-btn w-full text-left px-3 py-2 rounded-xl text-sm font-bold hover:bg-emerald-50" data-region="CO">🇨🇴 Colombia</button>
+                                        <button type="button" class="region-option-btn w-full text-left px-3 py-2 rounded-xl text-sm font-bold hover:bg-emerald-50" data-region="AR">🇦🇷 Argentina</button>
+                                        <button type="button" class="region-option-btn w-full text-left px-3 py-2 rounded-xl text-sm font-bold hover:bg-emerald-50" data-region="PE">🇵🇪 Perú</button>
+                                        <button type="button" class="region-option-btn w-full text-left px-3 py-2 rounded-xl text-sm font-bold hover:bg-emerald-50" data-region="US">🇺🇸 United States</button>
+                                    </div>
+                                </div>
+                                <button type="button" id="btn-toggle-filters"
+                                    class="self-start sm:self-auto inline-flex items-center gap-2 rounded-full border border-emerald-100 bg-white/85 px-4 py-2 text-[11px] font-black uppercase tracking-[0.18em] text-slate-700 shadow-sm transition-all hover:border-emerald-200 hover:bg-emerald-50">
+                                    <span id="toggle-filters-label">Ajustar búsqueda</span>
+                                    <svg id="toggle-filters-icon" class="w-4 h-4 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="m6 9 6 6 6-6" />
+                                    </svg>
+                                </button>
+                            </div>
                         </div>
 
-                        <div id="filters-collapsible" class="filters-collapsible mt-4">
+                        <div id="filters-collapsible" class="filters-collapsible mt-4 max-sm:hidden sm:block">
                             <div class="space-y-4">
                                 <div>
                                     <p id="filter-section-condition" class="filter-section-label mb-2 text-center">Condición</p>
@@ -1494,6 +1511,14 @@
                                             <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-shield-check"><path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"/><path d="m9 12 2 2 4-4"/></svg>
                                             Solo seguras
                                         </button>
+                                        <button type="button" id="btn-known-marketplaces" data-enabled="true"
+                                            class="filter-chip-base px-5 py-2 text-[11px] font-black uppercase tracking-widest transition-all flex items-center gap-1 border-emerald-500 bg-emerald-50 text-emerald-700">
+                                            Marketplace conocido
+                                        </button>
+                                        <button type="button" id="btn-high-risk-marketplaces" data-enabled="false"
+                                            class="filter-chip-base px-5 py-2 text-[11px] font-black uppercase tracking-widest transition-all flex items-center gap-1">
+                                            Riesgo alto
+                                        </button>
                                     </div>
                                     <p id="location-helper-copy"
                                         class="text-xs text-slate-500 dark:text-slate-400 mt-4 font-medium flex items-center justify-center gap-1.5">
@@ -1503,6 +1528,20 @@
                                         </svg>
                                         Lumu usa tu ubicación segura para encontrar ofertas físicas.
                                     </p>
+                                </div>
+
+                                <div>
+                                    <p id="filter-section-advanced" class="filter-section-label mb-2 text-center">Filtros avanzados</p>
+                                    <div class="flex flex-wrap items-center justify-center gap-2.5">
+                                        <button type="button" id="btn-only-coupons" data-enabled="false"
+                                            class="filter-chip-base px-5 py-2 text-[11px] font-black uppercase tracking-widest transition-all flex items-center gap-1">
+                                            Solo con cupón
+                                        </button>
+                                        <button type="button" id="btn-only-real-deals" data-enabled="false"
+                                            class="filter-chip-base px-5 py-2 text-[11px] font-black uppercase tracking-widest transition-all flex items-center gap-1">
+                                            Solo oferta real
+                                        </button>
+                                    </div>
                                 </div>
 
                                 <div>
@@ -1523,6 +1562,10 @@
                 </div>
                 <input type="hidden" id="condition-mode" value="all">
                 <input type="hidden" id="loc-radius" value="global">
+                <input type="hidden" id="include-known-marketplaces" value="true">
+                <input type="hidden" id="include-high-risk-marketplaces" value="false">
+                <input type="hidden" id="only-coupons" value="false">
+                <input type="hidden" id="only-real-deals" value="false">
                 <input type="hidden" id="user-lat" value="">
                 <input type="hidden" id="user-lng" value="">
             </form>
@@ -1790,7 +1833,7 @@
                 <label class="relative inline-flex items-center cursor-pointer group bg-slate-50 rounded-full px-3 py-1.5 hover:bg-slate-100 transition-colors">
                     <input type="checkbox" id="free-shipping-filter" class="sr-only peer">
                     <div class="w-8 h-4 bg-slate-300 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full after:content-[''] after:absolute after:top-[5px] after:left-[14px] after:bg-white after:rounded-full after:h-3 after:w-3 after:transition-all peer-checked:bg-emerald-500"></div>
-                    <span class="ml-2 text-xs font-bold text-slate-600 whitespace-nowrap">🚚 Envío gratis</span>
+                    <span id="free-shipping-label" class="ml-2 text-xs font-bold text-slate-600 whitespace-nowrap">🚚 Envío gratis</span>
                 </label>
                 <!-- Contador -->
                 <span id="results-count" class="text-xs text-slate-400 font-bold w-full sm:w-auto sm:ml-auto text-right"></span>
@@ -1810,58 +1853,35 @@
                 <span class="text-amber-500 text-2xl drop-shadow-sm">🔥</span> Tendencias del Momento
             </h3>
             <div class="flex gap-3 overflow-x-auto pb-4 custom-scrollbar -mx-4 px-4 sm:mx-0 sm:px-0">
-                <button onclick="quickSearch('Lentes de Sol Ray-Ban polarizados')"
+                <button id="trend-pill-1" data-emoji="🕶️" data-query-es="Lentes de Sol Ray-Ban polarizados" data-query-en="Polarized Ray-Ban sunglasses" onclick="quickSearch('Lentes de Sol Ray-Ban polarizados')"
                     class="flex-shrink-0 bg-white border border-slate-200 px-5 py-2.5 rounded-full text-sm font-bold text-slate-700 hover:border-emerald-400 hover:text-emerald-700 hover:bg-emerald-50 transition-all shadow-sm">🕶️
                     Lentes de Sol</button>
-                <button onclick="quickSearch('Tenis Nike Air Max 2025')"
+                <button id="trend-pill-2" data-emoji="👟" data-query-es="Tenis Nike Air Max 2025" data-query-en="Nike Air Max 2025 sneakers" onclick="quickSearch('Tenis Nike Air Max 2025')"
                     class="flex-shrink-0 bg-white border border-slate-200 px-5 py-2.5 rounded-full text-sm font-bold text-slate-700 hover:border-emerald-400 hover:text-emerald-700 hover:bg-emerald-50 transition-all shadow-sm">👟
                     Tenis Nike</button>
-                <button onclick="quickSearch('Bocinas Bluetooth JBL contra agua')"
+                <button id="trend-pill-3" data-emoji="🔊" data-query-es="Bocinas Bluetooth JBL contra agua" data-query-en="Waterproof JBL Bluetooth speakers" onclick="quickSearch('Bocinas Bluetooth JBL contra agua')"
                     class="flex-shrink-0 bg-white border border-slate-200 px-5 py-2.5 rounded-full text-sm font-bold text-slate-700 hover:border-emerald-400 hover:text-emerald-700 hover:bg-emerald-50 transition-all shadow-sm">🔊
                     Bocinas JBL</button>
-                <button onclick="quickSearch('Robot Aspiradora Roomba')"
+                <button id="trend-pill-4" data-emoji="🤖" data-query-es="Robot Aspiradora Roomba" data-query-en="Roomba robot vacuum" onclick="quickSearch('Robot Aspiradora Roomba')"
                     class="flex-shrink-0 bg-white border border-slate-200 px-5 py-2.5 rounded-full text-sm font-bold text-slate-700 hover:border-emerald-400 hover:text-emerald-700 hover:bg-emerald-50 transition-all shadow-sm">🤖
                     Robot Aspiradora</button>
-                <button onclick="quickSearch('Silla ergonómica gamer')"
+                <button id="trend-pill-5" data-emoji="🪑" data-query-es="Silla ergonómica gamer" data-query-en="Ergonomic gaming chair" onclick="quickSearch('Silla ergonómica gamer')"
                     class="flex-shrink-0 bg-white border border-slate-200 px-5 py-2.5 rounded-full text-sm font-bold text-slate-700 hover:border-emerald-400 hover:text-emerald-700 hover:bg-emerald-50 transition-all shadow-sm">🪑
                     Sillas Gamer</button>
-                <button onclick="quickSearch('Cámaras Deportivas GoPro Hero')"
+                <button id="trend-pill-6" data-emoji="📷" data-query-es="Cámaras Deportivas GoPro Hero" data-query-en="GoPro Hero action cameras" onclick="quickSearch('Cámaras Deportivas GoPro Hero')"
                     class="flex-shrink-0 bg-white border border-slate-200 px-5 py-2.5 rounded-full text-sm font-bold text-slate-700 hover:border-emerald-400 hover:text-emerald-700 hover:bg-emerald-50 transition-all shadow-sm">📷
                     GoPro</button>
-                <button onclick="quickSearch('Smart TV 55 pulgadas 4K')"
+                <button id="trend-pill-7" data-emoji="📺" data-query-es="Smart TV 55 pulgadas 4K" data-query-en="55 inch 4K Smart TV" onclick="quickSearch('Smart TV 55 pulgadas 4K')"
                     class="flex-shrink-0 bg-white border border-slate-200 px-5 py-2.5 rounded-full text-sm font-bold text-slate-700 hover:border-emerald-400 hover:text-emerald-700 hover:bg-emerald-50 transition-all shadow-sm">📺
                     Smart TV 4K</button>
             </div>
         </div>
-        <script>
-            (function () {
-                const m = new Date().getMonth();
-                const el = document.getElementById('season-title');
-                if (!el) return;
-                const seasons = [
-                    { icon: '❄️', label: 'Invierno' },   // Ene
-                    { icon: '❄️', label: 'Invierno' },   // Feb
-                    { icon: '🌸', label: 'Primavera' },  // Mar
-                    { icon: '🌸', label: 'Primavera' },  // Abr
-                    { icon: '🌸', label: 'Primavera' },  // May
-                    { icon: '☀️', label: 'Verano' },     // Jun
-                    { icon: '☀️', label: 'Verano' },     // Jul
-                    { icon: '☀️', label: 'Verano' },     // Ago
-                    { icon: '🍂', label: 'Otoño' },      // Sep
-                    { icon: '🍂', label: 'Otoño' },      // Oct
-                    { icon: '🍂', label: 'Otoño' },      // Nov
-                    { icon: '❄️', label: 'Invierno' }    // Dic
-                ];
-                const s = seasons[m];
-                el.innerHTML = `<span class="text-2xl drop-shadow-sm">${s.icon}</span> Tendencias ${s.label} ${new Date().getFullYear()}`;
-            })();
-        </script>
 
         <!-- Showcase de Productos Frontal (Estilo Ecommerce) -->
         <div id="product-showcase" class="w-full max-w-7xl mx-auto px-4 mt-8 mb-16 fade-in block">
             <div class="flex items-center justify-between mb-6">
-                <h3 class="text-2xl font-display font-black text-slate-900 tracking-tight">Inspiración para ti</h3>
-                <a href="#tendencias-section"
+                <h3 id="showcase-title" class="text-2xl font-display font-black text-slate-900 tracking-tight">Inspiración para ti</h3>
+                <a id="showcase-view-trends" href="#tendencias-section"
                     class="text-primary font-bold text-sm hover:underline flex items-center gap-1 group">
                     Ver tendencias <span class="group-hover:translate-x-1 transition-transform">→</span>
                 </a>
@@ -1878,8 +1898,8 @@
                             class="showcase-img w-full h-full object-contain group-hover:scale-110 transition-transform duration-500 ease-out drop-shadow-md"
                             onerror="this.onerror=null; this.src='/logo.png';">
                     </div>
-                    <div class="text-[10px] font-bold tracking-widest text-primary uppercase mb-1">Videojuegos</div>
-                    <h4 class="font-bold text-slate-800 leading-snug mb-2 line-clamp-2">Nintendo Switch OLED 64GB Color
+                    <div id="showcase-cat-1" class="text-[10px] font-bold tracking-widest text-primary uppercase mb-1">Videojuegos</div>
+                    <h4 id="showcase-product-1" class="font-bold text-slate-800 leading-snug mb-2 line-clamp-2">Nintendo Switch OLED 64GB Color
                         Blanco</h4>
                     <div class="flex items-end gap-2 mt-auto">
                         <span class="text-2xl font-black text-slate-900">$5,490</span>
@@ -1896,8 +1916,8 @@
                             class="showcase-img w-full h-full object-contain group-hover:scale-110 transition-transform duration-500 ease-out drop-shadow-md"
                             onerror="this.onerror=null; this.src='/logo.png';">
                     </div>
-                    <div class="text-[10px] font-bold tracking-widest text-primary uppercase mb-1">Audio Premium</div>
-                    <h4 class="font-bold text-slate-800 leading-snug mb-2 line-clamp-2">Audífonos inalámbricos Sony
+                    <div id="showcase-cat-2" class="text-[10px] font-bold tracking-widest text-primary uppercase mb-1">Audio Premium</div>
+                    <h4 id="showcase-product-2" class="font-bold text-slate-800 leading-snug mb-2 line-clamp-2">Audífonos inalámbricos Sony
                         WH-1000XM5 Noise Cancelling</h4>
                     <div class="flex items-end gap-2 mt-auto">
                         <span class="text-2xl font-black text-slate-900">$5,399</span>
@@ -1913,8 +1933,8 @@
                             class="showcase-img w-full h-full object-contain group-hover:scale-110 transition-transform duration-500 ease-out drop-shadow-md"
                             onerror="this.onerror=null; this.src='/logo.png';">
                     </div>
-                    <div class="text-[10px] font-bold tracking-widest text-primary uppercase mb-1">Smartwatches</div>
-                    <h4 class="font-bold text-slate-800 leading-snug mb-2 line-clamp-2">Apple Watch Series 9 (GPS, 45mm)
+                    <div id="showcase-cat-3" class="text-[10px] font-bold tracking-widest text-primary uppercase mb-1">Smartwatches</div>
+                    <h4 id="showcase-product-3" class="font-bold text-slate-800 leading-snug mb-2 line-clamp-2">Apple Watch Series 9 (GPS, 45mm)
                         Caja de Aluminio</h4>
                     <div class="flex items-end gap-2 mt-auto">
                         <span class="text-2xl font-black text-slate-900">$7,499</span>
@@ -1931,8 +1951,8 @@
                             class="showcase-img w-full h-full object-contain group-hover:scale-110 transition-transform duration-500 ease-out drop-shadow-md"
                             onerror="this.onerror=null; this.src='/logo.png';">
                     </div>
-                    <div class="text-[10px] font-bold tracking-widest text-primary uppercase mb-1">Cocina</div>
-                    <h4 class="font-bold text-slate-800 leading-snug mb-2 line-clamp-2">Freidora de Aire Ninja AF101
+                    <div id="showcase-cat-4" class="text-[10px] font-bold tracking-widest text-primary uppercase mb-1">Cocina</div>
+                    <h4 id="showcase-product-4" class="font-bold text-slate-800 leading-snug mb-2 line-clamp-2">Freidora de Aire Ninja AF101
                         3.7L</h4>
                     <div class="flex items-end gap-2 mt-auto">
                         <span class="text-2xl font-black text-slate-900">$1,899</span>

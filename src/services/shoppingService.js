@@ -2,6 +2,7 @@ const axios = require('axios');
 const directScraper = require('./directScraper');
 const monitor = require('./scraperMonitor');
 const localPriceExtractor = require('./localPriceExtractor');
+const regionConfigService = require('./regionConfigService');
 
 // Timeout por defecto para Serper API
 const SERPER_TIMEOUT = 8000;
@@ -14,9 +15,31 @@ function extractSnippetPrice(text) {
     if (/meses|msi|mensual|mensualidades|quincena|quincenal|semanales|semana|por mes|desde \$/.test(lowered)) {
         return null;
     }
-    const match = source.match(/\$([\d,]+(?:\.\d{2})?)/);
+    const match = source.match(/(?:\$|s\/\.?|s\/)\s*([\d.,]+)/i);
     if (!match) return null;
-    const parsed = parseFloat(match[1].replace(/,/g, ''));
+    let numeric = match[1].trim();
+    const hasDot = numeric.includes('.');
+    const hasComma = numeric.includes(',');
+
+    if (hasDot && hasComma) {
+        const lastDot = numeric.lastIndexOf('.');
+        const lastComma = numeric.lastIndexOf(',');
+        if (lastDot > lastComma) {
+            numeric = numeric.replace(/,/g, '');
+        } else {
+            numeric = numeric.replace(/\./g, '').replace(',', '.');
+        }
+    } else if (hasDot) {
+        const parts = numeric.split('.');
+        const looksLikeThousands = parts.length > 1 && parts.slice(1).every(part => part.length === 3);
+        numeric = looksLikeThousands ? numeric.replace(/\./g, '') : numeric;
+    } else if (hasComma) {
+        const parts = numeric.split(',');
+        const looksLikeThousands = parts.length > 1 && parts.slice(1).every(part => part.length === 3);
+        numeric = looksLikeThousands ? numeric.replace(/,/g, '') : numeric.replace(',', '.');
+    }
+
+    const parsed = parseFloat(numeric);
     return Number.isFinite(parsed) ? parsed : null;
 }
 
@@ -65,7 +88,9 @@ async function runWithConcurrencyLimit(promiseFns, limit) {
     return Promise.all(results);
 }
 
-exports.searchGoogleShopping = async (query, radius, lat, lng, intentType, abortSignal, conditionMode = 'all') => {
+exports.searchGoogleShopping = async (query, radius, lat, lng, intentType, abortSignal, conditionMode = 'all', countryCode = 'MX') => {
+    const regionCfg = regionConfigService.getRegionConfig(countryCode);
+    console.log(`[ShoppingService] Region: ${regionCfg.countryCode} (gl=${regionCfg.gl}, hl=${regionCfg.hl}, currency=${regionCfg.currency})`);
     const apiKey = process.env.SERPER_API_KEY;
     let serperResults = [];
     let isService = intentType === 'servicio_local';
@@ -83,7 +108,7 @@ exports.searchGoogleShopping = async (query, radius, lat, lng, intentType, abort
                     method: 'post',
                     url: 'https://google.serper.dev/places',
                     headers: { 'X-API-KEY': apiKey, 'Content-Type': 'application/json' },
-                    data: JSON.stringify({ q: query, ll: `@${lat},${lng},14z`, gl: 'mx', hl: 'es' }),
+                    data: JSON.stringify({ q: query, ll: `@${lat},${lng},14z`, gl: regionCfg.gl, hl: regionCfg.hl }),
                     timeout: SERPER_TIMEOUT
                 };
                 const localRes = await axios(localConfig);
@@ -117,7 +142,7 @@ exports.searchGoogleShopping = async (query, radius, lat, lng, intentType, abort
             method: 'post',
             url: 'https://google.serper.dev/shopping',
             headers: { 'X-API-KEY': apiKey, 'Content-Type': 'application/json' },
-            data: JSON.stringify({ q: query, gl: 'mx', hl: 'es', num: 40 }),
+            data: JSON.stringify({ q: query, gl: regionCfg.gl, hl: regionCfg.hl, num: 40 }),
             timeout: SERPER_TIMEOUT
         }).catch(err => { console.error('Error Google Shopping:', err.message); return null; });
 
@@ -126,8 +151,8 @@ exports.searchGoogleShopping = async (query, radius, lat, lng, intentType, abort
             url: 'https://google.serper.dev/search',
             headers: { 'X-API-KEY': apiKey, 'Content-Type': 'application/json' },
             data: JSON.stringify({
-                q: `${query} precio comprar site:walmart.com.mx OR site:liverpool.com.mx OR site:coppel.com OR site:bestbuy.com.mx OR site:elektra.com.mx OR site:costco.com.mx OR site:sams.com.mx OR site:officedepot.com.mx OR site:soriana.com OR site:sears.com.mx OR site:mx.shein.com OR site:temu.com OR site:bodegaaurrera.com.mx OR site:linio.com.mx OR site:claroshop.com OR site:sanborns.com.mx`,
-                gl: 'mx', hl: 'es', num: 20
+                q: regionConfigService.buildWebSearchQuery(query, countryCode),
+                gl: regionCfg.gl, hl: regionCfg.hl, num: 20
             }),
             timeout: SERPER_TIMEOUT
         }).catch(err => { console.error('Error Serper Web:', err.message); return null; });
@@ -185,28 +210,8 @@ exports.searchGoogleShopping = async (query, radius, lat, lng, intentType, abort
                 const path = r.link.toLowerCase();
                 return !categoryPatterns.some(pattern => pattern.test(path));
             });
-            const storeMap = {
-                'walmart.com.mx': 'Walmart MX',
-                'liverpool.com.mx': 'Liverpool',
-                'coppel.com': 'Coppel',
-                'bestbuy.com.mx': 'Best Buy MX',
-                'elektra.com.mx': 'Elektra',
-                'costco.com.mx': 'Costco MX',
-                'sams.com.mx': "Sam's Club MX",
-                'officedepot.com.mx': 'OfficeDepot MX',
-                'soriana.com': 'Soriana',
-                'sears.com.mx': 'Sears MX',
-                'mx.shein.com': 'Shein MX',
-                'shein.com': 'Shein MX',
-                'temu.com': 'Temu MX',
-                'bodegaaurrera.com.mx': 'Bodega Aurrera MX',
-                'linio.com.mx': 'Linio MX',
-                'claroshop.com': 'Claro Shop MX',
-                'sanborns.com.mx': 'Sanborns MX'
-            };
             const webMapped = webResults.map(r => {
-                const domain = (r.link.match(/https?:\/\/(?:www\.)?([^/]+)/) || [])[1] || '';
-                const storeName = Object.entries(storeMap).find(([d]) => domain.includes(d))?.[1] || domain;
+                const storeName = regionConfigService.resolveStoreName(r.link, countryCode);
                 const price = extractSnippetPrice(r.snippet || '') ?? extractSnippetPrice(r.title || '');
                 return {
                     title: r.title || 'Sin Título',
@@ -235,13 +240,13 @@ exports.searchGoogleShopping = async (query, radius, lat, lng, intentType, abort
                 const coreTerms = placesClean.split(/\s+/)
                     .filter(w => w.length > 2 && !/^\d+\w*$/.test(w) && !/^\d+GB|TB|MB|RAM|SSD|HDD$/i.test(w))
                     .slice(0, 3).join(' ');
-                const simplifiedPlacesQuery = `comprar ${coreTerms}`;
+                const simplifiedPlacesQuery = `${regionCfg.placesQuery} ${coreTerms}`;
                 console.log(`[Serper Places] Buscando "${simplifiedPlacesQuery}" en @${lat},${lng},${zoomFromRadius}z`);
                 const localConfig = {
                     method: 'post',
                     url: 'https://google.serper.dev/places',
                     headers: { 'X-API-KEY': apiKey, 'Content-Type': 'application/json' },
-                    data: JSON.stringify({ q: simplifiedPlacesQuery, ll: `@${lat},${lng},${zoomFromRadius}z`, gl: 'mx', hl: 'es' }),
+                    data: JSON.stringify({ q: simplifiedPlacesQuery, ll: `@${lat},${lng},${zoomFromRadius}z`, gl: regionCfg.gl, hl: regionCfg.hl }),
                     timeout: SERPER_TIMEOUT
                 };
                 const localRes = await axios(localConfig);
@@ -306,29 +311,38 @@ exports.searchGoogleShopping = async (query, radius, lat, lng, intentType, abort
     if (!isService && intentType !== 'mayoreo_perecedero') {
         // Strip Google-only negative keywords (-funda -case etc.) since direct scrapers use URL search params
         const cleanQuery = query.replace(/\s+-\w+/g, '').trim();
-        console.log(`Ejecutando scrapers directos y rápidos para: ${cleanQuery} ...`);
-        
+        console.log(`Ejecutando scrapers directos rápidos para ${countryCode}: ${cleanQuery} ...`);
+
         const scraperFunctions = [
-            () => monitor.wrap(directScraper.scrapeAmazonDirect, 'amazon_direct', cleanQuery),
-            () => monitor.wrap(directScraper.scrapeMercadoLibreDirect, 'ml_direct', cleanQuery),
-            () => monitor.wrap(directScraper.scrapeWalmartMX, 'walmart_direct', cleanQuery),
-            () => monitor.wrap(directScraper.scrapeLiverpoolMX, 'liverpool_direct', cleanQuery),
-            () => monitor.wrap(directScraper.scrapeCoppelMX, 'coppel_direct', cleanQuery),
-            () => monitor.wrap(directScraper.scrapeAliExpress, 'aliexpress_direct', cleanQuery),
-            () => monitor.wrap(directScraper.scrapeElektraMX, 'elektra_direct', cleanQuery),
-            () => monitor.wrap(directScraper.scrapeBestBuyMX, 'bestbuy_direct', cleanQuery),
-            () => monitor.wrap(directScraper.scrapeCostcoMX, 'costco_direct', cleanQuery),
-            () => monitor.wrap(directScraper.scrapeSamsClubMX, 'sams_direct', cleanQuery),
-            () => monitor.wrap(directScraper.scrapeHomeDepotMX, 'homedepot_direct', cleanQuery),
-            () => monitor.wrap(directScraper.scrapeOfficeDepotMX, 'officedepot_direct', cleanQuery),
-            () => monitor.wrap(directScraper.scrapeSorianaMX, 'soriana_direct', cleanQuery),
-            () => monitor.wrap(directScraper.scrapeSearsMX, 'sears_direct', cleanQuery),
-            () => monitor.wrap(directScraper.scrapeSheinMX, 'shein_direct', cleanQuery),
-            () => monitor.wrap(directScraper.scrapeTemuMX, 'temu_direct', cleanQuery),
-            () => monitor.wrap(directScraper.scrapeBodegaAurreraMX, 'bodega_aurrera_direct', cleanQuery),
-            () => monitor.wrap(directScraper.scrapeLinioMX, 'linio_direct', cleanQuery),
-            () => monitor.wrap(directScraper.scrapeClaroShopMX, 'claroshop_direct', cleanQuery)
+            () => monitor.wrap(() => directScraper.scrapeMercadoLibreAPI(cleanQuery, countryCode), 'ml_api_direct'),
+            () => monitor.wrap(directScraper.scrapeAliExpress, 'aliexpress_direct', cleanQuery)
         ];
+
+        if (countryCode === 'MX') {
+            scraperFunctions.unshift(() => monitor.wrap(directScraper.scrapeAmazonDirect, 'amazon_direct', cleanQuery));
+            scraperFunctions.push(
+                () => monitor.wrap(directScraper.scrapeWalmartMX, 'walmart_direct', cleanQuery),
+                () => monitor.wrap(directScraper.scrapeLiverpoolMX, 'liverpool_direct', cleanQuery),
+                () => monitor.wrap(directScraper.scrapeCoppelMX, 'coppel_direct', cleanQuery),
+                () => monitor.wrap(directScraper.scrapeElektraMX, 'elektra_direct', cleanQuery),
+                () => monitor.wrap(directScraper.scrapeBestBuyMX, 'bestbuy_direct', cleanQuery),
+                () => monitor.wrap(directScraper.scrapeCostcoMX, 'costco_direct', cleanQuery),
+                () => monitor.wrap(directScraper.scrapeSamsClubMX, 'sams_direct', cleanQuery),
+                () => monitor.wrap(directScraper.scrapeHomeDepotMX, 'homedepot_direct', cleanQuery),
+                () => monitor.wrap(directScraper.scrapeOfficeDepotMX, 'officedepot_direct', cleanQuery),
+                () => monitor.wrap(directScraper.scrapeSorianaMX, 'soriana_direct', cleanQuery),
+                () => monitor.wrap(directScraper.scrapeSearsMX, 'sears_direct', cleanQuery),
+                () => monitor.wrap(directScraper.scrapeSheinMX, 'shein_direct', cleanQuery),
+                () => monitor.wrap(directScraper.scrapeTemuMX, 'temu_direct', cleanQuery),
+                () => monitor.wrap(directScraper.scrapeBodegaAurreraMX, 'bodega_aurrera_direct', cleanQuery),
+                () => monitor.wrap(directScraper.scrapeLinioMX, 'linio_direct', cleanQuery),
+                () => monitor.wrap(directScraper.scrapeClaroShopMX, 'claroshop_direct', cleanQuery)
+            );
+        } else if (['CL', 'CO', 'PE'].includes(countryCode)) {
+            scraperFunctions.unshift(() => monitor.wrap(() => directScraper.scrapeFalabellaRegional(cleanQuery, countryCode), 'falabella_direct'));
+        } else if (countryCode === 'US') {
+            scraperFunctions.unshift(() => monitor.wrap(directScraper.scrapeAmazonDirect, 'amazon_direct', cleanQuery));
+        }
         
         const CONCURRENCY_LIMIT = 5;
         const scraperResultsRaw = await runWithConcurrencyLimit(scraperFunctions, CONCURRENCY_LIMIT);

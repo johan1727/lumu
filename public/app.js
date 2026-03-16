@@ -3,6 +3,7 @@ console.log('SCRIPT TOP: app.js is starting...');
 let supabaseClient = null;
 let stripePaymentLink = null;
 let currentUser = null;
+let _allProducts = [];
 
 // --- Global Error Handlers ---
 window.addEventListener('error', function (event) {
@@ -38,8 +39,12 @@ let selectedImageBase64 = null;
 // Location inputs (global so they're accessible in submit handler)
 let locRadiusInput, userLatInput, userLngInput;
 let conditionModeInput = null;
+let includeKnownMarketplacesInput = null;
+let includeHighRiskMarketplacesInput = null;
 let currentRegion = 'MX';
+let serverDetectedRegion = null;
 const SEARCH_SNAPSHOTS_KEY = 'lumu_search_snapshots';
+const REGION_OVERRIDE_KEY = 'lumu_region_override';
 
 const REGION_LABELS = {
     MX: {
@@ -139,6 +144,50 @@ const REGION_LABELS = {
         }
     }
 };
+
+// Build LATAM region configs that share Spanish UI with MX but different currency/locale/region
+(function buildLatamRegionLabels() {
+    const latamOverrides = {
+        CL: { locale: 'es-CL', currency: 'CLP', activeRegion: 'Chile' },
+        CO: { locale: 'es-CO', currency: 'COP', activeRegion: 'Colombia' },
+        AR: { locale: 'es-AR', currency: 'ARS', activeRegion: 'Argentina' },
+        PE: { locale: 'es-PE', currency: 'PEN', activeRegion: 'Perú' }
+    };
+    const mxBase = REGION_LABELS.MX;
+    for (const [code, overrides] of Object.entries(latamOverrides)) {
+        REGION_LABELS[code] = {
+            ...mxBase,
+            ...overrides,
+            filters: { ...mxBase.filters },
+            scopes: { ...mxBase.scopes },
+            toolbar: { ...mxBase.toolbar },
+            sections: { ...mxBase.sections },
+            footer: { ...mxBase.footer }
+        };
+    }
+})();
+
+const REGION_FLAGS = {
+    MX: '🇲🇽',
+    CL: '🇨🇱',
+    CO: '🇨🇴',
+    AR: '🇦🇷',
+    PE: '🇵🇪',
+    US: '🇺🇸'
+};
+
+function getVoiceRecognitionLocale(regionCode = 'MX') {
+    const normalized = String(regionCode || 'MX').toUpperCase();
+    const localeMap = {
+        MX: 'es-MX',
+        CL: 'es-CL',
+        CO: 'es-CO',
+        AR: 'es-AR',
+        PE: 'es-PE',
+        US: 'en-US'
+    };
+    return localeMap[normalized] || 'es-MX';
+}
 
 const REGION_UI_COPY = {
     MX: {
@@ -807,11 +856,46 @@ function formatCurrencyByRegion(amount) {
 }
 
 function detectRegion() {
+    const savedOverride = localStorage.getItem(REGION_OVERRIDE_KEY);
+    if (savedOverride && savedOverride !== 'auto' && REGION_LABELS[savedOverride]) {
+        return savedOverride;
+    }
+    if (serverDetectedRegion && REGION_LABELS[serverDetectedRegion]) {
+        return serverDetectedRegion;
+    }
     const lang = (navigator.language || '').toLowerCase();
     const tz = Intl.DateTimeFormat().resolvedOptions().timeZone || '';
-    if (lang.includes('en-us') || tz.includes('America/New_York') || tz.includes('America/Chicago') || tz.includes('America/Denver') || tz.includes('America/Los_Angeles')) {
-        return 'US';
-    }
+    const timezoneMap = {
+        'America/Santiago': 'CL',
+        'America/Punta_Arenas': 'CL',
+        'America/Bogota': 'CO',
+        'America/Buenos_Aires': 'AR',
+        'America/Cordoba': 'AR',
+        'America/Mendoza': 'AR',
+        'America/Lima': 'PE',
+        'America/Mexico_City': 'MX',
+        'America/Monterrey': 'MX',
+        'America/Cancun': 'MX',
+        'America/Merida': 'MX',
+        'America/Chihuahua': 'MX',
+        'America/Mazatlan': 'MX',
+        'America/Hermosillo': 'MX',
+        'America/Tijuana': 'MX',
+        'America/New_York': 'US',
+        'America/Chicago': 'US',
+        'America/Denver': 'US',
+        'America/Los_Angeles': 'US',
+        'America/Phoenix': 'US',
+        'America/Anchorage': 'US',
+        'Pacific/Honolulu': 'US'
+    };
+    if (timezoneMap[tz]) return timezoneMap[tz];
+    if (lang.includes('es-cl')) return 'CL';
+    if (lang.includes('es-co')) return 'CO';
+    if (lang.includes('es-ar')) return 'AR';
+    if (lang.includes('es-pe')) return 'PE';
+    if (lang.includes('es-mx')) return 'MX';
+    if (lang.includes('en-us') || lang === 'en') return 'US';
     return 'MX';
 }
 
@@ -819,6 +903,8 @@ function applyRegionalCopy() {
     currentRegion = detectRegion();
     const config = getRegionConfig();
     const ui = getRegionUICopy();
+    const regionFlag = REGION_FLAGS[currentRegion] || '🌎';
+    const savedOverride = localStorage.getItem(REGION_OVERRIDE_KEY) || 'auto';
 
     const searchInputEl = document.getElementById('search-input');
     if (searchInputEl) searchInputEl.placeholder = config.searchPlaceholder;
@@ -835,10 +921,21 @@ function applyRegionalCopy() {
         if (helperTextNode) helperTextNode.textContent = ` ${config.helperCopy}`;
     }
 
+    const regionPill = document.getElementById('detected-region-pill');
+    if (regionPill) {
+        regionPill.textContent = `${regionFlag} ${config.activeRegion || 'Región automática'}`;
+    }
+
     const globalBtn = document.getElementById('filter-global');
     const localBtn = document.getElementById('filter-local-only');
     const nearbyBtn = document.getElementById('filter-nearby');
     const safeBtn = document.getElementById('btn-safe-stores');
+    const knownMarketplacesBtn = document.getElementById('btn-known-marketplaces');
+    const highRiskBtn = document.getElementById('btn-high-risk-marketplaces');
+    const onlyCouponsBtn = document.getElementById('btn-only-coupons');
+    const onlyRealDealsBtn = document.getElementById('btn-only-real-deals');
+    const advancedFiltersTitle = document.getElementById('filter-section-advanced');
+    const pricingCopy = document.getElementById('pricing-copy');
 
     if (globalBtn) globalBtn.textContent = config.filters.global;
     if (localBtn) localBtn.textContent = config.filters.local_only;
@@ -846,6 +943,47 @@ function applyRegionalCopy() {
     if (safeBtn) {
         const icon = safeBtn.querySelector('svg')?.outerHTML || '';
         safeBtn.innerHTML = `${icon} ${config.filters.safe}`;
+    }
+    if (knownMarketplacesBtn) {
+        knownMarketplacesBtn.textContent = currentRegion === 'US' ? 'Known marketplaces' : 'Marketplaces conocidos';
+    }
+    if (highRiskBtn) {
+        highRiskBtn.textContent = currentRegion === 'US' ? 'High risk' : 'Riesgo alto';
+    }
+    if (onlyCouponsBtn) {
+        onlyCouponsBtn.textContent = currentRegion === 'US' ? 'Coupons only' : 'Solo con cupón';
+    }
+    if (onlyRealDealsBtn) {
+        onlyRealDealsBtn.textContent = currentRegion === 'US' ? 'Real deals only' : 'Solo oferta real';
+    }
+    if (advancedFiltersTitle) {
+        advancedFiltersTitle.textContent = currentRegion === 'US' ? 'Advanced filters' : 'Filtros avanzados';
+    }
+    if (pricingCopy) {
+        pricingCopy.innerHTML = currentRegion === 'US'
+            ? 'From <strong class="text-emerald-600">$39 USD/month</strong> — no ads, price alerts, and tools to find the best deals faster.'
+            : `Desde <strong class="text-emerald-600">$39 ${config.currency}/mes</strong> — sin anuncios, con alertas de precio y herramientas para encontrar más rápido las mejores ofertas.`;
+    }
+
+    const flashDealsSection = document.getElementById('flash-deals-section');
+    if (flashDealsSection) {
+        flashDealsSection.classList.toggle('hidden', !['MX', 'US'].includes(currentRegion));
+    }
+
+    document.querySelectorAll('.region-option-btn').forEach((button) => {
+        const regionCode = button.getAttribute('data-region') || 'auto';
+        const isActive = regionCode === savedOverride || (savedOverride === 'auto' && regionCode === 'auto');
+        button.classList.toggle('bg-emerald-50', isActive);
+        button.classList.toggle('text-emerald-700', isActive);
+        button.classList.toggle('ring-1', isActive);
+        button.classList.toggle('ring-emerald-200', isActive);
+    });
+
+    const metaDesc = document.querySelector('meta[name="description"]');
+    if (metaDesc) {
+        metaDesc.content = currentRegion === 'US'
+            ? `Compare prices in ${config.activeRegion} with localized stores, marketplaces and nearby results.`
+            : `Compara precios en ${config.activeRegion} con tiendas locales, marketplaces y resultados cerca de ti.`;
     }
 
     // Toolbar translations
@@ -867,7 +1005,7 @@ function applyRegionalCopy() {
         storeFilter.value = currentValue;
     }
 
-    const freeShippingLabel = document.querySelector('label[for="free-shipping-filter"] span');
+    const freeShippingLabel = document.getElementById('free-shipping-label');
     if (freeShippingLabel && config.toolbar) {
         freeShippingLabel.textContent = config.toolbar.freeShipping;
     }
@@ -939,6 +1077,34 @@ function applyRegionalCopy() {
     setTextById('extra-trending-title', ui.home.trendingTitle);
     setTextById('extra-deals-title', ui.home.dayDealsTitle);
     setTextById('coins-progress-subtitle', ui.home.coinsSubtitle);
+    setTextById('results-title', `${config.sections.analysisComplete} `);
+    setTextById('showcase-title', ui.home.trendingTitle === 'Most Searched' ? SHOWCASE_COPY.US.title : SHOWCASE_COPY.MX.title);
+
+    const resultsTitle = document.getElementById('results-title');
+    if (resultsTitle) {
+        resultsTitle.innerHTML = `${config.sections.analysisComplete} <span class="text-slate-500 font-medium">${config.sections.bestOptions}</span>`;
+    }
+
+    const showcaseRegionCopy = currentRegion === 'US' ? SHOWCASE_COPY.US : SHOWCASE_COPY.MX;
+    setTextById('showcase-title', showcaseRegionCopy.title);
+    const showcaseViewTrends = document.getElementById('showcase-view-trends');
+    if (showcaseViewTrends) {
+        const textNode = Array.from(showcaseViewTrends.childNodes).find(node => node.nodeType === Node.TEXT_NODE && node.textContent.trim());
+        if (textNode) textNode.textContent = `${showcaseRegionCopy.viewTrends} `;
+    }
+    showcaseRegionCopy.categories.forEach((value, index) => setTextById(`showcase-cat-${index + 1}`, value));
+    showcaseRegionCopy.products.forEach((value, index) => setTextById(`showcase-product-${index + 1}`, value));
+
+    TREND_PILL_COPY[currentRegion === 'US' ? 'US' : 'MX'].forEach((value, index) => {
+        const button = document.getElementById(`trend-pill-${index + 1}`);
+        if (!button) return;
+        button.innerHTML = `${button.innerHTML.split('</span>')[0] || button.textContent}`;
+        const emoji = button.textContent.trim().split(/\s+/)[0];
+        button.textContent = `${emoji} ${value}`;
+        button.onclick = () => quickSearch(button.getAttribute(currentRegion === 'US' ? 'data-query-en' : 'data-query-es') || '');
+    });
+
+    updateSeasonTitle();
 
     setTextById('history-modal-title', ui.historyModal.title);
     setTextById('history-modal-copy', ui.historyModal.copy);
@@ -1182,6 +1348,241 @@ function getLocalizedText(spanish, english) {
     return currentRegion === 'US' ? english : spanish;
 }
 
+const TRUST_LABEL_EN = {
+    'Confiable': 'Trusted',
+    'Tienda oficial': 'Official store',
+    'Vendedor verificado': 'Verified seller',
+    'Marketplace conocido': 'Known marketplace',
+    'Riesgo alto': 'High risk',
+    'Marketplace/C2C': 'Marketplace/C2C',
+    'Marketplace': 'Marketplace'
+};
+
+const TREND_PILL_COPY = {
+    MX: ['Lentes de Sol', 'Tenis Nike', 'Bocinas JBL', 'Robot Aspiradora', 'Sillas Gamer', 'GoPro', 'Smart TV 4K'],
+    US: ['Sunglasses', 'Nike Sneakers', 'JBL Speakers', 'Robot Vacuum', 'Gaming Chairs', 'GoPro', '4K Smart TV']
+};
+
+const SHOWCASE_COPY = {
+    MX: {
+        title: 'Inspiración para ti',
+        viewTrends: 'Ver tendencias',
+        categories: ['Videojuegos', 'Audio Premium', 'Smartwatches', 'Cocina'],
+        products: [
+            'Nintendo Switch OLED 64GB Color Blanco',
+            'Audífonos inalámbricos Sony WH-1000XM5 Noise Cancelling',
+            'Apple Watch Series 9 (GPS, 45mm) Caja de Aluminio',
+            'Freidora de Aire Ninja AF101 3.7L'
+        ]
+    },
+    US: {
+        title: 'Inspiration for you',
+        viewTrends: 'View trends',
+        categories: ['Gaming', 'Premium Audio', 'Smartwatches', 'Kitchen'],
+        products: [
+            'Nintendo Switch OLED 64GB White',
+            'Sony WH-1000XM5 Wireless Noise Cancelling Headphones',
+            'Apple Watch Series 9 (GPS, 45mm) Aluminum Case',
+            'Ninja AF101 Air Fryer 3.7L'
+        ]
+    }
+};
+
+function localizeCouponDetails(details = '') {
+    if (currentRegion !== 'US') return details;
+    return String(details || '')
+        .replace(/ENV[IÍ]O GRATIS/gi, 'FREE SHIPPING')
+        .replace(/CUP[OÓ]N DISPONIBLE/gi, 'COUPON AVAILABLE')
+        .replace(/DESCUENTO/gi, 'DISCOUNT')
+        .replace(/M[IÍ]N\./gi, 'MIN.');
+}
+
+function updateSeasonTitle() {
+    const el = document.getElementById('season-title');
+    if (!el) return;
+    const month = new Date().getMonth();
+    const seasonsEs = [
+        { icon: '❄️', label: 'Invierno' },
+        { icon: '❄️', label: 'Invierno' },
+        { icon: '🌸', label: 'Primavera' },
+        { icon: '🌸', label: 'Primavera' },
+        { icon: '🌸', label: 'Primavera' },
+        { icon: '☀️', label: 'Verano' },
+        { icon: '☀️', label: 'Verano' },
+        { icon: '☀️', label: 'Verano' },
+        { icon: '🍂', label: 'Otoño' },
+        { icon: '🍂', label: 'Otoño' },
+        { icon: '🍂', label: 'Otoño' },
+        { icon: '❄️', label: 'Invierno' }
+    ];
+    const seasonsEn = [
+        { icon: '❄️', label: 'Winter' },
+        { icon: '❄️', label: 'Winter' },
+        { icon: '🌸', label: 'Spring' },
+        { icon: '🌸', label: 'Spring' },
+        { icon: '🌸', label: 'Spring' },
+        { icon: '☀️', label: 'Summer' },
+        { icon: '☀️', label: 'Summer' },
+        { icon: '☀️', label: 'Summer' },
+        { icon: '🍂', label: 'Fall' },
+        { icon: '🍂', label: 'Fall' },
+        { icon: '🍂', label: 'Fall' },
+        { icon: '❄️', label: 'Winter' }
+    ];
+    const season = (currentRegion === 'US' ? seasonsEn : seasonsEs)[month];
+    el.innerHTML = currentRegion === 'US'
+        ? `<span class="text-2xl drop-shadow-sm">${season.icon}</span> ${season.label} Trends ${new Date().getFullYear()}`
+        : `<span class="text-2xl drop-shadow-sm">${season.icon}</span> Tendencias ${season.label} ${new Date().getFullYear()}`;
+}
+
+// SF V2: Smart Filter Suggestions with relevance scoring, toggle, persistence, expanded categories
+const _smartFilterActiveSet = new Set();
+
+function _getSmartFilterStorageKey() {
+    const q = String(document.getElementById('search-input')?.value || '').trim().toLowerCase().slice(0, 80);
+    return q ? `lumu_sf:${q}` : '';
+}
+
+function _restoreSmartFilters() {
+    const key = _getSmartFilterStorageKey();
+    if (!key) return;
+    try {
+        const saved = JSON.parse(localStorage.getItem(key) || '[]');
+        if (Array.isArray(saved)) saved.forEach(k => _smartFilterActiveSet.add(k));
+    } catch { /* ignore */ }
+}
+
+function _persistSmartFilters() {
+    const key = _getSmartFilterStorageKey();
+    if (!key) return;
+    try {
+        localStorage.setItem(key, JSON.stringify([..._smartFilterActiveSet]));
+    } catch { /* quota exceeded — ignore */ }
+}
+
+function renderSmartFilterSuggestions(products = []) {
+    const toolbar = document.getElementById('results-toolbar');
+    if (!toolbar) return;
+    let wrap = document.getElementById('smart-filter-suggestions');
+    if (!wrap) {
+        wrap = document.createElement('div');
+        wrap.id = 'smart-filter-suggestions';
+        wrap.className = 'hidden mb-4 flex flex-wrap gap-2 items-center';
+        toolbar.parentElement?.insertBefore(wrap, toolbar.nextSibling);
+    }
+
+    const query = String(document.getElementById('search-input')?.value || '').toLowerCase();
+    const total = products.length || 1;
+
+    // --- Count product attributes ---
+    let couponCount = 0, realDealCount = 0, freeShipCount = 0, trustedCount = 0;
+    products.forEach(p => {
+        if (p.cupon) couponCount++;
+        if (p.dealVerdict?.status === 'real_deal') realDealCount++;
+        const text = `${p.titulo || ''} ${p.couponDetails || ''}`.toLowerCase();
+        if (text.includes('gratis') || text.includes('free') || text.includes('shipping')) freeShipCount++;
+        const trust = (p.trustLabel || '').toLowerCase();
+        if (trust.includes('confiable') || trust.includes('trusted') || trust.includes('oficial') || trust.includes('official') || trust.includes('verificado') || trust.includes('verified')) trustedCount++;
+    });
+
+    // --- Expanded category detection ---
+    const CAT = {
+        tech:    /iphone|airpods|laptop|macbook|samsung|galaxy|tv|switch|ps5|xbox|playstation|monitor|aud[ií]fonos|headphones|gopro|tablet|ipad|drone/.test(query),
+        home:    /freidora|refrigerador|aspiradora|mueble|silla|air fryer|vacuum|chair|kitchen|blender|licuadora|horno|microwave/.test(query),
+        fashion: /tenis|zapatos|nike|adidas|ropa|sneakers|shoes|jacket|hoodie|vestido|dress|bolsa|mochila|backpack/.test(query),
+        luxury:  /perfume|reloj|watch|bolsa|cartera|wallet|joyería|jewelry|ring|anillo|collar|necklace|pulsera|bracelet/.test(query),
+        budget:  /barato|econ[oó]mico|cheap|deal|oferta|descuento|remate|clearance|sale/.test(query),
+        gaming:  /ps5|xbox|switch|consola|gaming|gamer|controller|headset|rgb|razer|logitech/.test(query),
+        kids:    /niño|niña|bebé|baby|kids|juguete|toy|lego|disney|pañal|stroller/.test(query),
+        outdoor: /camping|bicicleta|bike|tienda.*campaña|tent|hiking|kayak|pesca|fishing/.test(query)
+    };
+
+    // --- Build scored suggestions ---
+    const candidates = [];
+
+    if (realDealCount > 0) {
+        const pct = realDealCount / total;
+        let score = 50 + pct * 30; // base 50, up to 80 from data
+        if (CAT.budget) score += 20;
+        candidates.push({ key: 'real', score, label: getLocalizedText('Solo oferta real', 'Real deals only'), icon: '🔥',
+            toggle: () => document.getElementById('btn-only-real-deals')?.click() });
+    }
+    if (couponCount > 0) {
+        const pct = couponCount / total;
+        let score = 40 + pct * 30;
+        if (CAT.budget) score += 15;
+        candidates.push({ key: 'coupon', score, label: getLocalizedText('Solo con cupón', 'Coupons only'), icon: '🏷️',
+            toggle: () => document.getElementById('btn-only-coupons')?.click() });
+    }
+    if (freeShipCount > 0) {
+        const pct = freeShipCount / total;
+        let score = 35 + pct * 25;
+        if (CAT.fashion || CAT.home) score += 15;
+        candidates.push({ key: 'shipping', score, label: getLocalizedText('Envío gratis', 'Free shipping'), icon: '🚚',
+            toggle: () => document.getElementById('free-shipping-filter')?.click() });
+    }
+    if (trustedCount > 0 || CAT.tech || CAT.luxury || CAT.gaming || CAT.kids) {
+        let score = 30 + (trustedCount / total) * 20;
+        if (CAT.tech) score += 25;
+        if (CAT.luxury) score += 30;
+        if (CAT.gaming) score += 20;
+        if (CAT.kids) score += 25;
+        candidates.push({ key: 'safe', score, label: getLocalizedText('Tiendas seguras', 'Trusted stores'), icon: '🛡️',
+            toggle: () => document.getElementById('btn-safe-stores')?.click() });
+    }
+
+    // Sort by score descending, take top 4
+    candidates.sort((a, b) => b.score - a.score);
+    const suggestions = candidates.slice(0, 4);
+
+    if (!suggestions.length) {
+        wrap.classList.add('hidden');
+        wrap.innerHTML = '';
+        return;
+    }
+
+    // Restore saved active state for this query
+    _smartFilterActiveSet.clear();
+    _restoreSmartFilters();
+
+    wrap.classList.remove('hidden');
+    const label = document.createElement('span');
+    label.className = 'text-xs font-bold text-slate-400 mr-1 select-none';
+    label.textContent = getLocalizedText('Filtros sugeridos:', 'Suggested filters:');
+
+    wrap.innerHTML = '';
+    wrap.appendChild(label);
+
+    suggestions.forEach((item) => {
+        const isActive = _smartFilterActiveSet.has(item.key);
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.setAttribute('data-sf-key', item.key);
+        btn.className = isActive
+            ? 'sf-chip rounded-full border border-emerald-500 bg-emerald-600 text-white px-3 py-1.5 text-xs font-black shadow-sm hover:bg-emerald-700 transition-all'
+            : 'sf-chip rounded-full border border-emerald-200 bg-emerald-50 text-emerald-700 px-3 py-1.5 text-xs font-black shadow-sm hover:bg-emerald-100 transition-all';
+        btn.innerHTML = `${item.icon} ${item.label}`;
+        btn.addEventListener('click', () => {
+            const nowActive = _smartFilterActiveSet.has(item.key);
+            if (nowActive) {
+                _smartFilterActiveSet.delete(item.key);
+                btn.className = 'sf-chip rounded-full border border-emerald-200 bg-emerald-50 text-emerald-700 px-3 py-1.5 text-xs font-black shadow-sm hover:bg-emerald-100 transition-all';
+            } else {
+                _smartFilterActiveSet.add(item.key);
+                btn.className = 'sf-chip rounded-full border border-emerald-500 bg-emerald-600 text-white px-3 py-1.5 text-xs font-black shadow-sm hover:bg-emerald-700 transition-all';
+            }
+            _persistSmartFilters();
+            item.toggle();
+        });
+        wrap.appendChild(btn);
+
+        // Auto-activate if it was persisted as active
+        if (isActive) {
+            item.toggle();
+        }
+    });
+}
+
 function getConditionMode() {
     return conditionModeInput?.value || 'all';
 }
@@ -1386,6 +1787,75 @@ function closeHistoryModal() {
     }
 }
 
+function openProductHistoryModal(product = {}) {
+    if (!historyModal || !historyList) return;
+
+    const titleEl = document.getElementById('history-modal-title');
+    const copyEl = document.getElementById('history-modal-copy');
+    const safeTitle = sanitize(product.titulo || (currentRegion === 'US' ? 'Product history' : 'Historial del producto'));
+    const priceTrend = product.priceTrend || {};
+    const history = Array.isArray(priceTrend.history) ? [...priceTrend.history].reverse() : [];
+    const currentPrice = Number(product.precio);
+    const points = history
+        .map((entry) => Number(entry.price))
+        .filter((value) => Number.isFinite(value) && value > 0);
+
+    if (Number.isFinite(currentPrice) && currentPrice > 0) {
+        points.push(currentPrice);
+    }
+
+    if (titleEl) titleEl.textContent = currentRegion === 'US' ? 'Price history' : 'Historial de precio';
+    if (copyEl) copyEl.textContent = safeTitle;
+
+    if (points.length === 0) {
+        historyList.innerHTML = `<div class="bg-white rounded-2xl border border-slate-200 p-5 text-sm font-medium text-slate-500">${currentRegion === 'US' ? 'No tracked price history for this product yet.' : 'Aún no hay historial de precio rastreado para este producto.'}</div>`;
+        openHistoryModal();
+        return;
+    }
+
+    const minP = Math.min(...points);
+    const maxP = Math.max(...points);
+    const avgP = points.reduce((sum, value) => sum + value, 0) / points.length;
+    const w = 560;
+    const h = 180;
+    const pad = 16;
+    const diff = maxP - minP === 0 ? 1 : maxP - minP;
+    const pathD = points.map((val, i) => {
+        const x = pad + (i * ((w - pad * 2) / Math.max(points.length - 1, 1)));
+        const y = pad + (h - pad * 2) - (((val - minP) / diff) * (h - pad * 2));
+        return `${i === 0 ? 'M' : 'L'}${x},${y}`;
+    }).join(' ');
+
+    historyList.innerHTML = `
+        <div class="bg-white rounded-[1.5rem] border border-slate-200 p-5 shadow-sm">
+            <div class="flex flex-wrap gap-2 mb-4">
+                <span class="px-3 py-1.5 rounded-full bg-emerald-50 text-emerald-700 text-xs font-black uppercase tracking-wider">${currentRegion === 'US' ? 'Current' : 'Actual'} ${Number.isFinite(currentPrice) ? formatCurrencyByRegion(currentPrice) : '—'}</span>
+                <span class="px-3 py-1.5 rounded-full bg-slate-100 text-slate-700 text-xs font-black uppercase tracking-wider">${currentRegion === 'US' ? 'Average' : 'Promedio'} ${formatCurrencyByRegion(avgP)}</span>
+                <span class="px-3 py-1.5 rounded-full bg-blue-50 text-blue-700 text-xs font-black uppercase tracking-wider">${currentRegion === 'US' ? 'Min tracked' : 'Mínimo rastreado'} ${formatCurrencyByRegion(minP)}</span>
+                <span class="px-3 py-1.5 rounded-full bg-amber-50 text-amber-700 text-xs font-black uppercase tracking-wider">${currentRegion === 'US' ? 'Max tracked' : 'Máximo rastreado'} ${formatCurrencyByRegion(maxP)}</span>
+            </div>
+            <div class="rounded-2xl bg-slate-50 border border-slate-200 p-4 overflow-x-auto">
+                <svg width="${w}" height="${h}" viewBox="0 0 ${w} ${h}" class="min-w-[520px]">
+                    <path d="${pathD}" fill="none" stroke="#10b981" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"></path>
+                </svg>
+            </div>
+        </div>
+        <div class="space-y-2">
+            ${history.map((entry) => `
+                <div class="bg-white rounded-xl border border-slate-200 px-4 py-3 flex items-center justify-between gap-4">
+                    <div class="min-w-0">
+                        <p class="text-sm font-bold text-slate-800">${formatCurrencyByRegion(Number(entry.price) || 0)}</p>
+                        <p class="text-xs text-slate-500">${sanitize(entry.date || entry.created_at || '')}</p>
+                    </div>
+                    <span class="text-[11px] font-black uppercase tracking-wider text-slate-500">${currentRegion === 'US' ? 'Tracked' : 'Rastreado'}</span>
+                </div>
+            `).join('')}
+        </div>
+    `;
+
+    openHistoryModal();
+}
+
 function openFavorites() {
     if (!favoritesModal) return;
     favoritesModal.classList.remove('invisible', 'opacity-0');
@@ -1421,6 +1891,10 @@ async function initApp() {
             if (configRes && configRes.ok) {
                 const config = await configRes.json();
                 console.log('Config loaded:', config);
+                if (config.detectedCountry && REGION_LABELS[config.detectedCountry]) {
+                    serverDetectedRegion = config.detectedCountry;
+                    currentRegion = config.detectedCountry;
+                }
                 if (config.supabaseUrl && window.supabase) {
                     supabaseClient = window.supabase.createClient(config.supabaseUrl, config.supabaseAnonKey);
                     window.supabaseClient = supabaseClient; // Polyfill for the rest of the app
@@ -1493,7 +1967,7 @@ async function initApp() {
                 btnVoiceInput.title = detectRegion() === 'US' ? 'Your browser does not support voice dictation' : 'Tu navegador no soporta dictado por voz';
             } else {
                 const recognition = new SpeechRecognition();
-                recognition.lang = detectRegion() === 'US' ? 'en-US' : 'es-MX';
+                recognition.lang = getVoiceRecognitionLocale(detectRegion());
                 recognition.interimResults = true;
                 recognition.maxAlternatives = 1;
                 recognition.continuous = false;
@@ -1584,6 +2058,8 @@ async function initApp() {
         userLatInput = document.getElementById('user-lat');
         userLngInput = document.getElementById('user-lng');
         conditionModeInput = document.getElementById('condition-mode');
+        includeKnownMarketplacesInput = document.getElementById('include-known-marketplaces');
+        includeHighRiskMarketplacesInput = document.getElementById('include-high-risk-marketplaces');
         const locFilterBtns = document.querySelectorAll('.loc-filter-btn');
         const conditionChips = document.querySelectorAll('[data-condition]');
         applyRegionalCopy();
@@ -1646,12 +2122,17 @@ async function initApp() {
 
         // 2. Location Filters
         const activeFiltersSummary = document.getElementById('active-filters-summary');
+        const onlyCouponsInput = document.getElementById('only-coupons');
+        const onlyRealDealsInput = document.getElementById('only-real-deals');
         const renderActiveFiltersSummary = () => {
             if (!activeFiltersSummary) return;
 
             const config = getRegionConfig();
+            const regionFlag = REGION_FLAGS[currentRegion] || '🌎';
 
             const items = [
+                `${regionFlag} ${config.activeRegion}`,
+                config.currency,
                 getConditionLabel(conditionModeInput?.value || 'all'),
                 config.scopes[locRadiusInput?.value === 'local_only' ? 'local_only' : (locRadiusInput?.value !== 'global' ? 'nearby' : 'global')]
             ];
@@ -1659,11 +2140,66 @@ async function initApp() {
             if (document.getElementById('btn-safe-stores')?.getAttribute('data-safe') === 'true') {
                 items.push(config.filters.safe);
             }
+            if (includeKnownMarketplacesInput?.value === 'true') {
+                items.push(currentRegion === 'US' ? 'Known marketplaces' : 'Marketplaces conocidos');
+            }
+            if (includeHighRiskMarketplacesInput?.value === 'true') {
+                items.push(currentRegion === 'US' ? 'High risk sources' : 'Riesgo alto');
+            }
+            if (onlyCouponsInput?.value === 'true') {
+                items.push(currentRegion === 'US' ? 'Coupons only' : 'Solo con cupón');
+            }
+            if (onlyRealDealsInput?.value === 'true') {
+                items.push(currentRegion === 'US' ? 'Real deals only' : 'Solo oferta real');
+            }
 
             activeFiltersSummary.innerHTML = items.map(label => `
                 <span class="active-filter-pill rounded-full px-3 py-1.5 text-[11px] font-black uppercase tracking-[0.16em]">${label}</span>
             `).join('');
+
+            const toggleFiltersLabel = document.getElementById('toggle-filters-label');
+            if (toggleFiltersLabel) {
+                const activeCount = Math.max(0, items.length - 4);
+                const baseLabel = getRegionUICopy().guidedSearch[
+                    document.getElementById('filters-collapsible')?.classList.contains('filters-collapsed') ? 'toggleShow' : 'toggleHide'
+                ];
+                toggleFiltersLabel.textContent = activeCount > 0 ? `${baseLabel} (${activeCount})` : baseLabel;
+            }
         };
+
+        const setToggleState = (button, enabled) => {
+            if (!button) return;
+            button.setAttribute('data-enabled', enabled ? 'true' : 'false');
+            button.classList.toggle('border-emerald-500', enabled);
+            button.classList.toggle('bg-emerald-50', enabled);
+            button.classList.toggle('text-emerald-700', enabled);
+            button.classList.toggle('border-slate-200', !enabled);
+            button.classList.toggle('bg-white', !enabled);
+            button.classList.toggle('text-slate-600', !enabled);
+        };
+
+        const regionPillButton = document.getElementById('detected-region-pill');
+        const regionSelectorMenu = document.getElementById('region-selector-menu');
+        const regionOptionButtons = document.querySelectorAll('.region-option-btn');
+        if (regionPillButton && regionSelectorMenu) {
+            regionPillButton.addEventListener('click', (event) => {
+                event.stopPropagation();
+                regionSelectorMenu.classList.toggle('hidden');
+                applyRegionalCopy();
+            });
+            document.addEventListener('click', () => regionSelectorMenu.classList.add('hidden'));
+            regionSelectorMenu.addEventListener('click', (event) => event.stopPropagation());
+            regionOptionButtons.forEach((btn) => {
+                btn.addEventListener('click', () => {
+                    const selectedRegion = btn.getAttribute('data-region') || 'auto';
+                    localStorage.setItem(REGION_OVERRIDE_KEY, selectedRegion);
+                    currentRegion = selectedRegion === 'auto' ? detectRegion() : selectedRegion;
+                    regionSelectorMenu.classList.add('hidden');
+                    applyRegionalCopy();
+                    renderActiveFiltersSummary();
+                });
+            });
+        }
 
         if (locFilterBtns.length > 0 && locRadiusInput) {
             locFilterBtns.forEach(btn => {
@@ -1726,6 +2262,60 @@ async function initApp() {
             });
         }
 
+        const btnKnownMarketplaces = document.getElementById('btn-known-marketplaces');
+        const btnHighRiskMarketplaces = document.getElementById('btn-high-risk-marketplaces');
+        if (btnKnownMarketplaces && includeKnownMarketplacesInput) {
+            setToggleState(btnKnownMarketplaces, includeKnownMarketplacesInput.value === 'true');
+            btnKnownMarketplaces.addEventListener('click', () => {
+                const enabled = btnKnownMarketplaces.getAttribute('data-enabled') !== 'true';
+                includeKnownMarketplacesInput.value = enabled ? 'true' : 'false';
+                setToggleState(btnKnownMarketplaces, enabled);
+                if (!enabled && includeHighRiskMarketplacesInput && btnHighRiskMarketplaces) {
+                    includeHighRiskMarketplacesInput.value = 'false';
+                    setToggleState(btnHighRiskMarketplaces, false);
+                }
+                renderActiveFiltersSummary();
+            });
+        }
+        if (btnHighRiskMarketplaces && includeHighRiskMarketplacesInput) {
+            setToggleState(btnHighRiskMarketplaces, includeHighRiskMarketplacesInput.value === 'true');
+            btnHighRiskMarketplaces.addEventListener('click', () => {
+                const enabled = btnHighRiskMarketplaces.getAttribute('data-enabled') !== 'true';
+                includeHighRiskMarketplacesInput.value = enabled ? 'true' : 'false';
+                setToggleState(btnHighRiskMarketplaces, enabled);
+                if (enabled && includeKnownMarketplacesInput && btnKnownMarketplaces) {
+                    includeKnownMarketplacesInput.value = 'true';
+                    setToggleState(btnKnownMarketplaces, true);
+                }
+                renderActiveFiltersSummary();
+                if (typeof applyFiltersAndSort === 'function') applyFiltersAndSort();
+            });
+        }
+
+        const btnOnlyCoupons = document.getElementById('btn-only-coupons');
+        if (btnOnlyCoupons && onlyCouponsInput) {
+            setToggleState(btnOnlyCoupons, onlyCouponsInput.value === 'true');
+            btnOnlyCoupons.addEventListener('click', () => {
+                const enabled = btnOnlyCoupons.getAttribute('data-enabled') !== 'true';
+                onlyCouponsInput.value = enabled ? 'true' : 'false';
+                setToggleState(btnOnlyCoupons, enabled);
+                renderActiveFiltersSummary();
+                if (typeof applyFiltersAndSort === 'function') applyFiltersAndSort();
+            });
+        }
+
+        const btnOnlyRealDeals = document.getElementById('btn-only-real-deals');
+        if (btnOnlyRealDeals && onlyRealDealsInput) {
+            setToggleState(btnOnlyRealDeals, onlyRealDealsInput.value === 'true');
+            btnOnlyRealDeals.addEventListener('click', () => {
+                const enabled = btnOnlyRealDeals.getAttribute('data-enabled') !== 'true';
+                onlyRealDealsInput.value = enabled ? 'true' : 'false';
+                setToggleState(btnOnlyRealDeals, enabled);
+                renderActiveFiltersSummary();
+                if (typeof applyFiltersAndSort === 'function') applyFiltersAndSort();
+            });
+        }
+
         if (conditionChips.length > 0 && conditionModeInput) {
             conditionChips.forEach(btn => {
                 btn.addEventListener('click', () => {
@@ -1755,7 +2345,8 @@ async function initApp() {
                 btnToggleFilters.setAttribute('aria-expanded', collapsed ? 'false' : 'true');
             };
 
-            syncFiltersPanel(true);
+            const shouldCollapseInitially = window.innerWidth < 640;
+            syncFiltersPanel(shouldCollapseInitially);
 
             btnToggleFilters.addEventListener('click', () => {
                 const isCollapsed = filtersCollapsible.classList.contains('filters-collapsed');
@@ -2182,11 +2773,23 @@ async function initApp() {
                             }
                         }
                         coinsBadge.innerHTML = `<span class="text-base drop-shadow-sm">🪙</span> <span>${data.coins}</span>`;
+                        // SEC-3: Cache temp VIP status for ad gateway skip
+                        window._isPremiumTemp = !!data.is_premium_temp;
+                        window._vipTempRemainingMin = data.vip_temp_remaining_min || 0;
                         // Auto-upgrade if temp premium
                         if (data.is_premium_temp && proBadge && proBadge.classList.contains('hidden')) {
                             proBadge.classList.remove('hidden');
                             proBadge.classList.add('flex');
-                            proBadge.innerHTML = currentRegion === 'US' ? '⭐ TEMP VIP' : '⭐ VIP TEMPORAL';
+                            const mins = data.vip_temp_remaining_min || 0;
+                            proBadge.innerHTML = currentRegion === 'US'
+                                ? `⭐ TEMP VIP (${mins}min)`
+                                : `⭐ VIP TEMPORAL (${mins}min)`;
+                        } else if (!data.is_premium_temp && proBadge) {
+                            // If temp VIP expired, hide badge (unless they're real VIP)
+                            if (proBadge.textContent.includes('TEMP') || proBadge.textContent.includes('TEMPORAL')) {
+                                proBadge.classList.add('hidden');
+                                proBadge.classList.remove('flex');
+                            }
                         }
                     }
                 }).catch(e => console.error('Error fetching coins:', e));
@@ -2303,6 +2906,20 @@ async function initApp() {
                 });
             }
             if (locRadiusInput && snapshot.radius) locRadiusInput.value = snapshot.radius;
+            if (includeKnownMarketplacesInput) {
+                includeKnownMarketplacesInput.value = snapshot.includeKnownMarketplaces === false ? 'false' : 'true';
+            }
+            if (includeHighRiskMarketplacesInput) {
+                includeHighRiskMarketplacesInput.value = snapshot.includeHighRiskMarketplaces ? 'true' : 'false';
+            }
+            const btnKnownMarketplaces = document.getElementById('btn-known-marketplaces');
+            const btnHighRiskMarketplaces = document.getElementById('btn-high-risk-marketplaces');
+            if (btnKnownMarketplaces && includeKnownMarketplacesInput) {
+                setToggleState(btnKnownMarketplaces, includeKnownMarketplacesInput.value === 'true');
+            }
+            if (btnHighRiskMarketplaces && includeHighRiskMarketplacesInput) {
+                setToggleState(btnHighRiskMarketplaces, includeHighRiskMarketplacesInput.value === 'true');
+            }
 
             chatHistory = [];
             chatContainer.classList.add('hidden');
@@ -2320,6 +2937,8 @@ async function initApp() {
                 query: snapshot.query || '',
                 radius: snapshot.radius || 'global',
                 safeStoresOnly: Boolean(snapshot.safeStoresOnly),
+                includeKnownMarketplaces: snapshot.includeKnownMarketplaces !== false,
+                includeHighRiskMarketplaces: Boolean(snapshot.includeHighRiskMarketplaces),
                 resultCount: snapshot.results.length
             });
             await renderProducts(snapshot.results);
@@ -2649,6 +3268,8 @@ async function initApp() {
             const radius = locRadiusInput?.value || 'global';
             const lat = userLatInput?.value || null;
             const lng = userLngInput?.value || null;
+            const includeKnownMarketplaces = includeKnownMarketplacesInput?.value !== 'false';
+            const includeHighRiskMarketplaces = includeHighRiskMarketplacesInput?.value === 'true';
 
             searchButton.disabled = true;
             const originalButtonHTML = getSearchButtonIdleHTML();
@@ -2687,14 +3308,17 @@ async function initApp() {
                 }
 
                 // Fase 7: SEO Dinámico
-                document.title = `Mejores precios de ${finalQuery} en México | Lumu.ai`;
+                const seoRegionLabel = getRegionConfig().activeRegion || 'México';
+                document.title = `${currentRegion === 'US' ? 'Best prices for' : 'Mejores precios de'} ${finalQuery} ${currentRegion === 'US' ? 'in' : 'en'} ${seoRegionLabel} | Lumu.ai`;
                 let metaDesc = document.querySelector('meta[name="description"]');
                 if (!metaDesc) {
                     metaDesc = document.createElement('meta');
                     metaDesc.name = 'description';
                     document.head.appendChild(metaDesc);
                 }
-                metaDesc.content = `Compara precios de ${finalQuery} en Amazon, Mercado Libre, Walmart y más. Encuentra la oferta más barata en México con Lumu AI.`;
+                metaDesc.content = currentRegion === 'US'
+                    ? `Compare prices for ${finalQuery} across Amazon, Walmart, eBay and more. Find the best deal in ${seoRegionLabel} with Lumu AI.`
+                    : `Compara precios de ${finalQuery} en Amazon, Mercado Libre, Falabella, Walmart y más. Encuentra la oferta más barata en ${seoRegionLabel} con Lumu AI.`;
 
                 resultsWrapper.classList.remove('hidden');
 
@@ -2718,7 +3342,10 @@ async function initApp() {
                     chatHistory: safeChatHistory,
                     radius: radius,
                     skipLLM: skipLLM,
+                    country: currentRegion,
                     safeStoresOnly: safeStoresOnly,
+                    includeKnownMarketplaces,
+                    includeHighRiskMarketplaces,
                     conditionMode: getConditionMode()
                 };
                 const parsedLat = parseFloat(lat);
@@ -2788,19 +3415,19 @@ async function initApp() {
                         if (isPaywall) {
                             const rewardAvailable = typeof hasRealRewardedAdConfigured === 'function' && hasRealRewardedAdConfigured();
                             addChatBubble('ai', rewardAvailable
-                                ? `🔒 **Límite de búsquedas gratuitas alcanzado.** Hazte VIP para obtener mayor capacidad de búsqueda o mira un anuncio para 3 búsquedas gratis.`
-                                : `🔒 **Límite de búsquedas gratuitas alcanzado.** Hazte VIP para obtener mayor capacidad de búsqueda.`, [], false);
+                                ? `🔒 **${getLocalizedText('Límite de búsquedas gratuitas alcanzado.', 'Free search limit reached.')}** ${getLocalizedText('Hazte VIP para obtener mayor capacidad de búsqueda o mira un anuncio para 3 búsquedas gratis.', 'Upgrade to VIP for more searches or watch an ad for 3 free searches.')}`
+                                : `🔒 **${getLocalizedText('Límite de búsquedas gratuitas alcanzado.', 'Free search limit reached.')}** ${getLocalizedText('Hazte VIP para obtener mayor capacidad de búsqueda.', 'Upgrade to VIP for more searches.')}`, [], false);
                             resultsContainer.innerHTML = `
                                 <div class="col-span-full flex flex-col items-center text-center py-12 px-6 bg-gradient-to-br from-amber-50 to-orange-50 rounded-3xl border border-amber-200">
                                     <div class="text-5xl mb-4">⚡</div>
-                                    <h3 class="text-xl font-black text-slate-800 mb-2">Límite Alcanzado</h3>
-                                    <p class="text-slate-600 font-medium mb-6 max-w-sm">${rewardAvailable ? 'Desbloquea una mayor capacidad de búsqueda con VIP o gana 3 búsquedas hoy patrocinadas por anuncios.' : 'Desbloquea una mayor capacidad de búsqueda con VIP para seguir buscando sin esperar al próximo reinicio diario.'}</p>
+                                    <h3 class="text-xl font-black text-slate-800 mb-2">${getLocalizedText('Límite Alcanzado', 'Limit Reached')}</h3>
+                                    <p class="text-slate-600 font-medium mb-6 max-w-sm">${rewardAvailable ? getLocalizedText('Desbloquea una mayor capacidad de búsqueda con VIP o gana 3 búsquedas hoy patrocinadas por anuncios.', 'Unlock more searches with VIP or earn 3 free searches today by watching an ad.') : getLocalizedText('Desbloquea una mayor capacidad de búsqueda con VIP para seguir buscando sin esperar al próximo reinicio diario.', 'Unlock more searches with VIP to keep searching without waiting for the next daily reset.')}</p>
                                     <div class="flex flex-col gap-3 w-full max-w-xs">
-                                        <a href="${sanitize(vipUrl)}" target="_blank" class="w-full bg-amber-500 hover:bg-amber-600 text-white px-8 py-3.5 rounded-2xl font-bold transition-all shadow-lg shadow-amber-500/20">Obtener VIP - $39 MXN/mes</a>
+                                        <a href="${sanitize(vipUrl)}" target="_blank" class="w-full bg-amber-500 hover:bg-amber-600 text-white px-8 py-3.5 rounded-2xl font-bold transition-all shadow-lg shadow-amber-500/20">${getLocalizedText('Obtener VIP - $39 MXN/mes', 'Get VIP - $39 MXN/mo')}</a>
                                         ${rewardAvailable ? `
                                         <button onclick="window.watchRewardedAdForSearches();" class="w-full bg-white hover:bg-slate-50 text-slate-700 border border-slate-200 px-8 py-3.5 rounded-2xl font-bold transition-all flex justify-center items-center gap-2">
                                             <svg class="w-5 h-5 text-emerald-500" fill="currentColor" viewBox="0 0 24 24"><path d="M10 8v8l6-4-6-4zm9-5H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm0 16H5V5h14v14z"/></svg>
-                                            Ver anuncio (3 Gratis)
+                                            ${getLocalizedText('Ver anuncio (3 Gratis)', 'Watch Ad (3 Free)')}
                                         </button>` : ''}
                                     </div>
                                 </div>`;
@@ -2825,7 +3452,7 @@ async function initApp() {
                     }
                     resultsWrapper.classList.remove('hidden'); // Fix: chat lives inside results so this must be visible
                     resultsGrid.innerHTML = '';
-                    document.getElementById('results-title').innerHTML = `Conversación con <span class="text-emerald-500">Lumu AI</span>`;
+                    document.getElementById('results-title').innerHTML = `${getLocalizedText('Conversación con', 'Chat with')} <span class="text-emerald-500">Lumu AI</span>`;
                     searchInput.value = '';
                     // Reset height
                     searchInput.style.height = '56px';
@@ -2867,18 +3494,14 @@ async function initApp() {
                             query: busqueda,
                             radius,
                             safeStoresOnly,
+                            includeKnownMarketplaces,
+                            includeHighRiskMarketplaces,
                             conditionMode: getConditionMode(),
                             results: data.top_5_baratos || [],
                             savedAt: new Date().toISOString()
                         });
-                        if (supabaseClient && currentUser) {
-                            supabaseClient.from('searches').insert([{
-                                user_id: currentUser.id,
-                                query: busqueda
-                            }]).then(({ error }) => {
-                                if (error) console.error('Error guardando búsqueda:', error);
-                            });
-                        } else {
+                        // SEC-2 FIX: Backend already logs authenticated searches — only save locally for anonymous users
+                        if (!supabaseClient || !currentUser) {
                             // Guardar en LocalStorage
                             let localHist = JSON.parse(localStorage.getItem('lumu_local_history') || '[]');
                             localHist = [busqueda, ...localHist.filter(q => (typeof q === 'string' ? q : q?.query) !== busqueda)].slice(0, 50);
@@ -2890,6 +3513,8 @@ async function initApp() {
                         query: data.intencion_detectada?.busqueda || finalQuery,
                         radius,
                         safeStoresOnly,
+                        includeKnownMarketplaces,
+                        includeHighRiskMarketplaces,
                         resultCount: data.top_5_baratos?.length || 0
                     });
 
@@ -2910,11 +3535,11 @@ async function initApp() {
 
                             const csTitle = document.createElement('h3');
                             csTitle.className = 'text-lg font-black text-slate-800 mb-2 flex items-center gap-2';
-                            csTitle.innerHTML = '<span class="text-2xl">💡</span> Quizás también te interese...';
+                            csTitle.innerHTML = `<span class="text-2xl">💡</span> ${getLocalizedText('Quizás también te interese...', 'You might also like...')}`;
 
                             const csDesc = document.createElement('p');
                             csDesc.className = 'text-slate-500 font-medium mb-6 max-w-sm text-sm';
-                            csDesc.innerText = 'Nuestra IA sugiere explorar estas alternativas:';
+                            csDesc.innerText = getLocalizedText('Nuestra IA sugiere explorar estas alternativas:', 'Our AI suggests exploring these alternatives:');
 
                             const csBtns = document.createElement('div');
                             csBtns.className = 'flex flex-wrap gap-2 justify-center w-full';
@@ -2952,8 +3577,8 @@ async function initApp() {
                             resultsContainer.innerHTML = `
                             <div class="col-span-full flex flex-col items-center justify-center py-10 min-h-[300px]">
                                 <div class="w-12 h-12 border-4 border-slate-100 dark:border-slate-700 border-t-emerald-500 rounded-full animate-spin mb-4"></div>
-                                <h3 class="text-lg font-bold text-slate-800 dark:text-slate-200">Ampliando búsqueda...</h3>
-                                <p class="text-slate-500 dark:text-slate-400 text-sm">Buscando alternativas para "${finalQuery}"</p>
+                                <h3 class="text-lg font-bold text-slate-800 dark:text-slate-200">${getLocalizedText('Ampliando búsqueda...', 'Expanding search...')}</h3>
+                                <p class="text-slate-500 dark:text-slate-400 text-sm">${getLocalizedText(`Buscando alternativas para "${finalQuery}"`, `Searching alternatives for "${finalQuery}"`)}</p>
                             </div>
                         `;
                             // Intentar con la primera sugerencia automáticamente sin LLM
@@ -2965,7 +3590,11 @@ async function initApp() {
 
                         // --- No-results final: UI amigable con sugerencias ---
                         const searchTerm = data.intencion_detectada?.busqueda || finalQuery;
-                        const fallbackChips = [
+                        const fallbackChips = currentRegion === 'US' ? [
+                            `${searchTerm} new`,
+                            `${searchTerm} deals`,
+                            `${searchTerm} cheap`,
+                        ] : [
                             `${searchTerm} nuevo`,
                             `${searchTerm} ofertas`,
                             `${searchTerm} economico`,
@@ -2979,12 +3608,12 @@ async function initApp() {
                         resultsContainer.innerHTML = `
                         <div class="col-span-full flex flex-col items-center text-center py-12 px-6 bg-white/60 backdrop-blur-sm rounded-3xl border border-dashed border-slate-200">
                             <div class="text-6xl mb-4">🔍</div>
-                            <h3 class="text-xl font-black text-slate-800 mb-2">Sin resultados directos</h3>
-                            <p class="text-slate-500 font-medium mb-6 max-w-sm">No encontramos disponibilidad inmediata. Selecciona una variante para ampliar la búsqueda:</p>
+                            <h3 class="text-xl font-black text-slate-800 mb-2">${getLocalizedText('Sin resultados directos', 'No direct results')}</h3>
+                            <p class="text-slate-500 font-medium mb-6 max-w-sm">${getLocalizedText('No encontramos disponibilidad inmediata. Selecciona una variante para ampliar la búsqueda:', 'No immediate availability found. Select a variant to expand your search:')}</p>
                             <div class="flex flex-wrap gap-2 justify-center sugg-container">
                                 ${suggChips}
                             </div>
-                            <p class="text-xs text-slate-400 mt-6">Si buscas algo de mercado local, prueba activar 📍 <b>Tiendas Locales</b></p>
+                            <p class="text-xs text-slate-400 mt-6">${getLocalizedText('Si buscas algo de mercado local, prueba activar 📍 <b>Tiendas Locales</b>', 'Looking for something local? Try enabling 📍 <b>Local Stores</b>')}</p>
                         </div>
                     `;
                         resultsWrapper.classList.remove('hidden');
@@ -3007,7 +3636,7 @@ async function initApp() {
                 
                 let userMsg = error.message;
                 if (userMsg === 'Failed to fetch' || userMsg.includes('NetworkError')) {
-                    userMsg = 'Error de conexión. El servidor no respondió o no hay internet. Por favor intenta de nuevo.';
+                    userMsg = getLocalizedText('Error de conexión. El servidor no respondió o no hay internet. Por favor intenta de nuevo.', 'Connection error. The server did not respond or there is no internet. Please try again.');
                 }
                 
                 errorMessage.textContent = userMsg;
@@ -3499,7 +4128,9 @@ async function initApp() {
                 ).join('');
             }
             if (countEl) {
-                countEl.textContent = `${_compareProducts.length} producto${_compareProducts.length > 1 ? 's' : ''} seleccionado${_compareProducts.length > 1 ? 's' : ''}`;
+                countEl.textContent = currentRegion === 'US'
+                    ? `${_compareProducts.length} product${_compareProducts.length > 1 ? 's' : ''} selected`
+                    : `${_compareProducts.length} producto${_compareProducts.length > 1 ? 's' : ''} seleccionado${_compareProducts.length > 1 ? 's' : ''}`;
             }
         }
 
@@ -3581,8 +4212,17 @@ async function initApp() {
             const freeShippingOnly = document.getElementById('free-shipping-filter')?.checked || false;
             const minVal = parseFloat(document.getElementById('price-min')?.value);
             const maxVal = parseFloat(document.getElementById('price-max')?.value);
+            const onlyCouponsInput = document.getElementById('only-coupons');
+            const onlyRealDealsInput = document.getElementById('only-real-deals');
 
-            let filtered = [..._lastProducts];
+            let filtered = [..._allProducts];
+
+            if (onlyCouponsInput?.value === 'true') {
+                filtered = filtered.filter(p => p.cupon);
+            }
+            if (onlyRealDealsInput?.value === 'true') {
+                filtered = filtered.filter(p => p.dealVerdict?.status === 'real_deal');
+            }
 
             // Filtro de tienda
             if (storeVal !== 'all') {
@@ -3620,11 +4260,44 @@ async function initApp() {
             const countEl = document.getElementById('results-count');
             if (countEl) {
                 countEl.textContent = currentRegion === 'US'
-                    ? `${filtered.length} of ${_lastProducts.length} results`
-                    : `${filtered.length} de ${_lastProducts.length} resultados`;
+                    ? `${filtered.length} of ${_allProducts.length} results`
+                    : `${filtered.length} de ${_allProducts.length} resultados`;
             }
 
-            renderProductCards(filtered, _lastFavorites);
+            // UX-1: Friendly empty state when filters remove all results
+            const grid = document.getElementById('results-grid');
+            const emptyFilterMsg = document.getElementById('empty-filter-msg');
+            if (filtered.length === 0 && _allProducts.length > 0) {
+                if (!emptyFilterMsg && grid) {
+                    const msg = document.createElement('div');
+                    msg.id = 'empty-filter-msg';
+                    msg.className = 'col-span-full flex flex-col items-center text-center py-10 px-6 bg-amber-50/60 rounded-2xl border border-dashed border-amber-200';
+                    msg.innerHTML = `
+                        <div class="text-4xl mb-3">🔍</div>
+                        <h4 class="text-lg font-black text-slate-700 mb-1">${getLocalizedText('Sin resultados con estos filtros', 'No results match these filters')}</h4>
+                        <p class="text-sm text-slate-500 mb-4">${getLocalizedText('Intenta quitar algunos filtros para ver más productos.', 'Try removing some filters to see more products.')}</p>
+                        <button id="clear-all-filters-btn" class="px-5 py-2 bg-white border border-slate-200 text-slate-700 text-sm font-bold rounded-xl hover:bg-slate-50 transition-colors shadow-sm">${getLocalizedText('Quitar todos los filtros', 'Clear all filters')}</button>
+                    `;
+                    grid.innerHTML = '';
+                    grid.appendChild(msg);
+                    document.getElementById('clear-all-filters-btn')?.addEventListener('click', () => {
+                        const storeF = document.getElementById('store-filter'); if (storeF) storeF.value = 'all';
+                        const shipF = document.getElementById('free-shipping-filter'); if (shipF) shipF.checked = false;
+                        const minF = document.getElementById('price-min'); if (minF) minF.value = '';
+                        const maxF = document.getElementById('price-max'); if (maxF) maxF.value = '';
+                        const coupF = document.getElementById('only-coupons'); if (coupF) coupF.value = 'false';
+                        const dealF = document.getElementById('only-real-deals'); if (dealF) dealF.value = 'false';
+                        _smartFilterActiveSet.clear();
+                        _persistSmartFilters();
+                        applyFiltersAndSort();
+                    });
+                }
+            } else {
+                emptyFilterMsg?.remove();
+                renderProductCards(filtered, _lastFavorites);
+            }
+
+            renderSmartFilterSuggestions(filtered);
         }
 
         // Bind toolbar events
@@ -3638,7 +4311,19 @@ async function initApp() {
 
         async function renderProducts(products) {
             resultsContainer.innerHTML = '';
-            _lastProducts = products;
+            const onlyCouponsInput = document.getElementById('only-coupons');
+            const onlyRealDealsInput = document.getElementById('only-real-deals');
+            const filteredProducts = (products || []).filter((product) => {
+                if (onlyCouponsInput?.value === 'true' && !product.cupon) {
+                    return false;
+                }
+                if (onlyRealDealsInput?.value === 'true' && product.dealVerdict?.status !== 'real_deal') {
+                    return false;
+                }
+                return true;
+            });
+            _allProducts = products || [];
+            _lastProducts = filteredProducts;
 
             // Show toolbar
             const toolbar = document.getElementById('results-toolbar');
@@ -3647,9 +4332,21 @@ async function initApp() {
             // Populate store filter
             const storeSelect = document.getElementById('store-filter');
             if (storeSelect) {
-                const stores = [...new Set(products.map(p => p.tienda))].filter(Boolean).sort();
+                const stores = [...new Set(filteredProducts.map(p => p.tienda))].filter(Boolean).sort();
                 storeSelect.innerHTML = `<option value="all">${getLocalizedText('Todas las tiendas', 'All stores')}</option>` + 
                     stores.map(s => `<option value="${s}">${s}</option>`).join('');
+            }
+
+            // UX-5: Auto-fill price range placeholders from actual results
+            const prices = filteredProducts.map(p => typeof p.precio === 'number' ? p.precio : parseFloat(String(p.precio || '0').replace(/[^0-9.]/g, ''))).filter(v => v > 0);
+            if (prices.length > 0) {
+                const minPrice = Math.floor(Math.min(...prices));
+                const maxPrice = Math.ceil(Math.max(...prices));
+                const sym = getRegionConfig().currencySymbol || '$';
+                const minInput = document.getElementById('price-min');
+                const maxInput = document.getElementById('price-max');
+                if (minInput) minInput.placeholder = `Min ${sym}${minPrice}`;
+                if (maxInput) maxInput.placeholder = `Max ${sym}${maxPrice}`;
             }
 
             // --- Phase 17: Pre-fetch favoritos para persistencia visual ---
@@ -3665,16 +4362,17 @@ async function initApp() {
             _lastFavorites = userFavorites;
 
             const countEl = document.getElementById('results-count');
-            if (countEl) countEl.textContent = `${products.length} ${getRegionConfig().resultsFound}`;
+            if (countEl) countEl.textContent = `${filteredProducts.length} ${getRegionConfig().resultsFound}`;
 
             const localSearchData = JSON.parse(localStorage.getItem('lumu_searches_data') || '{"count":0}');
             updateCoinsProgress(localSearchData.count || 0);
 
-            renderProductCards(products, userFavorites);
+            renderProductCards(filteredProducts, userFavorites);
+            renderSmartFilterSuggestions(filteredProducts);
 
             // Check price alerts after rendering
             if (typeof window.checkPriceAlerts === 'function') {
-                window.checkPriceAlerts(products);
+                window.checkPriceAlerts(filteredProducts);
             }
         }
 
@@ -3801,7 +4499,8 @@ async function initApp() {
                     'best buy': 'https://upload.wikimedia.org/wikipedia/commons/f/f5/Best_Buy_Logo.svg',
                     'elektra': 'https://upload.wikimedia.org/wikipedia/commons/thumb/9/90/Elektra_logo.svg/320px-Elektra_logo.svg.png',
                     'costco': 'https://upload.wikimedia.org/wikipedia/commons/5/59/Costco_Wholesale_logo_2010-10-26.svg',
-                    'sam': 'https://upload.wikimedia.org/wikipedia/commons/9/9a/Sam%27s_Club.svg'
+                    'sam': 'https://upload.wikimedia.org/wikipedia/commons/9/9a/Sam%27s_Club.svg',
+                    'falabella': 'https://upload.wikimedia.org/wikipedia/commons/thumb/6/65/Falabella.svg/512px-Falabella.svg.png'
                 };
                 const defaultFallback = buildFallbackProductImage(product.tienda || product.titulo || 'Lumu');
                 const matchedStore = Object.entries(storeFallbacks).find(([key]) => tiendaLower.includes(key));
@@ -3853,8 +4552,8 @@ async function initApp() {
                             
                             const minP = Math.min(...dps);
                             const maxP = Math.max(...dps);
-                            const w = 60;
-                            const h = 20;
+                            const w = 84;
+                            const h = 28;
                             const pad = 3;
                             
                             // Si todos los precios son iguales, linea recta en medio
@@ -3869,7 +4568,7 @@ async function initApp() {
                             const strokeColor = trend.direction === 'down' ? '#10b981' : (trend.direction === 'up' ? '#f43f5e' : '#94a3b8');
                             
                             sparklineHtml = `
-                                <div class="tooltip tooltip-left ml-auto" data-tip="${isUS ? 'Trend (7 days)' : 'Tendencia (7 días)'}">
+                                <div class="tooltip tooltip-left ml-auto" data-tip="${isUS ? `Trend (7 days) · Min ${formatCurrencyByRegion(minP)} · Max ${formatCurrencyByRegion(maxP)}` : `Tendencia (7 días) · Mín ${formatCurrencyByRegion(minP)} · Máx ${formatCurrencyByRegion(maxP)}`}">
                                     <svg width="${w}" height="${h}" class="overflow-visible opacity-80 mix-blend-multiply">
                                         <path d="${pathD}" fill="none" stroke="${strokeColor}" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" />
                                         <circle cx="${pad + ((dps.length - 1) * ((w - pad*2) / (dps.length - 1)))}" cy="${pad + (h - pad*2) - (((precioNumerico - minP) / diff) * (h - pad*2))}" r="2.5" fill="${strokeColor}" />
@@ -3888,6 +4587,47 @@ async function initApp() {
                     }
                 }
 
+                let dealVerdictHtml = '';
+                let historyInsightHtml = '';
+                if (product.dealVerdict && product.dealVerdict.status) {
+                    const verdict = product.dealVerdict;
+                    const verdictMap = {
+                        real_deal: {
+                            cls: 'bg-emerald-50 text-emerald-700 border border-emerald-200 shadow-sm',
+                            icon: '✅',
+                            labelEs: 'Oferta real',
+                            labelEn: 'Real deal'
+                        },
+                        normal_price: {
+                            cls: 'bg-slate-100 text-slate-700 border border-slate-200 shadow-sm',
+                            icon: 'ℹ️',
+                            labelEs: 'Precio normal',
+                            labelEn: 'Normal price'
+                        },
+                        suspicious_discount: {
+                            cls: 'bg-amber-50 text-amber-800 border border-amber-200 shadow-sm',
+                            icon: '⚠️',
+                            labelEs: 'Descuento sospechoso',
+                            labelEn: 'Suspicious discount'
+                        }
+                    };
+                    const verdictUi = verdictMap[verdict.status] || verdictMap.normal_price;
+                    const avgPriceTip = verdict.stats && Number.isFinite(verdict.stats.avgPrice)
+                        ? (isUS ? `Average tracked price: ${formatCurrencyByRegion(verdict.stats.avgPrice)}` : `Precio promedio rastreado: ${formatCurrencyByRegion(verdict.stats.avgPrice)}`)
+                        : (isUS ? 'Tracked historical price analysis' : 'Análisis de precio histórico rastreado');
+                    const verdictAnim = verdict.status === 'real_deal' ? 'animate-pulse' : '';
+                    dealVerdictHtml = `<div class="mt-2 inline-flex items-center gap-2 px-3 py-1.5 rounded-lg text-[11px] font-black uppercase tracking-wider tooltip ${verdictUi.cls} ${verdictAnim}" data-tip="${avgPriceTip}"><span class="text-sm">${verdictUi.icon}</span>${isUS ? verdictUi.labelEn : verdictUi.labelEs}</div>`;
+                    if (verdict.stats && (Number.isFinite(verdict.stats.avgPrice) || Number.isFinite(verdict.stats.minPrice))) {
+                        const avgLabel = Number.isFinite(verdict.stats.avgPrice)
+                            ? `${isUS ? 'Avg' : 'Prom'} ${formatCurrencyByRegion(verdict.stats.avgPrice)}`
+                            : '';
+                        const minLabel = Number.isFinite(verdict.stats.minPrice)
+                            ? `${isUS ? 'Min' : 'Mín'} ${formatCurrencyByRegion(verdict.stats.minPrice)}`
+                            : '';
+                        historyInsightHtml = `<div class="mt-2 flex flex-wrap gap-2 text-[11px] font-bold text-slate-600"><span class="px-2 py-1 rounded-md bg-slate-100">${avgLabel}</span><span class="px-2 py-1 rounded-md bg-slate-100">${minLabel}</span></div>`;
+                    }
+                }
+
                 let couponHtml = '';
                 const cuponObj = product.cupon;
                 if (cuponObj) {
@@ -3896,7 +4636,9 @@ async function initApp() {
                     if (isPlaceholder) {
                         // Skip coupon display if it's a placeholder
                     } else {
-                        const discountText = (typeof cuponObj === 'object' && cuponObj.discount) ? cuponObj.discount : (product.couponDetails || (isUS ? 'COUPON AVAILABLE' : 'CUPÓN DISPONIBLE'));
+                        const discountText = (typeof cuponObj === 'object' && cuponObj.discount)
+                            ? localizeCouponDetails(cuponObj.discount)
+                            : localizeCouponDetails(product.couponDetails || (isUS ? 'COUPON AVAILABLE' : 'CUPÓN DISPONIBLE'));
                         const isPremium = window.currentUser && (window.currentUser.is_premium || window.currentUser.plan === 'personal_vip' || window.currentUser.plan === 'b2b');
                     
                         if (isPremium) {
@@ -3971,6 +4713,22 @@ async function initApp() {
                     : product.conditionLabel === 'refurbished'
                         ? (isUS ? 'REFURB.' : 'REACOND.')
                         : (isUS ? 'NEW' : 'NUEVO');
+                const trustBadgeMap = {
+                    1: 'bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200',
+                    2: 'bg-blue-50 text-blue-700 ring-1 ring-blue-200',
+                    3: 'bg-rose-50 text-rose-700 ring-1 ring-rose-200'
+                };
+                const trustBadgeClass = trustBadgeMap[product.storeTier] || 'bg-slate-100 text-slate-600 ring-1 ring-slate-200';
+                const rawTrustLabel = product.trustLabel || 'Marketplace';
+                const trustBadgeText = sanitize(isUS ? (TRUST_LABEL_EN[rawTrustLabel] || rawTrustLabel) : rawTrustLabel);
+                const trustBadgeHtml = trustBadgeText
+                    ? `<span class="text-[9px] font-bold px-2 py-0.5 rounded-full ${trustBadgeClass}" title="${trustBadgeText}">${trustBadgeText}</span>`
+                    : '';
+                const sellerSignalHtml = product.sellerModel === 'official_store'
+                    ? `<span class="text-[9px] font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full ring-1 ring-emerald-200">${isUS ? 'OFFICIAL' : 'OFICIAL'}</span>`
+                    : product.sellerModel === 'verified_marketplace'
+                        ? `<span class="text-[9px] font-bold text-cyan-700 bg-cyan-50 px-2 py-0.5 rounded-full ring-1 ring-cyan-200">${isUS ? 'VERIFIED' : 'VERIFICADO'}</span>`
+                        : '';
                 const c2cBadgeHtml = product.isC2C
                     ? '<span class="text-[9px] font-bold text-rose-700 bg-rose-50 px-2 py-0.5 rounded-full ring-1 ring-rose-200">C2C</span>'
                     : '';
@@ -4000,6 +4758,8 @@ async function initApp() {
                         <div class="flex items-center gap-1">
                             ${isBestPrice ? `<span class="text-[9px] font-bold text-white bg-gradient-to-r from-emerald-500 to-teal-500 px-2 py-0.5 rounded-full ring-2 ring-emerald-200 shadow-sm animate-pulse">💰 ${isUS ? 'BEST PRICE' : 'MEJOR PRECIO'}</span>` : ''}
                             ${product.isLocalStore ? `<span class="text-[9px] font-bold text-emerald-700 bg-emerald-100 px-2 py-0.5 rounded-full ring-1 ring-emerald-200">📍 ${isUS ? 'LOCAL' : 'LOCAL'}</span>` : ''}
+                            ${trustBadgeHtml}
+                            ${sellerSignalHtml}
                             <span class="text-[9px] font-bold px-2 py-0.5 rounded-full ${conditionBadgeClass}">${conditionBadgeText}</span>
                             ${c2cBadgeHtml}
                         </div>
@@ -4015,6 +4775,8 @@ async function initApp() {
                             ${priceDisplay}
                         </div>
                         ${trendHtml}
+                        ${dealVerdictHtml}
+                        ${historyInsightHtml}
                         ${fomoHtml}
                         ${couponHtml}
                         
@@ -4027,7 +4789,7 @@ async function initApp() {
                             
                             <!-- Acciones secundarias en botones Outline abajo -->
                             ${(!isLocal && precioNumerico > 0) ? `
-                            <div class="grid grid-cols-2 gap-2 w-full mt-1">
+                            <div class="grid grid-cols-2 sm:grid-cols-3 gap-2 w-full mt-1">
                                 <button class="btn-quick-alert flex-1 py-1.5 flex justify-center items-center gap-1.5 bg-white text-slate-600 hover:text-amber-600 hover:bg-amber-50 rounded-xl border border-slate-200 hover:border-amber-300 transition-all text-xs font-bold shadow-sm" title="${isUS ? 'Price alert' : 'Alerta de precio'}"
                                         data-alert-name="${sanitize(product.titulo)}"
                                         data-alert-price="${precioNumerico}"
@@ -4041,6 +4803,10 @@ async function initApp() {
                                         data-product-name="${sanitize(product.titulo)}">
                                     <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M9 7h6m0 10v-3m-3 3h.01M9 17h.01M9 14h.01M12 14h.01M15 11h.01M12 11h.01M9 11h.01M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z"/></svg>
                                     <span>${isUS ? 'Margin' : 'Margen'}</span>
+                                </button>
+                                <button class="btn-view-history flex-1 py-1.5 flex justify-center items-center gap-1.5 bg-white text-slate-600 hover:text-emerald-700 hover:bg-emerald-50 rounded-xl border border-slate-200 hover:border-emerald-300 transition-all text-xs font-bold shadow-sm" title="${isUS ? 'Price history' : 'Historial de precio'}">
+                                    <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M3 3v18h18M7 14l3-3 3 2 4-5"></path></svg>
+                                    <span>${isUS ? 'History' : 'Historial'}</span>
                                 </button>
                             </div>` : ''}
                             
@@ -4090,6 +4856,7 @@ async function initApp() {
                 const btnFav = card.querySelector('.btn-favorite');
                 const btnOpenOffer = card.querySelector('.btn-open-offer');
                 const btnCompare = card.querySelector('.btn-compare');
+                const btnViewHistory = card.querySelector('.btn-view-history');
                 
                 if (btnOpenOffer) {
                     btnOpenOffer.addEventListener('click', (e) => {
@@ -4118,6 +4885,13 @@ async function initApp() {
                             { transform: 'scale(1.25)' },
                             { transform: 'scale(1)' }
                         ], { duration: 250 });
+                    });
+                }
+                if (btnViewHistory) {
+                    btnViewHistory.addEventListener('click', (e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        openProductHistoryModal(product);
                     });
                 }
                 btnFav.addEventListener('click', async (e) => {
@@ -4954,7 +5728,8 @@ window.openAdGateway = async function (targetUrlOriginal, isReward = false) {
     // Evitar volver a ver el anuncio para el mismo link
     if (!window.adsWatchedCache) window.adsWatchedCache = {};
 
-    if (isVIP || window.adsWatchedCache[targetUrlOriginal]) {
+    // SEC-3: Also skip ads for temp VIP users (from Lumu Coins)
+    if (isVIP || window._isPremiumTemp || window.adsWatchedCache[targetUrlOriginal]) {
         window.open(targetUrl, '_blank');
         return;
     }
@@ -6148,4 +6923,34 @@ window.startInteractiveTutorial = startInteractiveTutorial;
         lastCheckedCount = count;
     };
 })();
+
+// UX-3: Global keyboard shortcuts
+document.addEventListener('keydown', (e) => {
+    // Ctrl+K / Cmd+K → focus search bar
+    if ((e.ctrlKey || e.metaKey) && e.key === 'k') {
+        e.preventDefault();
+        const searchInput = document.getElementById('search-input');
+        if (searchInput) {
+            searchInput.focus();
+            searchInput.select();
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+        }
+    }
+    // Escape → close topmost visible modal
+    if (e.key === 'Escape') {
+        const modals = [
+            'compare-modal', 'ad-modal', 'margin-calc-modal',
+            'price-history-modal', 'achievements-modal'
+        ];
+        for (const id of modals) {
+            const modal = document.getElementById(id);
+            if (modal && !modal.classList.contains('hidden') && modal.style.visibility !== 'hidden') {
+                modal.classList.add('hidden');
+                modal.classList.remove('flex');
+                if (modal.style) { modal.style.visibility = 'hidden'; modal.style.opacity = '0'; }
+                break;
+            }
+        }
+    }
+});
 

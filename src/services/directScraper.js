@@ -15,12 +15,26 @@ const USER_AGENTS = [
 
 const getRandomUA = () => USER_AGENTS[Math.floor(Math.random() * USER_AGENTS.length)];
 
-const getAxiosConfig = () => {
+const ACCEPT_LANGUAGE_MAP = {
+    MX: 'es-MX,es;q=0.9,en-US;q=0.8,en;q=0.7',
+    CL: 'es-CL,es;q=0.9,en-US;q=0.8,en;q=0.7',
+    CO: 'es-CO,es;q=0.9,en-US;q=0.8,en;q=0.7',
+    AR: 'es-AR,es;q=0.9,en-US;q=0.8,en;q=0.7',
+    PE: 'es-PE,es;q=0.9,en-US;q=0.8,en;q=0.7',
+    US: 'en-US,en;q=0.9,es;q=0.7'
+};
+
+const getAcceptLanguage = (countryCode = 'MX') => {
+    const normalizedCountry = String(countryCode || 'MX').toUpperCase();
+    return ACCEPT_LANGUAGE_MAP[normalizedCountry] || ACCEPT_LANGUAGE_MAP.MX;
+};
+
+const getAxiosConfig = (countryCode = 'MX') => {
     const config = {
         headers: {
             'User-Agent': getRandomUA(),
             'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8',
-            'Accept-Language': 'es-MX,es;q=0.9,en-US;q=0.8,en;q=0.7',
+            'Accept-Language': getAcceptLanguage(countryCode),
             'Accept-Encoding': 'gzip, deflate, br',
             'Cache-Control': 'no-cache',
         },
@@ -56,11 +70,44 @@ const getAxiosConfig = () => {
 
 const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 
-const scrapeWithRetry = async (url, maxRetries = 2) => {
+const MERCADO_LIBRE_SITE_MAP = {
+    MX: 'MLM',
+    CL: 'MLC',
+    AR: 'MLA',
+    CO: 'MCO',
+    PE: 'MPE',
+    US: 'MLM'
+};
+
+const MERCADO_LIBRE_SOURCE_MAP = {
+    MX: 'Mercado Libre MX',
+    CL: 'Mercado Libre CL',
+    AR: 'Mercado Libre AR',
+    CO: 'Mercado Libre CO',
+    PE: 'Mercado Libre PE',
+    US: 'Mercado Libre'
+};
+
+const FALABELLA_CONFIG_MAP = {
+    CL: {
+        baseUrl: 'https://www.falabella.com/falabella-cl/search',
+        source: 'Falabella CL'
+    },
+    CO: {
+        baseUrl: 'https://www.falabella.com.co/falabella-co/search',
+        source: 'Falabella CO'
+    },
+    PE: {
+        baseUrl: 'https://www.falabella.com.pe/falabella-pe/search',
+        source: 'Falabella PE'
+    }
+};
+
+const scrapeWithRetry = async (url, maxRetries = 2, countryCode = 'MX') => {
     let lastError;
     for (let i = 0; i <= maxRetries; i++) {
         try {
-            const config = getAxiosConfig();
+            const config = getAxiosConfig(countryCode);
             return await axios.get(url, config);
         } catch (error) {
             lastError = error;
@@ -108,6 +155,117 @@ exports.scrapeMercadoLibreDirect = async (query) => {
 
     } catch (error) {
         console.error('[Direct Scraper] Error crítico en MercadoLibre tras reintentos:', error.message);
+        return [];
+    }
+};
+
+exports.scrapeMercadoLibreAPI = async (query, countryCode = 'MX') => {
+    try {
+        const normalizedCountry = String(countryCode || 'MX').toUpperCase();
+        const siteId = MERCADO_LIBRE_SITE_MAP[normalizedCountry] || 'MLM';
+        const sourceLabel = MERCADO_LIBRE_SOURCE_MAP[normalizedCountry] || 'Mercado Libre';
+        const apiUrl = `https://api.mercadolibre.com/sites/${siteId}/search?q=${encodeURIComponent(query)}&limit=10`;
+        console.log(`[ML API] Buscando en ${siteId} para ${normalizedCountry}: ${query}`);
+
+        const response = await axios.get(apiUrl, {
+            timeout: 8000,
+            headers: {
+                'User-Agent': getRandomUA(),
+                'Accept': 'application/json'
+            }
+        });
+
+        const results = Array.isArray(response.data?.results)
+            ? response.data.results.map((item) => {
+                const price = Number(item.price);
+                const permalink = item.permalink || item.url || '';
+                if (!item.title || !Number.isFinite(price) || !permalink) {
+                    return null;
+                }
+
+                return {
+                    title: item.title,
+                    price,
+                    url: permalink,
+                    source: sourceLabel,
+                    image: item.thumbnail || item.secure_thumbnail || item.pictures?.[0]?.url || ''
+                };
+            }).filter(Boolean)
+            : [];
+
+        console.log(`[ML API] ${sourceLabel} encontró: ${results.length} resultados.`);
+        return results;
+    } catch (error) {
+        console.error('[ML API] Error consultando MercadoLibre API:', error.message);
+        return [];
+    }
+};
+
+exports.scrapeFalabellaRegional = async (query, countryCode = 'CL') => {
+    try {
+        const normalizedCountry = String(countryCode || 'CL').toUpperCase();
+        const falabellaConfig = FALABELLA_CONFIG_MAP[normalizedCountry];
+        if (!falabellaConfig) return [];
+
+        console.log(`[Direct Scraper] Buscando en ${falabellaConfig.source}: ${query}`);
+        const baseDomain = falabellaConfig.baseUrl.split('/search')[0];
+        const url = `${falabellaConfig.baseUrl}?Ntt=${encodeURIComponent(query)}`;
+        const response = await scrapeWithRetry(url, 2, normalizedCountry);
+        const $ = cheerio.load(response.data);
+        const results = [];
+
+        $('script[type="application/ld+json"]').each((i, el) => {
+            try {
+                const raw = $(el).html();
+                if (!raw) return;
+                const json = JSON.parse(raw);
+                const items = json['@type'] === 'ItemList'
+                    ? (json.itemListElement || [])
+                    : (json['@type'] === 'Product' ? [json] : []);
+
+                items.slice(0, 8).forEach((item) => {
+                    const product = item.item || item;
+                    const offer = Array.isArray(product.offers) ? product.offers[0] : product.offers;
+                    const productUrl = product.url || product['@id'] || '';
+                    const numericPrice = Number(offer?.price);
+                    if (!product?.name || !productUrl || !Number.isFinite(numericPrice)) return;
+
+                    results.push({
+                        title: product.name,
+                        price: numericPrice,
+                        url: productUrl.startsWith('http') ? productUrl : `${baseDomain}${productUrl}`,
+                        source: falabellaConfig.source,
+                        image: typeof product.image === 'string' ? product.image : (product.image?.[0] || '')
+                    });
+                });
+            } catch (error) { }
+        });
+
+        if (results.length === 0) {
+            $('[data-pod], [class*="pod"], [class*="ProductCard"], a[href*="/product/"]').slice(0, 8).each((i, el) => {
+                const title = $(el).find('[class*="title"], b, h3, h4').first().text().trim();
+                const link = $(el).is('a') ? $(el).attr('href') : $(el).find('a').first().attr('href');
+                const priceRaw = $(el).find('[class*="price"], [class*="Price"], [data-internet-price]').first().text().trim();
+                const image = $(el).find('img').first().attr('src') || $(el).find('img').first().attr('data-src');
+                const normalizedPrice = String(priceRaw || '').replace(/[^\d.,]/g, '');
+                const parsedPrice = normalizedPrice ? parseFloat(normalizedPrice.replace(/\./g, '').replace(',', '.')) : NaN;
+
+                if (title && link && Number.isFinite(parsedPrice)) {
+                    results.push({
+                        title,
+                        price: parsedPrice,
+                        url: link.startsWith('http') ? link : `${baseDomain}${link}`,
+                        source: falabellaConfig.source,
+                        image: image ? (image.startsWith('//') ? `https:${image}` : image) : ''
+                    });
+                }
+            });
+        }
+
+        console.log(`[Direct Scraper] ${falabellaConfig.source} encontró: ${results.length} resultados.`);
+        return results;
+    } catch (error) {
+        console.error('[Direct Scraper] Error en Falabella regional:', error.message);
         return [];
     }
 };

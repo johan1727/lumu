@@ -95,12 +95,15 @@ router.post('/push-subscribe', authMiddleware, requireAuth, priceAlertController
 router.post('/claim-reward', authMiddleware, requireFrontendRequest, searchController.claimReward);
 
 // GET /api/config
+const regionConfigService = require('../services/regionConfigService');
 router.get('/config', (req, res, next) => {
     if (!isAllowedFrontendRequest(req, { allowHostFallback: true })) {
         return res.status(403).json({ error: 'Acceso denegado' });
     }
     next();
 }, (req, res) => {
+    const detectedCountry = regionConfigService.resolveCountry(req);
+    const regionConfig = regionConfigService.getRegionConfig(detectedCountry);
     // Only expose public-safe keys (never SERVICE_ROLE_KEY)
     res.json({
         supabaseUrl: process.env.SUPABASE_URL || '',
@@ -108,7 +111,13 @@ router.get('/config', (req, res, next) => {
         stripePaymentLink: process.env.STRIPE_PAYMENT_LINK || '',
         stripeB2bPaymentLink: process.env.STRIPE_B2B_PAYMENT_LINK || '',
         vapidPublicKey: process.env.VAPID_PUBLIC_KEY || '',
-        rewardedAdTagUrl: process.env.REWARDED_AD_TAG_URL || ''
+        rewardedAdTagUrl: process.env.REWARDED_AD_TAG_URL || '',
+        detectedCountry: detectedCountry,
+        currency: regionConfig.currency,
+        locale: regionConfig.locale,
+        currencySymbol: regionConfig.currencySymbol,
+        regionLabel: regionConfig.regionLabel,
+        supportedCountries: regionConfigService.getSupportedCountries()
     });
 });
 

@@ -24,7 +24,10 @@ const searchProductSchema = baseSearchSchema.extend({
     chatHistory: z.array(chatMessageSchema).max(30).optional(),
     skipLLM: z.boolean().optional(),
     safeStoresOnly: z.boolean().optional().default(false),
-    conditionMode: z.enum(['all', 'new', 'used']).optional().default('all')
+    includeKnownMarketplaces: z.boolean().optional().default(true),
+    includeHighRiskMarketplaces: z.boolean().optional().default(false),
+    conditionMode: z.enum(['all', 'new', 'used']).optional().default('all'),
+    country: z.string().max(5).optional()
 });
 
 const bulkSearchSchema = z.object({

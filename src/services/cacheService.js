@@ -33,10 +33,10 @@ const normalizeQuery = (query) => {
 };
 
 /**
- * Genera una key única basada en query normalizada, lat, lng y radius
+ * Genera una key única basada en país, query normalizada, lat, lng y radius
  */
-const generateCacheKey = (query, radius, lat, lng) => {
-    let key = normalizeQuery(query);
+const generateCacheKey = (query, radius, lat, lng, countryCode = 'MX') => {
+    let key = `ct_${String(countryCode || 'MX').toUpperCase()}_${normalizeQuery(query)}`;
     if (radius && radius !== 'global') {
         // Truncar lat/lng a 1 decimal (~11 km de precisión) para más cache hits
         const normLat = lat != null ? parseFloat(lat).toFixed(1) : '0';
@@ -123,8 +123,8 @@ function ramCacheCleanup() {
 /**
  * Busca resultados en caché: primero RAM, luego Supabase (24 horas TTL)
  */
-exports.getCachedResults = async (query, radius, lat, lng) => {
-    const queryKey = generateCacheKey(query, radius, lat, lng);
+exports.getCachedResults = async (query, radius, lat, lng, countryCode = 'MX') => {
+    const queryKey = generateCacheKey(query, radius, lat, lng, countryCode);
 
     // 1. Check RAM cache first (instant, no network)
     const ramHit = ramCacheGet(queryKey);
@@ -191,10 +191,10 @@ exports.getCachedResults = async (query, radius, lat, lng) => {
 /**
  * Guarda resultados en Supabase (haciendo un upsert si ya existía la key)
  */
-exports.saveToCache = async (query, radius, lat, lng, results) => {
+exports.saveToCache = async (query, radius, lat, lng, results, countryCode = 'MX') => {
     if (!supabase) return;
 
-    const queryKey = generateCacheKey(query, radius, lat, lng);
+    const queryKey = generateCacheKey(query, radius, lat, lng, countryCode);
 
     // Always warm RAM cache immediately (even if saves fail)
     ramCacheSet(queryKey, results);
@@ -258,10 +258,10 @@ exports.cleanExpiredCache = async () => {
 /**
  * Guarda snapshot de precios para historial/tendencia
  */
-exports.savePriceSnapshot = async (query, radius, lat, lng, products = []) => {
+exports.savePriceSnapshot = async (query, radius, lat, lng, products = [], countryCode = 'MX') => {
     if (!supabase || !Array.isArray(products) || products.length === 0) return;
 
-    const queryKey = generateCacheKey(query, radius, lat, lng);
+    const queryKey = generateCacheKey(query, radius, lat, lng, countryCode);
     const snapshotRows = products
         .map((product) => {
             const rawPrice = product.precio;
@@ -297,10 +297,10 @@ exports.savePriceSnapshot = async (query, radius, lat, lng, products = []) => {
 /**
  * Crea un mapa de tendencias por URL normalizada
  */
-exports.getPriceHistoryMap = async (query, radius, lat, lng, products = []) => {
+exports.getPriceHistoryMap = async (query, radius, lat, lng, products = [], countryCode = 'MX') => {
     if (!supabase || !Array.isArray(products) || products.length === 0) return {};
 
-    const queryKey = generateCacheKey(query, radius, lat, lng);
+    const queryKey = generateCacheKey(query, radius, lat, lng, countryCode);
     const normalizedUrls = products
         .map((p) => normalizeProductUrl(p.urlMonetizada || p.urlOriginal))
         .filter(Boolean);
@@ -334,3 +334,4 @@ exports.getPriceHistoryMap = async (query, radius, lat, lng, products = []) => {
 };
 
 exports.normalizeProductUrl = normalizeProductUrl;
+exports.generateCacheKey = generateCacheKey;

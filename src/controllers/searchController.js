@@ -5,6 +5,8 @@ const cacheService = require('../services/cacheService');
 const supabase = require('../config/supabase');
 const visionService = require('../services/visionService');
 const couponService = require('../services/couponService');
+const storeTrustService = require('../services/storeTrustService');
+const regionConfigService = require('../services/regionConfigService');
 
 function buildFallbackSuggestions(baseQuery, altQueries = []) {
     const cleanBase = String(baseQuery || '').trim();
@@ -24,6 +26,75 @@ function buildFallbackSuggestions(baseQuery, altQueries = []) {
     return [...new Set([...(altQueries || []), ...baseSuggestions])]
         .filter(Boolean)
         .slice(0, 4);
+}
+
+function buildDealVerdict(currentPrice, history = []) {
+    const normalizedHistory = (history || [])
+        .map(entry => ({
+            price: Number(entry.price),
+            created_at: entry.created_at
+        }))
+        .filter(entry => Number.isFinite(entry.price) && entry.price > 0)
+        .sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
+
+    if (!Number.isFinite(currentPrice) || currentPrice <= 0 || normalizedHistory.length < 3) {
+        return null;
+    }
+
+    const prices = normalizedHistory.map(entry => entry.price);
+    const avgPrice = prices.reduce((sum, value) => sum + value, 0) / prices.length;
+    const minPrice = Math.min(...prices);
+    const maxPrice = Math.max(...prices);
+    const recentWindow = normalizedHistory.slice(-7, -1);
+    const baselineWindow = normalizedHistory.slice(Math.max(0, normalizedHistory.length - 37), Math.max(0, normalizedHistory.length - 7));
+    const recentAvg = recentWindow.length ? recentWindow.reduce((sum, item) => sum + item.price, 0) / recentWindow.length : null;
+    const baselineAvg = baselineWindow.length ? baselineWindow.reduce((sum, item) => sum + item.price, 0) / baselineWindow.length : avgPrice;
+    const belowAveragePct = avgPrice > 0 ? Number((((avgPrice - currentPrice) / avgPrice) * 100).toFixed(1)) : 0;
+    const belowMaxPct = maxPrice > 0 ? Number((((maxPrice - currentPrice) / maxPrice) * 100).toFixed(1)) : 0;
+    const recentInflation = recentAvg && baselineAvg ? recentAvg > baselineAvg * 1.2 : false;
+
+    if (recentInflation && currentPrice >= baselineAvg * 0.95) {
+        return {
+            status: 'suspicious_discount',
+            label: 'Descuento sospechoso',
+            confidence: 'media',
+            stats: {
+                avgPrice: Number(avgPrice.toFixed(2)),
+                minPrice: Number(minPrice.toFixed(2)),
+                maxPrice: Number(maxPrice.toFixed(2)),
+                belowAveragePct,
+                belowMaxPct
+            }
+        };
+    }
+
+    if (currentPrice <= minPrice * 1.03 || belowAveragePct >= 10) {
+        return {
+            status: 'real_deal',
+            label: 'Oferta real',
+            confidence: currentPrice <= minPrice * 1.01 || belowAveragePct >= 18 ? 'alta' : 'media',
+            stats: {
+                avgPrice: Number(avgPrice.toFixed(2)),
+                minPrice: Number(minPrice.toFixed(2)),
+                maxPrice: Number(maxPrice.toFixed(2)),
+                belowAveragePct,
+                belowMaxPct
+            }
+        };
+    }
+
+    return {
+        status: 'normal_price',
+        label: 'Precio normal',
+        confidence: 'media',
+        stats: {
+            avgPrice: Number(avgPrice.toFixed(2)),
+            minPrice: Number(minPrice.toFixed(2)),
+            maxPrice: Number(maxPrice.toFixed(2)),
+            belowAveragePct,
+            belowMaxPct
+        }
+    };
 }
 
 function createSearchCostMetrics() {
@@ -53,6 +124,30 @@ function estimateSearchCostUsd(metrics = {}) {
         (metrics.serperPlacesCalls || 0) * parseUsdRate('EST_COST_SERPER_PLACES_USD');
 
     return Number(total.toFixed(6));
+}
+
+function tokenizeSearchText(value = '') {
+    return String(value || '')
+        .toLowerCase()
+        .replace(/[^a-z0-9áéíóúñü\s]/gi, ' ')
+        .split(/\s+/)
+        .filter(token => token.length > 2);
+}
+
+function buildMatchSignals(searchText = '', titleText = '') {
+    const queryTokens = [...new Set(tokenizeSearchText(searchText))];
+    const titleTokens = new Set(tokenizeSearchText(titleText));
+    if (queryTokens.length === 0) {
+        return { matchScore: 0, strongMatch: false, weakMatch: false };
+    }
+
+    const matchedTokens = queryTokens.filter(token => titleTokens.has(token)).length;
+    const matchScore = matchedTokens / queryTokens.length;
+    return {
+        matchScore,
+        strongMatch: matchScore >= 0.72 || (matchedTokens >= 3 && matchScore >= 0.6),
+        weakMatch: matchScore < 0.45
+    };
 }
 
 function bumpProviderCostMetrics(metrics, { intentType, radius, lat, lng }) {
@@ -117,7 +212,23 @@ exports.searchProduct = async (req, res) => {
     const costMetrics = createSearchCostMetrics();
     try {
         console.log('[DEBUG /buscar] req.body:', JSON.stringify(req.body));
-        const { chatHistory = [], radius, lat, lng, skipLLM, safeStoresOnly = false, conditionMode = 'all' } = req.body;
+        const {
+            chatHistory = [],
+            radius,
+            lat,
+            lng,
+            skipLLM,
+            safeStoresOnly = false,
+            includeKnownMarketplaces = true,
+            includeHighRiskMarketplaces = false,
+            conditionMode = 'all',
+            country: explicitCountry
+        } = req.body;
+
+        // Detect country: explicit from frontend > Vercel IP header > Accept-Language > MX default
+        const countryCode = regionConfigService.resolveCountry(req, explicitCountry);
+        const regionCfg = regionConfigService.getRegionConfig(countryCode);
+        console.log(`[Search] Detected country: ${countryCode} (${regionCfg.regionLabel}, ${regionCfg.currency})`);
 
         // Use verified userId from auth middleware (JWT), ignore body.userId
         const userId = req.userId || null;
@@ -183,11 +294,16 @@ exports.searchProduct = async (req, res) => {
 
         // PAYWALL Enforcement: Verificar límites por plan en backend (authenticated users)
         if (userId && supabase) {
-            const { data: profile } = await supabase.from('profiles').select('plan, is_premium').eq('id', userId).single();
+            const { data: profile } = await supabase.from('profiles').select('plan, is_premium, vip_temp_unlocked_at').eq('id', userId).single();
             if (profile) {
                 let reqLimit = 3;
                 let isDaily = true;
                 let planName = 'Gratis';
+
+                // SEC-3: Check if user has active temporary VIP from Lumu Coins (1 hour window)
+                const VIP_TEMP_DURATION_MS = 60 * 60 * 1000; // 1 hour
+                const hasTempVIP = profile.vip_temp_unlocked_at &&
+                    (Date.now() - new Date(profile.vip_temp_unlocked_at).getTime()) < VIP_TEMP_DURATION_MS;
 
                 if (profile.plan === 'b2b') {
                     reqLimit = 500;
@@ -197,6 +313,10 @@ exports.searchProduct = async (req, res) => {
                     reqLimit = 100;
                     isDaily = false;
                     planName = 'VIP';
+                } else if (hasTempVIP) {
+                    reqLimit = 20;
+                    isDaily = true;
+                    planName = 'VIP Temporal';
                 }
 
                 let queryDate = new Date();
@@ -212,18 +332,35 @@ exports.searchProduct = async (req, res) => {
                     .eq('user_id', userId)
                     .gte('created_at', queryDate.toISOString());
 
+                // Subtract bonus credits (from claimReward) earned today
+                let bonusCredits = 0;
+                try {
+                    const bonusKey = `bonus:user:${userId}`;
+                    const { count: bCount } = await supabase.from('rate_limits')
+                        .select('*', { count: 'exact', head: true })
+                        .eq('ip', bonusKey)
+                        .gte('created_at', queryDate.toISOString());
+                    bonusCredits = bCount || 0;
+                } catch { /* ignore */ }
+
+                const effectiveUsed = Math.max(0, (count || 0) - bonusCredits);
+
                 if (!error) {
-                    if (count >= reqLimit) {
+                    if (effectiveUsed >= reqLimit) {
                         const errorMsg = isDaily
                             ? 'Límite diario de búsquedas gratuitas alcanzado. Mejora a VIP para búsquedas sin límites.'
                             : `Límite mensual de búsquedas alcanzado(${reqLimit} para el plan ${planName}).Por favor espera a tu siguiente ciclo o contacta a soporte.`;
-                        return res.status(402).json({ error: errorMsg, paywall: !profile.is_premium, upgrade_required: profile.is_premium });
+                        return res.status(402).json({
+                            error: errorMsg,
+                            paywall: !profile.is_premium && !hasTempVIP,
+                            upgrade_required: !!profile.is_premium && !hasTempVIP
+                        });
                     }
 
                     // Generar Warning si está cerca del límite
-                    if (!isDaily && count >= reqLimit * 0.9) {
-                        usageWarning = `⚠️ Te estás acercando a tu límite mensual(${count} / ${reqLimit} búsquedas).`;
-                    } else if (isDaily && count === reqLimit - 1) {
+                    if (!isDaily && effectiveUsed >= reqLimit * 0.9) {
+                        usageWarning = `⚠️ Te estás acercando a tu límite mensual(${effectiveUsed} / ${reqLimit} búsquedas).`;
+                    } else if (isDaily && effectiveUsed === reqLimit - 1) {
                         usageWarning = `⚠️ Te queda 1 búsqueda gratuita hoy.`;
                     }
                 }
@@ -296,7 +433,7 @@ exports.searchProduct = async (req, res) => {
         }
 
         // NUEVO: Verificamos en Caché
-        const cachedResults = await cacheService.getCachedResults(searchQuery, radius, lat, lng);
+        const cachedResults = await cacheService.getCachedResults(searchQuery, radius, lat, lng, countryCode);
         if (cachedResults) {
             costMetrics.cacheHit = true;
             logSearchCostMetrics('search.cache_hit', costMetrics, {
@@ -311,6 +448,12 @@ exports.searchProduct = async (req, res) => {
                     condicion: llmAnalysis.condition,
                     desde_cache: true
                 },
+                region: {
+                    country: countryCode,
+                    currency: regionCfg.currency,
+                    locale: regionCfg.locale,
+                    label: regionCfg.regionLabel
+                },
                 top_5_baratos: cachedResults,
                 advertencia_uso: usageWarning
             });
@@ -324,7 +467,7 @@ exports.searchProduct = async (req, res) => {
 
         bumpProviderCostMetrics(costMetrics, { intentType: llmAnalysis.intent_type, radius, lat, lng });
         console.log(`[Search Pipeline] Buscando: "${searchQuery}" | radius=${radius} | lat=${lat} | lng=${lng} | intent=${llmAnalysis.intent_type}`);
-        const shoppingResults = await shoppingService.searchGoogleShopping(searchQuery, radius, lat, lng, llmAnalysis.intent_type, abortController.signal, conditionMode);
+        const shoppingResults = await shoppingService.searchGoogleShopping(searchQuery, radius, lat, lng, llmAnalysis.intent_type, abortController.signal, conditionMode, countryCode);
         console.log(`[Search Pipeline] Resultados de shoppingService: ${shoppingResults.length}`);
 
         // Check remaining time before alt queries (skip if running low)
@@ -410,7 +553,7 @@ exports.searchProduct = async (req, res) => {
                 console.log(`[Search Pipeline] 🔄 Reintentando con query simplificado: "${simplifiedQuery}"`);
                 costMetrics.retrySearches += 1;
                 bumpProviderCostMetrics(costMetrics, { intentType: llmAnalysis.intent_type, radius, lat, lng });
-                const retryResults = await shoppingService.searchGoogleShopping(simplifiedQuery, radius, lat, lng, llmAnalysis.intent_type);
+                const retryResults = await shoppingService.searchGoogleShopping(simplifiedQuery, radius, lat, lng, llmAnalysis.intent_type, null, conditionMode, countryCode);
                 if (retryResults && retryResults.length > 0) {
                     shoppingResults.push(...retryResults);
                     console.log(`[Search Pipeline] ✅ Reintento exitoso: ${retryResults.length} resultados.`);
@@ -440,16 +583,21 @@ exports.searchProduct = async (req, res) => {
         // 4. Filtrar y Procesar resultados (Simular filtro Condition + Deduplicar)
         // --- PRE-FILTER: Remove garbage results & Apply Safe Stores Filter ---
         const cleanedResults = shoppingResults.filter(item => {
+            item.storeTrust = storeTrustService.classifyStore(item);
+
             // Apply Safe Stores Filter if requested
             if (safeStoresOnly) {
-                const storeName = (item.source || item.store || '').toLowerCase();
-                const url = (item.link || item.url || '').toLowerCase();
-                const isUntrusted = /temu|aliexpress|shein|wish|shopee/i.test(storeName) || 
-                                    /temu\.com|aliexpress\.com|shein\.com|wish\.com|shopee\.com/i.test(url);
-                const isRiskyC2C = /facebook|marketplace|segunda mano|segundamano|locanto|vivanuncios|ebay|craigslist/i.test(storeName)
-                    || /facebook\.com|fb\.com|vivanuncios\.com|segundamano\.mx|ebay\./i.test(url);
-                if (isUntrusted || isRiskyC2C) {
-                    console.log(`[Safe Filter] Excluyendo tienda no segura: ${storeName}`);
+                if (!storeTrustService.shouldAllowSafeStore(item)) {
+                    console.log(`[Safe Filter] Excluyendo tienda no segura: ${item.source || item.store || 'desconocida'}`);
+                    return false;
+                }
+            }
+
+            if (!safeStoresOnly) {
+                if (!includeKnownMarketplaces && item.storeTrust.storeTier === 2 && !item.storeTrust.isTrustedRetail) {
+                    return false;
+                }
+                if (!includeHighRiskMarketplaces && item.storeTrust.storeTier === 3) {
                     return false;
                 }
             }
@@ -462,10 +610,7 @@ exports.searchProduct = async (req, res) => {
             if (/^(compra|ver|buscar|encuentra|tienda|catálogo|categoría|página|p\.\-?\d)/i.test(title)) return false;
             // Robust price parsing: handle "$1,299.00", "MXN 1299", "1,299", numbers, etc.
             let price = null;
-            const sourceText = String(item.source || item.store || '').toLowerCase();
-            const urlText = String(item.url || item.link || '').toLowerCase();
-            const hasTrustedSource = /amazon|mercado|walmart|liverpool|coppel|best buy|bestbuy|elektra|costco|sam'?s|sams|office depot|officedepot|soriana|sears|home depot|homedepot|bodega aurrera|linio|claro shop|sanborns|local/i.test(sourceText)
-                || /amazon\.|mercadolibre\.|walmart\.|liverpool\.|coppel\.|bestbuy\.|elektra\.|costco\.|sams\.|officedepot\.|soriana\.|sears\.|homedepot\.|bodegaaurrera\.|linio\.|claroshop\.|sanborns\.|google\.com\/maps/i.test(urlText);
+            const hasTrustedSource = item.storeTrust.isKnownStore || item.isLocalStore;
             if (item.price != null) {
                 const priceStr = String(item.price).replace(/[^0-9.,]/g, '').replace(/,/g, '');
                 price = parseFloat(priceStr);
@@ -500,7 +645,7 @@ exports.searchProduct = async (req, res) => {
             const text = `${item.title || ''} ${item.snippet || ''} ${item.source || ''} ${item.url || ''}`.toLowerCase();
             const isRefurbished = /reacond|refurb|renewed|remanufacturado|open box|certified renewed/.test(text);
             const isUsed = /usad|seminuev|segunda mano|preowned|pre-owned|pre loved|preloved/.test(text);
-            const isC2C = /mercado libre|mercadolibre|facebook|marketplace|ebay|vivanuncios|segundamano/.test(text);
+            const isC2C = item.storeTrust?.sellerModel === 'c2c' || /facebook|marketplace|ebay|vivanuncios|segundamano/.test(text);
             return {
                 conditionLabel: isRefurbished ? 'refurbished' : (isUsed ? 'used' : 'new'),
                 isC2C
@@ -509,8 +654,12 @@ exports.searchProduct = async (req, res) => {
 
         for (const item of cleanedResults) {
             const conditionMeta = classifyCondition(item);
+            const matchSignals = buildMatchSignals(llmAnalysis.searchQuery || query, item.title || '');
             item.conditionLabel = conditionMeta.conditionLabel;
             item.isC2C = conditionMeta.isC2C;
+            item.matchScore = matchSignals.matchScore;
+            item.strongMatch = matchSignals.strongMatch;
+            item.weakMatch = matchSignals.weakMatch;
         }
 
         // Deduplicación: por URL exacta + Jaccard similarity en títulos
@@ -573,10 +722,22 @@ exports.searchProduct = async (req, res) => {
                 : conditionMode === 'new'
                     ? (b.conditionLabel === 'new' ? -220 : 350)
                     : (b.conditionLabel === 'refurbished' ? -120 : b.conditionLabel === 'used' ? -80 : 0);
-            const aC2CBoost = a.isC2C ? (conditionMode === 'used' ? -220 : 450) : 0;
-            const bC2CBoost = b.isC2C ? (conditionMode === 'used' ? -220 : 450) : 0;
+            const aTrustPenalty = storeTrustService.getTrustPenalty(a, {
+                conditionMode,
+                expensiveProductSearch: isMainProductSearch,
+                strongMatch: Boolean(a.strongMatch),
+                weakMatch: Boolean(a.weakMatch)
+            });
+            const bTrustPenalty = storeTrustService.getTrustPenalty(b, {
+                conditionMode,
+                expensiveProductSearch: isMainProductSearch,
+                strongMatch: Boolean(b.strongMatch),
+                weakMatch: Boolean(b.weakMatch)
+            });
             const aSuspiciousPenalty = a.isSuspicious ? 3000 : 0;
             const bSuspiciousPenalty = b.isSuspicious ? 3000 : 0;
+            const aMatchPenalty = a.weakMatch ? (isMainProductSearch ? 900 : 320) : (a.strongMatch ? -120 : 0);
+            const bMatchPenalty = b.weakMatch ? (isMainProductSearch ? 900 : 320) : (b.strongMatch ? -120 : 0);
 
             const aPrice = a.price == null ? Infinity : parseFloat(a.price);
             const bPrice = b.price == null ? Infinity : parseFloat(b.price);
@@ -584,9 +745,9 @@ exports.searchProduct = async (req, res) => {
             if (hasLocation) {
                 const aBoost = a.isLocalStore ? Math.min(aPrice * 0.10, 150) : 0;
                 const bBoost = b.isLocalStore ? Math.min(bPrice * 0.10, 150) : 0;
-                return (aPrice - aBoost + aConditionBoost + aC2CBoost + aSuspiciousPenalty) - (bPrice - bBoost + bConditionBoost + bC2CBoost + bSuspiciousPenalty);
+                return (aPrice - aBoost + aConditionBoost + aTrustPenalty + aMatchPenalty + aSuspiciousPenalty) - (bPrice - bBoost + bConditionBoost + bTrustPenalty + bMatchPenalty + bSuspiciousPenalty);
             } else {
-                return (aPrice + aConditionBoost + aC2CBoost + aSuspiciousPenalty) - (bPrice + bConditionBoost + bC2CBoost + bSuspiciousPenalty);
+                return (aPrice + aConditionBoost + aTrustPenalty + aMatchPenalty + aSuspiciousPenalty) - (bPrice + bConditionBoost + bTrustPenalty + bMatchPenalty + bSuspiciousPenalty);
             }
         });
 
@@ -625,12 +786,20 @@ exports.searchProduct = async (req, res) => {
                 cupon: llmAnalysis.cupon || null,
                 conditionLabel: product.conditionLabel || 'new',
                 isC2C: Boolean(product.isC2C),
-                isSuspicious: Boolean(product.isSuspicious)
+                isSuspicious: Boolean(product.isSuspicious),
+                storeCanonical: product.storeTrust?.canonicalStore || 'desconocida',
+                storeTier: product.storeTrust?.storeTier || 2,
+                trustLabel: product.storeTrust?.trustLabel || 'Marketplace',
+                sellerModel: product.storeTrust?.sellerModel || 'marketplace',
+                riskFlags: product.storeTrust?.riskFlags || [],
+                matchScore: Number(product.matchScore || 0),
+                strongMatch: Boolean(product.strongMatch),
+                weakMatch: Boolean(product.weakMatch)
             };
         });
 
         // Historial de precios: comparar con snapshots previos por URL
-        const priceHistoryMap = await cacheService.getPriceHistoryMap(searchQuery, radius, lat, lng, finalProducts);
+        const priceHistoryMap = await cacheService.getPriceHistoryMap(searchQuery, radius, lat, lng, finalProducts, countryCode);
         const productsWithTrend = finalProducts.map((product) => {
             const normalizedUrl = cacheService.normalizeProductUrl(product.urlMonetizada || product.urlOriginal);
             const productHistory = priceHistoryMap[normalizedUrl] || [];
@@ -640,8 +809,13 @@ exports.searchProduct = async (req, res) => {
                 ? product.precio
                 : parseFloat(String(product.precio || '').replace(/[^0-9.]/g, ''));
 
+            const dealVerdict = buildDealVerdict(currentPrice, productHistory);
+
             if (!previous || !Number.isFinite(currentPrice) || currentPrice <= 0) {
-                return product;
+                return {
+                    ...product,
+                    ...(dealVerdict ? { dealVerdict } : {})
+                };
             }
 
             const previousPrice = Number(previous.price);
@@ -652,6 +826,7 @@ exports.searchProduct = async (req, res) => {
 
             return {
                 ...product,
+                ...(dealVerdict ? { dealVerdict } : {}),
                 priceTrend: {
                     direction,
                     delta: absDelta,
@@ -664,8 +839,8 @@ exports.searchProduct = async (req, res) => {
         });
 
         // NUEVO: Guardar en Caché
-        await cacheService.saveToCache(searchQuery, radius, lat, lng, productsWithTrend);
-        await cacheService.savePriceSnapshot(searchQuery, radius, lat, lng, productsWithTrend);
+        await cacheService.saveToCache(searchQuery, radius, lat, lng, productsWithTrend, countryCode);
+        await cacheService.savePriceSnapshot(searchQuery, radius, lat, lng, productsWithTrend, countryCode);
 
         // FIX #6: Unificar logging - solo loguear en searches (no en rate_limits para autenticados)
         // Las búsquedas anónimas ya se loguearon arriba en rate_limits
@@ -689,7 +864,7 @@ exports.searchProduct = async (req, res) => {
                 couponDetails = "Cupón sugerido por IA";
             } else {
                 // Lookup active universal coupons for this specific store
-                const storeCoupons = couponService.getCouponsForStore(tienda);
+                const storeCoupons = couponService.getCouponsForStore(tienda, countryCode);
                 if (storeCoupons && storeCoupons.length > 0) {
                     injectedCoupon = storeCoupons[0].code;
                     couponDetails = storeCoupons[0].discount;
@@ -718,6 +893,12 @@ exports.searchProduct = async (req, res) => {
                 busqueda: searchQuery,
                 condicion: llmAnalysis.condition,
                 modo_condicion: conditionMode
+            },
+            region: {
+                country: countryCode,
+                currency: regionCfg.currency,
+                locale: regionCfg.locale,
+                label: regionCfg.regionLabel
             },
             top_5_baratos: finalProductsConCupones,
             sugerencias: buildFallbackSuggestions(searchQuery, llmAnalysis.alternativeQueries),
@@ -884,6 +1065,7 @@ exports.claimReward = async (req, res) => {
     try {
         const userId = req.userId || null;
         const BONUS_SEARCHES = 3;
+        const CLAIM_COOLDOWN_MS = 60 * 60 * 1000; // 1 hour between claims
         const rewardedAdTagUrl = process.env.REWARDED_AD_TAG_URL || '';
 
         if (!rewardedAdTagUrl.trim()) {
@@ -894,23 +1076,40 @@ exports.claimReward = async (req, res) => {
             return res.json({ success: true, bonus: BONUS_SEARCHES, msg: 'Modo local (sin Supabase)' });
         }
 
-        if (userId) {
-            // Delete the 3 most recent searches for this user today
-            const todayStart = new Date();
-            todayStart.setHours(0, 0, 0, 0);
+        // SECURITY FIX SEC-1: Rate-limit claims to 1 per hour per user/IP
+        const ip = req.headers['x-vercel-forwarded-for']?.split(',')[0]?.trim() || req.headers['x-real-ip'] || req.headers['x-forwarded-for']?.split(',').pop()?.trim() || req.ip || 'unknown';
+        const claimKey = userId ? `claim:user:${userId}` : `claim:ip:${ip}`;
+        const oneHourAgo = new Date(Date.now() - CLAIM_COOLDOWN_MS).toISOString();
 
-            const { data: recentSearches } = await supabase
-                .from('searches')
-                .select('id')
-                .eq('user_id', userId)
-                .gte('created_at', todayStart.toISOString())
-                .order('created_at', { ascending: false })
-                .limit(BONUS_SEARCHES);
+        try {
+            const { count, error: claimCheckErr } = await supabase
+                .from('rate_limits')
+                .select('*', { count: 'exact', head: true })
+                .eq('ip', claimKey)
+                .gte('created_at', oneHourAgo);
 
-            if (recentSearches && recentSearches.length > 0) {
-                const idsToDelete = recentSearches.map(s => s.id);
-                await supabase.from('searches').delete().in('id', idsToDelete);
+            if (!claimCheckErr && count > 0) {
+                return res.status(429).json({
+                    error: 'Ya reclamaste búsquedas extra recientemente. Intenta de nuevo en 1 hora.',
+                    retry_after: 3600
+                });
             }
+        } catch (e) {
+            console.warn('[ClaimReward] Rate-limit check failed, allowing:', e.message);
+        }
+
+        // Log this claim (fire & forget)
+        supabase.from('rate_limits').insert({ ip: claimKey, created_at: new Date().toISOString() }).then(() => {}).catch(() => {});
+
+        if (userId) {
+            // BUG FIX: Instead of deleting from 'searches' (which reduces Lumu Coins),
+            // insert bonus credit entries into rate_limits that the rate limiter can count.
+            // The searchProduct rate limiter will subtract these credits from the used count.
+            const creditEntries = [];
+            for (let i = 0; i < BONUS_SEARCHES; i++) {
+                creditEntries.push({ ip: `bonus:user:${userId}`, created_at: new Date().toISOString() });
+            }
+            await supabase.from('rate_limits').insert(creditEntries);
         } else {
             // Anonymous user
             const ip = req.headers['x-vercel-forwarded-for']?.split(',')[0]?.trim() || req.headers['x-real-ip'] || req.headers['x-forwarded-for']?.split(',').pop()?.trim() || req.ip || 'unknown';
@@ -939,7 +1138,7 @@ exports.claimReward = async (req, res) => {
     }
 };
 
-// NUEVO: Fase 6 - Lumu Coins
+// NUEVO: Fase 6 - Lumu Coins (with real 1-hour VIP unlock)
 exports.getCoins = async (req, res) => {
     try {
         const userId = req.userId;
@@ -961,18 +1160,45 @@ exports.getCoins = async (req, res) => {
         }
 
         const exactCoins = count || 0;
-        // Para la Fase 6: 50 coins = PRO
-        // Calculamos monedas actuales relativas a la meta (ej. si tiene 52, tiene 2 para la sig. meta)
         const currentCoins = exactCoins % 50;
         const totalVIPUnlocked = Math.floor(exactCoins / 50);
 
-        // Si ya desbloqueó VIP al menos una vez, le damos el status premium_temp
-        const isPremiumTemp = totalVIPUnlocked > 0;
+        // SEC-3: Check if temp VIP is currently active (1 hour window)
+        const VIP_TEMP_DURATION_MS = 60 * 60 * 1000; // 1 hour
+        const { data: profile } = await supabase.from('profiles')
+            .select('vip_temp_unlocked_at, vip_temp_last_milestone')
+            .eq('id', userId).single();
+
+        const lastUnlock = profile?.vip_temp_unlocked_at ? new Date(profile.vip_temp_unlocked_at).getTime() : 0;
+        const isActiveTemp = lastUnlock > 0 && (Date.now() - lastUnlock) < VIP_TEMP_DURATION_MS;
+        const timeRemainingMs = isActiveTemp ? VIP_TEMP_DURATION_MS - (Date.now() - lastUnlock) : 0;
+        const lastMilestone = Number(profile?.vip_temp_last_milestone || 0);
+        const currentMilestone = totalVIPUnlocked;
+
+        // Unlock temp VIP only when the user reaches a NEW 50-search milestone.
+        if (currentMilestone > 0 && currentMilestone > lastMilestone) {
+            const now = new Date().toISOString();
+            await supabase.from('profiles')
+                .update({
+                    vip_temp_unlocked_at: now,
+                    vip_temp_last_milestone: currentMilestone
+                })
+                .eq('id', userId);
+
+            return res.json({
+                total_searches: exactCoins,
+                coins: currentCoins,
+                is_premium_temp: true,
+                vip_temp_remaining_min: 60,
+                next_goal: 50
+            });
+        }
 
         return res.json({
             total_searches: exactCoins,
             coins: currentCoins,
-            is_premium_temp: isPremiumTemp,
+            is_premium_temp: isActiveTemp,
+            vip_temp_remaining_min: isActiveTemp ? Math.ceil(timeRemainingMs / 60000) : 0,
             next_goal: 50
         });
 

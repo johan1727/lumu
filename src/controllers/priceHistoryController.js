@@ -2,6 +2,7 @@
 // Price History Controller — Public endpoint for price trends
 // ============================================================
 const supabase = require('../config/supabase');
+const cacheService = require('../services/cacheService');
 
 /**
  * GET /api/price-history?query=...
@@ -10,6 +11,7 @@ const supabase = require('../config/supabase');
 exports.getPriceHistory = async (req, res) => {
     try {
         const query = (req.query.query || '').trim().toLowerCase();
+        const countryCode = String(req.query.country || 'MX').trim().toUpperCase();
         if (!query || query.length < 2) {
             return res.status(400).json({ error: 'Se requiere un query de al menos 2 caracteres.' });
         }
@@ -18,9 +20,9 @@ exports.getPriceHistory = async (req, res) => {
             return res.status(503).json({ error: 'Base de datos no disponible.' });
         }
 
-        // Search price_history for matching query_keys
-        // Use ILIKE for flexible matching
-        const queryPattern = `%${query.replace(/[%_]/g, '')}%`;
+        // Search price_history for matching query_keys, scoped by country
+        // Query keys now look like: ct_CL_xxx / ct_MX_xxx
+        const queryPattern = `%${cacheService.generateCacheKey(query, 'global', null, null, countryCode).replace(/[%_]/g, '')}%`;
 
         const { data: rawHistory, error } = await supabase
             .from('price_history')
