@@ -6,10 +6,10 @@ Disallow: /*?token=*
 Disallow: /admin/
 Crawl-delay: 1
 
-# Allow important pages
-Allow: /about
-Allow: /privacy
-Allow: /terms
+Allow: /sobre-nosotros.html
+Allow: /privacidad.html
+Allow: /terminos.html
+Allow: /buscar
 Allow: /buscar/
 
 Sitemap: https://www.lumu.dev/sitemap.xml

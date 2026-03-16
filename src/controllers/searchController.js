@@ -525,6 +525,10 @@ exports.searchProduct = async (req, res) => {
             // Jaccard similarity on title tokens
             const tokensI = new Set(item.title.toLowerCase().replace(/[^a-z0-9\s]/g, '').split(/\s+/).filter(t => t.length > 2));
             const isDuplicate = uniqueResults.some(u => {
+                const sameStore = String(u.source || '').trim().toLowerCase() === String(item.source || '').trim().toLowerCase();
+                if (!sameStore) {
+                    return false;
+                }
                 const tokensU = new Set(u.title.toLowerCase().replace(/[^a-z0-9\s]/g, '').split(/\s+/).filter(t => t.length > 2));
                 const intersection = [...tokensI].filter(t => tokensU.has(t)).length;
                 const union = new Set([...tokensI, ...tokensU]).size;
@@ -569,8 +573,8 @@ exports.searchProduct = async (req, res) => {
                 : conditionMode === 'new'
                     ? (b.conditionLabel === 'new' ? -220 : 350)
                     : (b.conditionLabel === 'refurbished' ? -120 : b.conditionLabel === 'used' ? -80 : 0);
-            const aC2CBoost = a.isC2C ? (conditionMode === 'used' ? -220 : 25) : 0;
-            const bC2CBoost = b.isC2C ? (conditionMode === 'used' ? -220 : 25) : 0;
+            const aC2CBoost = a.isC2C ? (conditionMode === 'used' ? -220 : 450) : 0;
+            const bC2CBoost = b.isC2C ? (conditionMode === 'used' ? -220 : 450) : 0;
             const aSuspiciousPenalty = a.isSuspicious ? 3000 : 0;
             const bSuspiciousPenalty = b.isSuspicious ? 3000 : 0;
 
