@@ -114,6 +114,7 @@ exports.analyzeImage = async (req, res) => {
 };
 
 exports.searchProduct = async (req, res) => {
+    const costMetrics = createSearchCostMetrics();
     try {
         console.log('[DEBUG /buscar] req.body:', JSON.stringify(req.body));
         const { chatHistory = [], radius, lat, lng, skipLLM, safeStoresOnly = false, conditionMode = 'all' } = req.body;
