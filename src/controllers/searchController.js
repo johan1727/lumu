@@ -26,6 +26,69 @@ function buildFallbackSuggestions(baseQuery, altQueries = []) {
         .slice(0, 4);
 }
 
+function createSearchCostMetrics() {
+    return {
+        llmGenerateCalls: 0,
+        llmEmbeddingCalls: 0,
+        serperShoppingCalls: 0,
+        serperWebCalls: 0,
+        serperPlacesCalls: 0,
+        cacheHit: false,
+        retrySearches: 0,
+        altQueryDirectCalls: 0
+    };
+}
+
+function parseUsdRate(envName) {
+    const parsed = parseFloat(process.env[envName] || '0');
+    return Number.isFinite(parsed) ? parsed : 0;
+}
+
+function estimateSearchCostUsd(metrics = {}) {
+    const total =
+        (metrics.llmGenerateCalls || 0) * parseUsdRate('EST_COST_GEMINI_GENERATE_USD') +
+        (metrics.llmEmbeddingCalls || 0) * parseUsdRate('EST_COST_GEMINI_EMBED_USD') +
+        (metrics.serperShoppingCalls || 0) * parseUsdRate('EST_COST_SERPER_SHOPPING_USD') +
+        (metrics.serperWebCalls || 0) * parseUsdRate('EST_COST_SERPER_WEB_USD') +
+        (metrics.serperPlacesCalls || 0) * parseUsdRate('EST_COST_SERPER_PLACES_USD');
+
+    return Number(total.toFixed(6));
+}
+
+function bumpProviderCostMetrics(metrics, { intentType, radius, lat, lng }) {
+    if (!process.env.SERPER_API_KEY) {
+        return;
+    }
+
+    if (intentType === 'mayoreo_perecedero') {
+        return;
+    }
+
+    const hasLocation = Boolean(lat && lng && radius !== 'global' && radius !== '999999');
+
+    if (intentType === 'servicio_local') {
+        if (hasLocation) metrics.serperPlacesCalls += 1;
+        return;
+    }
+
+    metrics.serperShoppingCalls += 1;
+    metrics.serperWebCalls += 1;
+
+    if (hasLocation) {
+        metrics.serperPlacesCalls += 1;
+    }
+}
+
+function logSearchCostMetrics(context, metrics, extra = {}) {
+    const estimatedCostUsd = estimateSearchCostUsd(metrics);
+    console.log('[Search Cost]', JSON.stringify({
+        context,
+        ...metrics,
+        estimatedCostUsd,
+        ...extra
+    }));
+}
+
 exports.analyzeImage = async (req, res) => {
     try {
         const { image } = req.body;
@@ -183,6 +246,11 @@ exports.searchProduct = async (req, res) => {
             return res.status(504).json({ error: 'La búsqueda tomó demasiado tiempo. Intenta con una búsqueda más específica.' });
         }
 
+        if (!skipLLM) {
+            costMetrics.llmGenerateCalls += 1;
+            if (supabase) costMetrics.llmEmbeddingCalls += 1;
+        }
+
         let llmAnalysis;
         if (skipLLM) {
             console.log(`[Direct Search] Saltando LLM para: ${query}`);
@@ -206,6 +274,10 @@ exports.searchProduct = async (req, res) => {
 
         // 2. Si faltan datos, devolver la pregunta de seguimiento al frontend
         if (llmAnalysis.action === 'ask') {
+            logSearchCostMetrics('search.ask', costMetrics, {
+                query,
+                userId: Boolean(userId)
+            });
             return res.json({
                 tipo_respuesta: 'conversacion',
                 pregunta_ia: llmAnalysis.question,
@@ -225,6 +297,12 @@ exports.searchProduct = async (req, res) => {
         // NUEVO: Verificamos en Caché
         const cachedResults = await cacheService.getCachedResults(searchQuery, radius, lat, lng);
         if (cachedResults) {
+            costMetrics.cacheHit = true;
+            logSearchCostMetrics('search.cache_hit', costMetrics, {
+                query: searchQuery,
+                userId: Boolean(userId),
+                resultCount: cachedResults.length
+            });
             return res.json({
                 tipo_respuesta: 'resultados',
                 intencion_detectada: {
@@ -243,6 +321,7 @@ exports.searchProduct = async (req, res) => {
             return res.status(504).json({ error: 'La búsqueda fue cancelada por timeout.' });
         }
 
+        bumpProviderCostMetrics(costMetrics, { intentType: llmAnalysis.intent_type, radius, lat, lng });
         console.log(`[Search Pipeline] Buscando: "${searchQuery}" | radius=${radius} | lat=${lat} | lng=${lng} | intent=${llmAnalysis.intent_type}`);
         const shoppingResults = await shoppingService.searchGoogleShopping(searchQuery, radius, lat, lng, llmAnalysis.intent_type, abortController.signal, conditionMode);
         console.log(`[Search Pipeline] Resultados de shoppingService: ${shoppingResults.length}`);
@@ -276,6 +355,8 @@ exports.searchProduct = async (req, res) => {
                         .catch(() => [])
                 );
             }
+
+            costMetrics.altQueryDirectCalls += altPromises.length;
             
             // Race alt queries against remaining time minus buffer
             const altTimeout = Math.min(remainingMs - 10000, 10000);
@@ -326,6 +407,8 @@ exports.searchProduct = async (req, res) => {
             const simplifiedQuery = searchQuery.split(/\s+/).slice(0, 3).join(' ');
             if (simplifiedQuery.length < searchQuery.length) {
                 console.log(`[Search Pipeline] 🔄 Reintentando con query simplificado: "${simplifiedQuery}"`);
+                costMetrics.retrySearches += 1;
+                bumpProviderCostMetrics(costMetrics, { intentType: llmAnalysis.intent_type, radius, lat, lng });
                 const retryResults = await shoppingService.searchGoogleShopping(simplifiedQuery, radius, lat, lng, llmAnalysis.intent_type);
                 if (retryResults && retryResults.length > 0) {
                     shoppingResults.push(...retryResults);
@@ -334,6 +417,11 @@ exports.searchProduct = async (req, res) => {
             }
 
             if (shoppingResults.length === 0) {
+                logSearchCostMetrics('search.no_results', costMetrics, {
+                    query: searchQuery,
+                    userId: Boolean(userId),
+                    resultCount: 0
+                });
                 return res.json({
                     tipo_respuesta: 'resultados',
                     intencion_detectada: {
@@ -614,6 +702,11 @@ exports.searchProduct = async (req, res) => {
         clearTimeout(timeoutId);
 
         // 6. Devolver respuesta estandarizada al frontend
+        logSearchCostMetrics('search.results', costMetrics, {
+            query: searchQuery,
+            userId: Boolean(userId),
+            resultCount: finalProductsConCupones.length
+        });
         return res.json({
             tipo_respuesta: 'resultados',
             intencion_detectada: {
@@ -632,6 +725,13 @@ exports.searchProduct = async (req, res) => {
         if (typeof timeoutId !== 'undefined') clearTimeout(timeoutId);
         
         console.error('🔥🔥🔥 ERROR FATAL en /buscar:', error.stack || error);
+        try {
+            logSearchCostMetrics('search.error', costMetrics, {
+                query,
+                userId: Boolean(userId),
+                error: error.message
+            });
+        } catch { }
         
         // No exponer stack trace en producción
         const isDev = process.env.NODE_ENV !== 'production';
@@ -644,6 +744,7 @@ exports.searchProduct = async (req, res) => {
 
 // NUEVO: Endpoint para B2B Bulk Search (Plan Revendedor)
 exports.bulkSearch = async (req, res) => {
+    let bulkCostMetrics = createSearchCostMetrics();
     try {
         const { queries, radius, lat, lng } = req.body;
         // Use verified userId from auth middleware (JWT)
@@ -694,16 +795,20 @@ exports.bulkSearch = async (req, res) => {
                 );
 
                 const searchPromise = (async () => {
+                    bulkCostMetrics.llmGenerateCalls += 1;
+                    if (supabase) bulkCostMetrics.llmEmbeddingCalls += 1;
                     const llmAnalysis = await llmService.analyzeMessage(q, []);
                     const searchQuery = llmAnalysis.searchQuery || q;
 
                     // Cache check first
                     const cachedResults = await cacheService.getCachedResults(searchQuery, radius, lat, lng);
                     if (cachedResults && cachedResults[0]) {
+                        bulkCostMetrics.cacheHit = true;
                         return { ...cachedResults[0], desde_cache: true };
                     }
 
                     // Real search
+                    bumpProviderCostMetrics(bulkCostMetrics, { intentType: llmAnalysis.intent_type, radius, lat, lng });
                     const shoppingResults = await shoppingService.searchGoogleShopping(searchQuery, radius, lat, lng);
                     if (shoppingResults.length > 0) {
                         const sortedResults = shoppingResults.sort((a, b) => {
@@ -747,6 +852,12 @@ exports.bulkSearch = async (req, res) => {
             supabase.from('searches').insert(inserts).then(() => { }).catch(e => console.error('Bulk insert error:', e));
         }
 
+        logSearchCostMetrics('bulk.results', bulkCostMetrics, {
+            userId: Boolean(userId),
+            requestedCount: Array.isArray(queries) ? queries.length : 0,
+            processedCount: bulkResults.length,
+            successCount
+        });
         return res.json({
             lote_procesado: bulkResults.length,
             resultados: bulkResults,
@@ -755,6 +866,11 @@ exports.bulkSearch = async (req, res) => {
 
     } catch (error) {
         console.error('Error en /bulk-search:', error);
+        try {
+            logSearchCostMetrics('bulk.error', bulkCostMetrics, {
+                error: error.message
+            });
+        } catch { }
         res.status(500).json({ error: 'Error del servidor en bulk search.' });
     }
 };

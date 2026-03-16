@@ -16,6 +16,42 @@ const priceHistoryController = require('../controllers/priceHistoryController');
 const autocompleteController = require('../controllers/autocompleteController');
 const supplierChecker = require('../services/supplierChecker');
 
+function isAllowedFrontendRequest(req) {
+    const origin = req.headers.origin || '';
+    const referer = req.headers.referer || '';
+    const allowedOrigins = req.app?.locals?.allowedOrigins || [];
+
+    let originHost = '';
+    try { originHost = new URL(origin).hostname; } catch { }
+    let refererHost = '';
+    try { refererHost = new URL(referer).hostname; } catch { }
+
+    const allowedHosts = allowedOrigins
+        .map(o => { try { return new URL(o).hostname; } catch { return ''; } })
+        .filter(Boolean);
+
+    if (process.env.NODE_ENV !== 'production') {
+        return true;
+    }
+
+    if (allowedOrigins.length === 0 || allowedHosts.length === 0) {
+        return false;
+    }
+
+    const explicitOriginAllowed = origin && allowedOrigins.includes(origin);
+    const sameHostByOrigin = originHost && allowedHosts.includes(originHost);
+    const sameHostByReferer = refererHost && allowedHosts.includes(refererHost);
+
+    return explicitOriginAllowed || sameHostByOrigin || sameHostByReferer;
+}
+
+function requireFrontendRequest(req, res, next) {
+    if (!isAllowedFrontendRequest(req)) {
+        return res.status(403).json({ error: 'Acceso denegado' });
+    }
+    next();
+}
+
 // Image Proxy route to bypass CORS for product images
 router.get('/img-proxy', imageProxy.proxyImage);
 
@@ -52,33 +88,10 @@ router.delete('/price-alerts/:id', authMiddleware, requireAuth, priceAlertContro
 router.post('/push-subscribe', authMiddleware, requireAuth, priceAlertController.savePushSubscription);
 
 // Rewarded Ads: Claim bonus searches
-router.post('/claim-reward', authMiddleware, searchController.claimReward);
+router.post('/claim-reward', authMiddleware, requireFrontendRequest, searchController.claimReward);
 
 // GET /api/config
-router.get('/config', (req, res) => {
-    // Protección reforzada: solo frontend permitido por origen/host
-    const origin = req.headers.origin || '';
-    const referer = req.headers.referer || '';
-    const host = req.get('host');
-    const allowedOrigins = req.app?.locals?.allowedOrigins || [];
-
-    // SECURITY FIX: Use strict URL comparison instead of includes() to prevent bypass
-    // e.g., https://evil.com/lumu.dev would bypass includes() but not URL parsing
-    let originHost = '';
-    try { originHost = new URL(origin).hostname; } catch { }
-    let refererHost = '';
-    try { refererHost = new URL(referer).hostname; } catch { }
-    const allowedHosts = allowedOrigins.map(o => { try { return new URL(o).hostname; } catch { return ''; } }).filter(Boolean);
-    const sameHostByOrigin = originHost && allowedHosts.includes(originHost);
-    const sameHostByReferer = refererHost && allowedHosts.includes(refererHost);
-    const explicitOriginAllowed = origin && allowedOrigins.includes(origin);
-    const noAllowListConfigured = allowedOrigins.length === 0;
-    const allowRequest = explicitOriginAllowed || sameHostByOrigin || sameHostByReferer || noAllowListConfigured;
-
-    if (process.env.NODE_ENV === 'production' && !allowRequest) {
-        return res.status(403).json({ error: 'Acceso denegado' });
-    }
-
+router.get('/config', requireFrontendRequest, (req, res) => {
     // Only expose public-safe keys (never SERVICE_ROLE_KEY)
     res.json({
         supabaseUrl: process.env.SUPABASE_URL || '',
