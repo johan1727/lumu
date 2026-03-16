@@ -16,10 +16,13 @@ const priceHistoryController = require('../controllers/priceHistoryController');
 const autocompleteController = require('../controllers/autocompleteController');
 const supplierChecker = require('../services/supplierChecker');
 
-function isAllowedFrontendRequest(req) {
+function isAllowedFrontendRequest(req, options = {}) {
     const origin = req.headers.origin || '';
     const referer = req.headers.referer || '';
     const allowedOrigins = req.app?.locals?.allowedOrigins || [];
+    const forwardedHost = String(req.headers['x-forwarded-host'] || '').split(',')[0].trim();
+    const requestHost = (forwardedHost || req.hostname || '').trim().toLowerCase();
+    const allowHostFallback = options.allowHostFallback === true;
 
     let originHost = '';
     try { originHost = new URL(origin).hostname; } catch { }
@@ -41,8 +44,9 @@ function isAllowedFrontendRequest(req) {
     const explicitOriginAllowed = origin && allowedOrigins.includes(origin);
     const sameHostByOrigin = originHost && allowedHosts.includes(originHost);
     const sameHostByReferer = refererHost && allowedHosts.includes(refererHost);
+    const sameHostByRequestHost = requestHost && allowedHosts.includes(requestHost);
 
-    return explicitOriginAllowed || sameHostByOrigin || sameHostByReferer;
+    return explicitOriginAllowed || sameHostByOrigin || sameHostByReferer || (allowHostFallback && sameHostByRequestHost);
 }
 
 function requireFrontendRequest(req, res, next) {
@@ -91,7 +95,12 @@ router.post('/push-subscribe', authMiddleware, requireAuth, priceAlertController
 router.post('/claim-reward', authMiddleware, requireFrontendRequest, searchController.claimReward);
 
 // GET /api/config
-router.get('/config', requireFrontendRequest, (req, res) => {
+router.get('/config', (req, res, next) => {
+    if (!isAllowedFrontendRequest(req, { allowHostFallback: true })) {
+        return res.status(403).json({ error: 'Acceso denegado' });
+    }
+    next();
+}, (req, res) => {
     // Only expose public-safe keys (never SERVICE_ROLE_KEY)
     res.json({
         supabaseUrl: process.env.SUPABASE_URL || '',
