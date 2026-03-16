@@ -20,6 +20,15 @@ const allowedOrigins = (process.env.FRONTEND_ORIGINS || 'https://lumu.dev,https:
     .split(',')
     .map(origin => origin.trim())
     .filter(Boolean);
+const allowedHosts = allowedOrigins
+    .map(origin => {
+        try {
+            return new URL(origin).hostname;
+        } catch {
+            return '';
+        }
+    })
+    .filter(Boolean);
 
 app.locals.allowedOrigins = allowedOrigins;
 app.disable('x-powered-by');
@@ -51,12 +60,19 @@ app.use(cors({
     origin: (origin, callback) => {
         if (!origin) return callback(null, true);
         if (allowedOrigins.includes(origin)) return callback(null, true);
+        let originHost = '';
+        try {
+            originHost = new URL(origin).hostname;
+        } catch { }
+        if (originHost && allowedHosts.includes(originHost)) {
+            return callback(null, true);
+        }
         // In development or local, allow localhost
         if (process.env.NODE_ENV !== 'production' && origin && (origin.includes('localhost') || origin.includes('127.0.0.1'))) {
             return callback(null, true);
         }
         if (process.env.NODE_ENV === 'production') {
-            console.warn(`[CORS] Rejected origin: ${origin}. Allowed: ${allowedOrigins.join(', ')}`);
+            console.warn(`[CORS] Rejected origin: ${origin}. Allowed origins: ${allowedOrigins.join(', ')}. Allowed hosts: ${allowedHosts.join(', ')}`);
         }
         return callback(new Error('CORS origin no permitido'));
     },
