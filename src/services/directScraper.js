@@ -70,6 +70,23 @@ const getAxiosConfig = (countryCode = 'MX') => {
 
 const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 
+function throwIfAborted(signal) {
+    if (signal?.aborted) {
+        const error = new Error('Aborted');
+        error.name = 'AbortError';
+        error.code = 'ERR_CANCELED';
+        throw error;
+    }
+}
+
+function getAxiosConfigWithSignal(countryCode = 'MX', signal) {
+    const config = getAxiosConfig(countryCode);
+    if (signal) {
+        config.signal = signal;
+    }
+    return config;
+}
+
 const MERCADO_LIBRE_SITE_MAP = {
     MX: 'MLM',
     CL: 'MLC',
@@ -103,14 +120,18 @@ const FALABELLA_CONFIG_MAP = {
     }
 };
 
-const scrapeWithRetry = async (url, maxRetries = 2, countryCode = 'MX') => {
+const scrapeWithRetry = async (url, maxRetries = 2, countryCode = 'MX', signal) => {
     let lastError;
     for (let i = 0; i <= maxRetries; i++) {
         try {
-            const config = getAxiosConfig(countryCode);
+            throwIfAborted(signal);
+            const config = getAxiosConfigWithSignal(countryCode, signal);
             return await axios.get(url, config);
         } catch (error) {
             lastError = error;
+            if (error?.name === 'AbortError' || error?.code === 'ERR_CANCELED') {
+                throw error;
+            }
             const isRetryable = error.code === 'ECONNABORTED' || (error.response && [503, 429, 403].includes(error.response.status));
 
             if (i < maxRetries && isRetryable) {
@@ -125,11 +146,12 @@ const scrapeWithRetry = async (url, maxRetries = 2, countryCode = 'MX') => {
     throw lastError;
 };
 
-exports.scrapeMercadoLibreDirect = async (query) => {
+exports.scrapeMercadoLibreDirect = async (query, signal) => {
     try {
+        throwIfAborted(signal);
         console.log(`[Direct Scraper] Iniciando búsqueda ultra-rápida en MercadoLibre para: ${query} (Con Retry)`);
         const url = `https://listado.mercadolibre.com.mx/${encodeURIComponent(query)}`;
-        const response = await scrapeWithRetry(url);
+        const response = await scrapeWithRetry(url, 2, 'MX', signal);
         const $ = cheerio.load(response.data);
 
         const results = [];
@@ -159,8 +181,9 @@ exports.scrapeMercadoLibreDirect = async (query) => {
     }
 };
 
-exports.scrapeMercadoLibreAPI = async (query, countryCode = 'MX') => {
+exports.scrapeMercadoLibreAPI = async (query, countryCode = 'MX', signal) => {
     try {
+        throwIfAborted(signal);
         const normalizedCountry = String(countryCode || 'MX').toUpperCase();
         const siteId = MERCADO_LIBRE_SITE_MAP[normalizedCountry] || 'MLM';
         const sourceLabel = MERCADO_LIBRE_SOURCE_MAP[normalizedCountry] || 'Mercado Libre';
@@ -169,6 +192,7 @@ exports.scrapeMercadoLibreAPI = async (query, countryCode = 'MX') => {
 
         const response = await axios.get(apiUrl, {
             timeout: 8000,
+            signal,
             headers: {
                 'User-Agent': getRandomUA(),
                 'Accept': 'application/json'
@@ -201,8 +225,9 @@ exports.scrapeMercadoLibreAPI = async (query, countryCode = 'MX') => {
     }
 };
 
-exports.scrapeFalabellaRegional = async (query, countryCode = 'CL') => {
+exports.scrapeFalabellaRegional = async (query, countryCode = 'CL', signal) => {
     try {
+        throwIfAborted(signal);
         const normalizedCountry = String(countryCode || 'CL').toUpperCase();
         const falabellaConfig = FALABELLA_CONFIG_MAP[normalizedCountry];
         if (!falabellaConfig) return [];
@@ -210,7 +235,7 @@ exports.scrapeFalabellaRegional = async (query, countryCode = 'CL') => {
         console.log(`[Direct Scraper] Buscando en ${falabellaConfig.source}: ${query}`);
         const baseDomain = falabellaConfig.baseUrl.split('/search')[0];
         const url = `${falabellaConfig.baseUrl}?Ntt=${encodeURIComponent(query)}`;
-        const response = await scrapeWithRetry(url, 2, normalizedCountry);
+        const response = await scrapeWithRetry(url, 2, normalizedCountry, signal);
         const $ = cheerio.load(response.data);
         const results = [];
 
@@ -270,11 +295,12 @@ exports.scrapeFalabellaRegional = async (query, countryCode = 'CL') => {
     }
 };
 
-exports.scrapeAmazonDirect = async (query) => {
+exports.scrapeAmazonDirect = async (query, signal) => {
     try {
+        throwIfAborted(signal);
         console.log(`[Direct Scraper] Iniciando búsqueda ultra-rápida en Amazon MX para: ${query} (Con Retry)`);
         const url = `https://www.amazon.com.mx/s?k=${encodeURIComponent(query)}&i=popular`;
-        const response = await scrapeWithRetry(url);
+        const response = await scrapeWithRetry(url, 2, 'MX', signal);
         const $ = cheerio.load(response.data);
 
         // Detect CAPTCHA/block
@@ -316,11 +342,12 @@ exports.scrapeAmazonDirect = async (query) => {
 /**
  * Scraper para Walmart México
  */
-exports.scrapeWalmartMX = async (query) => {
+exports.scrapeWalmartMX = async (query, signal) => {
     try {
+        throwIfAborted(signal);
         console.log(`[Direct Scraper] Buscando en Walmart MX: ${query}`);
         const url = `https://www.walmart.com.mx/productos?Ntt=${encodeURIComponent(query)}`;
-        const response = await scrapeWithRetry(url);
+        const response = await scrapeWithRetry(url, 2, 'MX', signal);
         const $ = cheerio.load(response.data);
 
         const results = [];
@@ -352,11 +379,12 @@ exports.scrapeWalmartMX = async (query) => {
 /**
  * Scraper para Liverpool México
  */
-exports.scrapeLiverpoolMX = async (query) => {
+exports.scrapeLiverpoolMX = async (query, signal) => {
     try {
+        throwIfAborted(signal);
         console.log(`[Direct Scraper] Buscando en Liverpool MX: ${query}`);
         const url = `https://www.liverpool.com.mx/tienda?s=${encodeURIComponent(query)}`;
-        const response = await scrapeWithRetry(url);
+        const response = await scrapeWithRetry(url, 2, 'MX', signal);
         const $ = cheerio.load(response.data);
 
         const results = [];
@@ -413,11 +441,12 @@ exports.scrapeLiverpoolMX = async (query) => {
 /**
  * Scraper para Coppel México
  */
-exports.scrapeCoppelMX = async (query) => {
+exports.scrapeCoppelMX = async (query, signal) => {
     try {
+        throwIfAborted(signal);
         console.log(`[Direct Scraper] Buscando en Coppel MX: ${query}`);
         const url = `https://www.coppel.com/search?searchTerms=${encodeURIComponent(query)}`;
-        const response = await scrapeWithRetry(url);
+        const response = await scrapeWithRetry(url, 2, 'MX', signal);
         const $ = cheerio.load(response.data);
 
         const results = [];
@@ -473,12 +502,13 @@ exports.scrapeCoppelMX = async (query) => {
 /**
  * Scraper para AliExpress (productos internacionales baratos)
  */
-exports.scrapeAliExpress = async (query) => {
+exports.scrapeAliExpress = async (query, signal) => {
     try {
+        throwIfAborted(signal);
         console.log(`[Direct Scraper] Buscando en AliExpress: ${query}`);
         // Use wholesale.aliexpress or the search page with ship-from MX/US filter
         const url = `https://www.aliexpress.com/w/wholesale-${encodeURIComponent(query).replace(/%20/g, '-')}.html?g=y&SearchText=${encodeURIComponent(query)}&shipCountry=MX`;
-        const config = getAxiosConfig();
+        const config = getAxiosConfigWithSignal('MX', signal);
         config.headers['Accept-Language'] = 'es-MX,es;q=0.9';
         config.timeout = 8000;
         
@@ -540,11 +570,12 @@ exports.scrapeAliExpress = async (query) => {
 /**
  * Scraper para Elektra México (gratis, sin Serper)
  */
-exports.scrapeElektraMX = async (query) => {
+exports.scrapeElektraMX = async (query, signal) => {
     try {
+        throwIfAborted(signal);
         console.log(`[Direct Scraper] Buscando en Elektra MX: ${query}`);
         const url = `https://www.elektra.com.mx/busqueda?q=${encodeURIComponent(query)}`;
-        const response = await scrapeWithRetry(url);
+        const response = await scrapeWithRetry(url, 2, 'MX', signal);
         const $ = cheerio.load(response.data);
 
         const results = [];
@@ -602,11 +633,12 @@ exports.scrapeElektraMX = async (query) => {
 /**
  * Scraper para Best Buy México (gratis, sin Serper)
  */
-exports.scrapeBestBuyMX = async (query) => {
+exports.scrapeBestBuyMX = async (query, signal) => {
     try {
+        throwIfAborted(signal);
         console.log(`[Direct Scraper] Buscando en Best Buy MX: ${query}`);
         const url = `https://www.bestbuy.com.mx/c/search?text=${encodeURIComponent(query)}`;
-        const response = await scrapeWithRetry(url);
+        const response = await scrapeWithRetry(url, 2, 'MX', signal);
         const $ = cheerio.load(response.data);
 
         const results = [];
@@ -664,11 +696,12 @@ exports.scrapeBestBuyMX = async (query) => {
 /**
  * Scraper para Costco México (gratis, sin Serper)
  */
-exports.scrapeCostcoMX = async (query) => {
+exports.scrapeCostcoMX = async (query, signal) => {
     try {
+        throwIfAborted(signal);
         console.log(`[Direct Scraper] Buscando en Costco MX: ${query}`);
         const url = `https://www.costco.com.mx/search?text=${encodeURIComponent(query)}`;
-        const response = await scrapeWithRetry(url);
+        const response = await scrapeWithRetry(url, 2, 'MX', signal);
         const $ = cheerio.load(response.data);
 
         const results = [];
@@ -726,11 +759,12 @@ exports.scrapeCostcoMX = async (query) => {
 /**
  * Scraper para Sam's Club México (gratis, sin Serper)
  */
-exports.scrapeSamsClubMX = async (query) => {
+exports.scrapeSamsClubMX = async (query, signal) => {
     try {
+        throwIfAborted(signal);
         console.log(`[Direct Scraper] Buscando en Sam's Club MX: ${query}`);
         const url = `https://www.sams.com.mx/buscar?q=${encodeURIComponent(query)}`;
-        const response = await scrapeWithRetry(url);
+        const response = await scrapeWithRetry(url, 2, 'MX', signal);
         const $ = cheerio.load(response.data);
 
         const results = [];
@@ -788,11 +822,12 @@ exports.scrapeSamsClubMX = async (query) => {
 /**
  * Scraper para Home Depot México (gratis, sin Serper)
  */
-exports.scrapeHomeDepotMX = async (query) => {
+exports.scrapeHomeDepotMX = async (query, signal) => {
     try {
+        throwIfAborted(signal);
         console.log(`[Direct Scraper] Buscando en Home Depot MX: ${query}`);
         const url = `https://www.homedepot.com.mx/busqueda/${encodeURIComponent(query)}`;
-        const response = await scrapeWithRetry(url);
+        const response = await scrapeWithRetry(url, 2, 'MX', signal);
         const $ = cheerio.load(response.data);
 
         const results = [];
@@ -825,11 +860,12 @@ exports.scrapeHomeDepotMX = async (query) => {
 /**
  * Scraper para Office Depot México (gratis, sin Serper)
  */
-exports.scrapeOfficeDepotMX = async (query) => {
+exports.scrapeOfficeDepotMX = async (query, signal) => {
     try {
+        throwIfAborted(signal);
         console.log(`[Direct Scraper] Buscando en Office Depot MX: ${query}`);
         const url = `https://www.officedepot.com.mx/officedepot/en/search/?text=${encodeURIComponent(query)}`;
-        const response = await scrapeWithRetry(url);
+        const response = await scrapeWithRetry(url, 2, 'MX', signal);
         const $ = cheerio.load(response.data);
 
         const results = [];
@@ -862,11 +898,12 @@ exports.scrapeOfficeDepotMX = async (query) => {
 /**
  * Scraper para Soriana México (supermercado/electrónica)
  */
-exports.scrapeSorianaMX = async (query) => {
+exports.scrapeSorianaMX = async (query, signal) => {
     try {
+        throwIfAborted(signal);
         console.log(`[Direct Scraper] Buscando en Soriana MX: ${query}`);
         const url = `https://www.soriana.com/buscar?q=${encodeURIComponent(query)}`;
-        const response = await scrapeWithRetry(url);
+        const response = await scrapeWithRetry(url, 2, 'MX', signal);
         const $ = cheerio.load(response.data);
 
         const results = [];
@@ -924,11 +961,12 @@ exports.scrapeSorianaMX = async (query) => {
 /**
  * Scraper para Sears México
  */
-exports.scrapeSearsMX = async (query) => {
+exports.scrapeSearsMX = async (query, signal) => {
     try {
+        throwIfAborted(signal);
         console.log(`[Direct Scraper] Buscando en Sears MX: ${query}`);
         const url = `https://www.sears.com.mx/buscar/${encodeURIComponent(query)}`;
-        const response = await scrapeWithRetry(url);
+        const response = await scrapeWithRetry(url, 2, 'MX', signal);
         const $ = cheerio.load(response.data);
 
         const results = [];
@@ -986,11 +1024,12 @@ exports.scrapeSearsMX = async (query) => {
 /**
  * Scraper para Shein México (moda barata)
  */
-exports.scrapeSheinMX = async (query) => {
+exports.scrapeSheinMX = async (query, signal) => {
     try {
+        throwIfAborted(signal);
         console.log(`[Direct Scraper] Buscando en Shein MX: ${query}`);
         const url = `https://mx.shein.com/pdsearch/${encodeURIComponent(query)}/`;
-        const config = getAxiosConfig();
+        const config = getAxiosConfigWithSignal('MX', signal);
         config.headers['Accept-Language'] = 'es-MX,es;q=0.9';
         config.timeout = 8000;
         
@@ -1051,11 +1090,12 @@ exports.scrapeSheinMX = async (query) => {
 /**
  * Scraper para Temu México (marketplace barato)
  */
-exports.scrapeTemuMX = async (query) => {
+exports.scrapeTemuMX = async (query, signal) => {
     try {
+        throwIfAborted(signal);
         console.log(`[Direct Scraper] Buscando en Temu MX: ${query}`);
         const url = `https://www.temu.com/mx/search_result.html?search_key=${encodeURIComponent(query)}`;
-        const config = getAxiosConfig();
+        const config = getAxiosConfigWithSignal('MX', signal);
         config.headers['Accept-Language'] = 'es-MX,es;q=0.9';
         config.timeout = 8000;
         
@@ -1115,11 +1155,12 @@ exports.scrapeTemuMX = async (query) => {
 /**
  * Scraper para Bodega Aurrera México
  */
-exports.scrapeBodegaAurreraMX = async (query) => {
+exports.scrapeBodegaAurreraMX = async (query, signal) => {
     try {
+        throwIfAborted(signal);
         console.log(`[Direct Scraper] Buscando en Bodega Aurrera: ${query}`);
         const url = `https://www.bodegaaurrera.com.mx/productos?Ntt=${encodeURIComponent(query)}`;
-        const response = await scrapeWithRetry(url);
+        const response = await scrapeWithRetry(url, 2, 'MX', signal);
         const $ = cheerio.load(response.data);
 
         const results = [];
@@ -1174,11 +1215,12 @@ exports.scrapeBodegaAurreraMX = async (query) => {
 /**
  * Scraper para Linio México
  */
-exports.scrapeLinioMX = async (query) => {
+exports.scrapeLinioMX = async (query, signal) => {
     try {
+        throwIfAborted(signal);
         console.log(`[Direct Scraper] Buscando en Linio MX: ${query}`);
         const url = `https://www.linio.com.mx/search?scroll=&q=${encodeURIComponent(query)}`;
-        const response = await scrapeWithRetry(url);
+        const response = await scrapeWithRetry(url, 2, 'MX', signal);
         const $ = cheerio.load(response.data);
 
         const results = [];
@@ -1233,11 +1275,12 @@ exports.scrapeLinioMX = async (query) => {
 /**
  * Scraper para Claro Shop México
  */
-exports.scrapeClaroShopMX = async (query) => {
+exports.scrapeClaroShopMX = async (query, signal) => {
     try {
+        throwIfAborted(signal);
         console.log(`[Direct Scraper] Buscando en Claro Shop: ${query}`);
         const url = `https://www.claroshop.com/buscar/${encodeURIComponent(query)}`;
-        const response = await scrapeWithRetry(url);
+        const response = await scrapeWithRetry(url, 2, 'MX', signal);
         const $ = cheerio.load(response.data);
 
         const results = [];

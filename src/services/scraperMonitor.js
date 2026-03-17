@@ -55,6 +55,10 @@ exports.wrap = async (scraperFn, scraperName, ...args) => {
         }
         return results;
     } catch (err) {
+        if (err?.name === 'AbortError' || err?.code === 'ERR_CANCELED') {
+            console.warn(`⏹️ [MONITOR] ${scraperName} abortado.`);
+            throw err;
+        }
         recordFail(scraperName);
         console.error(`❌ [MONITOR] ${scraperName} lanzó una excepción: ${err.message}`);
         return [];

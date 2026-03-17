@@ -1,4 +1,6 @@
 const supabase = require('../config/supabase');
+const scraperMonitor = require('../services/scraperMonitor');
+const regionConfigService = require('../services/regionConfigService');
 
 /**
  * POST /api/track — Log a conversion event (click, ad_view, etc.)
@@ -6,7 +8,7 @@ const supabase = require('../config/supabase');
  */
 async function trackEvent(req, res) {
     try {
-        const { event_type, product_title, store, url, search_query, device } = req.body;
+        const { event_type, product_title, store, url, search_query, device, canonical_key, product_category } = req.body;
 
         if (!event_type) {
             return res.status(400).json({ error: 'event_type requerido' });
@@ -42,7 +44,10 @@ async function trackEvent(req, res) {
             is_affiliate,
             affiliate_network,
             device: device || 'unknown',
-            referrer: (req.headers.referer || '').slice(0, 500)
+            referrer: (req.headers.referer || '').slice(0, 500),
+            country_code: regionConfigService.resolveCountry(req),
+            canonical_key: (canonical_key || '').slice(0, 160) || null,
+            product_category: (product_category || '').slice(0, 120) || null
         };
 
         if (supabase) {
@@ -50,6 +55,47 @@ async function trackEvent(req, res) {
             supabase.from('click_events').insert(event).then(({ error }) => {
                 if (error) console.error('[Analytics] Insert error:', error.message);
             });
+
+            // Auto-improve: upsert query_intent_memory on click events
+            if (event_type === 'click' && search_query && store) {
+                const normalizedQuery = (search_query || '').toLowerCase().trim();
+                const storeKey = (store || '').toLowerCase().trim();
+                const catKey = (product_category || '').toLowerCase().trim();
+                const cKey = (canonical_key || '').slice(0, 160) || null;
+                const cc = event.country_code || 'MX';
+
+                if (normalizedQuery && storeKey) {
+                    supabase.rpc('upsert_query_intent_memory', {
+                        p_normalized_query: normalizedQuery,
+                        p_canonical_key: cKey,
+                        p_country_code: cc,
+                        p_product_category: product_category || null,
+                        p_product_category_key: catKey,
+                        p_store_name: store,
+                        p_store_name_key: storeKey
+                    }).then(({ error: rpcErr }) => {
+                        if (rpcErr) {
+                            // Fallback: direct upsert if RPC doesn't exist yet
+                            supabase.from('query_intent_memory').upsert({
+                                normalized_query: normalizedQuery,
+                                canonical_key: cKey,
+                                country_code: cc,
+                                product_category: product_category || null,
+                                product_category_key: catKey,
+                                store_name: store,
+                                store_name_key: storeKey,
+                                clicked_count: 1,
+                                success_score: 1,
+                                last_clicked_at: new Date().toISOString()
+                            }, {
+                                onConflict: 'normalized_query,country_code,product_category_key,store_name_key'
+                            }).then(({ error: upsertErr }) => {
+                                if (upsertErr) console.error('[IntentMemory] Upsert error:', upsertErr.message);
+                            });
+                        }
+                    });
+                }
+            }
         }
 
         res.json({ ok: true });
@@ -93,9 +139,17 @@ async function getAnalytics(req, res) {
         const totalAdViews = all.filter(e => e.event_type === 'ad_view').length;
         const totalFavorites = all.filter(e => e.event_type === 'favorite').length;
         const totalAlerts = all.filter(e => e.event_type === 'alert_create').length;
+        const totalZeroResults = all.filter(e => e.event_type === 'zero_results').length;
+        const totalBounces = all.filter(e => e.event_type === 'bounce').length;
+        const totalAuthModalOpens = all.filter(e => e.event_type === 'auth_modal_open').length;
+        const totalAuthModalDismisses = all.filter(e => e.event_type === 'auth_modal_dismiss').length;
+        const totalSignupComplete = all.filter(e => e.event_type === 'signup_complete').length;
+        const totalSignupBonus = all.filter(e => e.event_type === 'signup_bonus').length;
 
         // --- Conversion Rate (searches → clicks) ---
         const conversionRate = totalSearches > 0 ? ((totalClicks / totalSearches) * 100).toFixed(1) : '0.0';
+        const bounceRate = totalSearches > 0 ? ((totalBounces / totalSearches) * 100).toFixed(1) : '0.0';
+        const signupConversionRate = totalAuthModalOpens > 0 ? ((totalSignupComplete / totalAuthModalOpens) * 100).toFixed(1) : '0.0';
 
         // --- Affiliate clicks ---
         const affiliateClicks = all.filter(e => e.event_type === 'click' && e.is_affiliate);
@@ -176,6 +230,14 @@ async function getAnalytics(req, res) {
                 totalClicks,
                 totalSearches,
                 conversionRate,
+                bounceRate,
+                totalBounces,
+                totalZeroResults,
+                totalAuthModalOpens,
+                totalAuthModalDismisses,
+                totalSignupComplete,
+                totalSignupBonus,
+                signupConversionRate,
                 totalAffiliateClicks,
                 totalAdViews,
                 totalFavorites,
@@ -196,4 +258,69 @@ async function getAnalytics(req, res) {
     }
 }
 
-module.exports = { trackEvent, getAnalytics };
+async function getLLMLogs(req, res) {
+    try {
+        if (!supabase) return res.status(503).json({ error: 'Base de datos no disponible' });
+        const limit = Math.min(200, Math.max(1, parseInt(req.query.limit || '50', 10) || 50));
+        const country = String(req.query.country || '').trim().toUpperCase();
+
+        let query = supabase
+            .from('llm_analysis_log')
+            .select('*')
+            .order('created_at', { ascending: false })
+            .limit(limit);
+
+        if (country) {
+            query = query.eq('country_code', country);
+        }
+
+        const { data, error } = await query;
+        if (error) throw error;
+
+        res.json({
+            count: Array.isArray(data) ? data.length : 0,
+            items: data || []
+        });
+    } catch (err) {
+        console.error('[Analytics] getLLMLogs error:', err);
+        res.status(500).json({ error: 'Error al obtener logs del LLM' });
+    }
+}
+
+async function getScraperHealth(req, res) {
+    try {
+        const report = scraperMonitor.getHealthReport();
+        const items = Object.entries(report).map(([name, stats]) => {
+            const success = Number(stats.success || 0);
+            const fail = Number(stats.fail || 0);
+            const total = success + fail;
+            const blockRateValue = parseInt(String(stats.blockRate || '0').replace('%', ''), 10) || 0;
+            return {
+                name,
+                success,
+                fail,
+                total,
+                blockRate: stats.blockRate,
+                blockRateValue,
+                status: stats.status,
+                lastBlock: stats.lastBlock
+            };
+        }).sort((a, b) => b.blockRateValue - a.blockRateValue || b.fail - a.fail);
+
+        const summary = {
+            totalScrapers: items.length,
+            critical: items.filter(item => item.blockRateValue > 50).length,
+            warning: items.filter(item => item.blockRateValue > 20 && item.blockRateValue <= 50).length,
+            healthy: items.filter(item => item.blockRateValue <= 20).length,
+            totalSuccess: items.reduce((acc, item) => acc + item.success, 0),
+            totalFail: items.reduce((acc, item) => acc + item.fail, 0)
+        };
+
+        res.json({ summary, items });
+    } catch (err) {
+        console.error('[Analytics] getScraperHealth error:', err);
+        res.status(500).json({ error: 'Error al obtener salud de scrapers' });
+    }
+}
+
+module.exports = { trackEvent, getAnalytics, getLLMLogs, getScraperHealth };

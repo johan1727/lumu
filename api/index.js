@@ -11,6 +11,7 @@ require('dotenv').config();
 const express = require('express');
 const helmet = require('helmet');
 const cors = require('cors');
+const cacheService = require('../src/services/cacheService');
 const app = express();
 const PORT = process.env.PORT || 3000;
 
@@ -153,7 +154,7 @@ const rateLimiter = async (req, res, next) => {
     }
 
     // RAM fallback
-    if (!requestLog[ip]) {
+    if (!requestLog[ip] || !Array.isArray(requestLog[ip])) {
         if (Object.keys(requestLog).length >= MAX_RAM_RATE_LIMIT_IPS) {
             Object.keys(requestLog).forEach(key => delete requestLog[key]);
         }
@@ -165,6 +166,9 @@ const rateLimiter = async (req, res, next) => {
             requestLog[key] = (requestLog[key] || []).filter(t => now - t < RATE_WINDOW_MS);
             if (requestLog[key].length === 0) delete requestLog[key];
         });
+    }
+    if (!requestLog[ip] || !Array.isArray(requestLog[ip])) {
+        requestLog[ip] = [];
     }
     requestLog[ip] = requestLog[ip].filter(t => now - t < RATE_WINDOW_MS);
     if (requestLog[ip].length >= REQUEST_LIMIT) {
@@ -211,6 +215,75 @@ if (require.main === module) {
     const server = app.listen(PORT, () => {
         console.log(`Lumu API corriendo en http://localhost:${PORT}`);
     });
+
+    const startPopularQueriesWarmCache = () => {
+        const enabled = process.env.ENABLE_WARM_CACHE === 'true';
+        if (!enabled) return;
+
+        const intervalMs = Math.max(10 * 60 * 1000, parseInt(process.env.WARM_CACHE_INTERVAL_MS || `${60 * 60 * 1000}`, 10) || (60 * 60 * 1000));
+        const queryLimit = Math.max(1, Math.min(50, parseInt(process.env.WARM_CACHE_QUERY_LIMIT || '10', 10) || 10));
+        const countries = String(process.env.WARM_CACHE_COUNTRIES || 'MX,CL,CO,AR,PE,US')
+            .split(',')
+            .map(value => value.trim().toUpperCase())
+            .filter(Boolean);
+
+        let isRunning = false;
+
+        const runWarmCache = async () => {
+            if (isRunning) return;
+            isRunning = true;
+            try {
+                const popularQueries = await cacheService.getPopularQueries(queryLimit);
+                if (!Array.isArray(popularQueries) || popularQueries.length === 0) {
+                    console.log('[Warm Cache] No hay queries populares para precalentar.');
+                    return;
+                }
+
+                console.log(`[Warm Cache] Iniciando precalentamiento para ${popularQueries.length} queries y ${countries.length} países.`);
+                for (const country of countries) {
+                    for (const entry of popularQueries) {
+                        const query = String(entry?.query || '').trim();
+                        if (!query) continue;
+                        try {
+                            const response = await fetch(`http://127.0.0.1:${PORT}/api/buscar`, {
+                                method: 'POST',
+                                headers: {
+                                    'Content-Type': 'application/json',
+                                    'x-warm-cache-job': 'true'
+                                },
+                                body: JSON.stringify({
+                                    query,
+                                    chatHistory: [],
+                                    radius: 'global',
+                                    country,
+                                    skipLLM: false,
+                                    safeStoresOnly: false,
+                                    includeKnownMarketplaces: true,
+                                    includeHighRiskMarketplaces: false,
+                                    conditionMode: 'all'
+                                })
+                            });
+                            if (!response.ok) {
+                                console.warn(`[Warm Cache] Falló "${query}" (${country}): ${response.status}`);
+                            }
+                        } catch (error) {
+                            console.warn(`[Warm Cache] Error calentando "${query}" (${country}): ${error.message}`);
+                        }
+                    }
+                }
+                console.log('[Warm Cache] Precalentamiento completado.');
+            } catch (error) {
+                console.error('[Warm Cache] Error general:', error.message);
+            } finally {
+                isRunning = false;
+            }
+        };
+
+        setTimeout(runWarmCache, 15000);
+        setInterval(runWarmCache, intervalMs);
+    };
+
+    startPopularQueriesWarmCache();
 
     server.on('error', (error) => {
         if (error && error.code === 'EADDRINUSE') {

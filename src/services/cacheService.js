@@ -32,6 +32,14 @@ const normalizeQuery = (query) => {
         .join(' ');
 };
 
+const normalizeCanonicalKey = (value = '') => String(value || '')
+    .toLowerCase()
+    .trim()
+    .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-z0-9_]+/g, '_')
+    .replace(/^_+|_+$/g, '')
+    .slice(0, 160);
+
 /**
  * Genera una key única basada en país, query normalizada, lat, lng y radius
  */
@@ -39,6 +47,18 @@ const generateCacheKey = (query, radius, lat, lng, countryCode = 'MX') => {
     let key = `ct_${String(countryCode || 'MX').toUpperCase()}_${normalizeQuery(query)}`;
     if (radius && radius !== 'global') {
         // Truncar lat/lng a 1 decimal (~11 km de precisión) para más cache hits
+        const normLat = lat != null ? parseFloat(lat).toFixed(1) : '0';
+        const normLng = lng != null ? parseFloat(lng).toFixed(1) : '0';
+        key += `_loc_${radius}_${normLat}_${normLng}`;
+    }
+    return key;
+};
+
+const generateCanonicalCacheKey = (canonicalKey, radius, lat, lng, countryCode = 'MX') => {
+    const normalizedCanonical = normalizeCanonicalKey(canonicalKey);
+    if (!normalizedCanonical) return '';
+    let key = `ctc_${String(countryCode || 'MX').toUpperCase()}_${normalizedCanonical}`;
+    if (radius && radius !== 'global') {
         const normLat = lat != null ? parseFloat(lat).toFixed(1) : '0';
         const normLng = lng != null ? parseFloat(lng).toFixed(1) : '0';
         key += `_loc_${radius}_${normLat}_${normLng}`;
@@ -105,6 +125,7 @@ function ramCacheSet(key, data) {
     
     _ramCache.set(key, { data, ts: now });
     _ramCacheAccessTimes.set(key, now);
+    ramCacheCleanup();
 }
 
 // Periodic cleanup (10% de probabilidad en cada set)
@@ -123,24 +144,29 @@ function ramCacheCleanup() {
 /**
  * Busca resultados en caché: primero RAM, luego Supabase (24 horas TTL)
  */
-exports.getCachedResults = async (query, radius, lat, lng, countryCode = 'MX') => {
-    const queryKey = generateCacheKey(query, radius, lat, lng, countryCode);
+function getMaxCacheHours(queryKey = '', priceVolatility = 'medium') {
+    if (priceVolatility === 'high') return 12;
+    if (priceVolatility === 'low') return 72;
+    const isGenericQuery = String(queryKey || '').split(' ').length <= 3;
+    return isGenericQuery ? 72 : 48;
+}
 
-    // 1. Check RAM cache first (instant, no network)
+async function getCachedResultsByKey(queryKey, priceVolatility = 'medium') {
+    if (!queryKey) return null;
+
     const ramHit = ramCacheGet(queryKey);
     if (ramHit) {
         console.log(`[Cache RAM Hit] Resultados instantáneos para: ${queryKey}`);
         return ramHit;
     }
 
-    // 1.5 Check Redis Cache (Ultra-fast distributed cache)
     if (redisClient) {
         try {
             const redisHitText = await redisClient.get(`lumu:search:${queryKey}`);
             if (redisHitText) {
                 console.log(`[Cache Redis Hit] Resultados ultrarrápidos para: ${queryKey}`);
                 const redisData = JSON.parse(redisHitText);
-                ramCacheSet(queryKey, redisData); // Warm local RAM
+                ramCacheSet(queryKey, redisData);
                 return redisData;
             }
         } catch (e) {
@@ -148,7 +174,6 @@ exports.getCachedResults = async (query, radius, lat, lng, countryCode = 'MX') =
         }
     }
 
-    // 2. Check Supabase cache (Fallback distribuido)
     if (!supabase) return null;
 
     try {
@@ -160,46 +185,43 @@ exports.getCachedResults = async (query, radius, lat, lng, countryCode = 'MX') =
 
         if (error || !data) return null;
 
-        // Comprobar antigüedad — cache inteligente por tipo de query
         const cacheTime = new Date(data.created_at).getTime();
         const now = new Date().getTime();
         const hoursDiff = (now - cacheTime) / (1000 * 60 * 60);
-
-        // Tiered TTL: productos populares/genéricos se cachean más tiempo
-        // - Productos genéricos (audifonos, laptops, celulares): 72h
-        // - Productos específicos (modelo exacto): 48h  
-        // - Default: 48h
-        const isGenericQuery = queryKey.split(' ').length <= 3;
-        const maxHours = isGenericQuery ? 72 : 48;
+        const maxHours = getMaxCacheHours(queryKey, priceVolatility);
 
         if (hoursDiff < maxHours) {
             console.log(`[Cache Supabase Hit] Resultados para: ${queryKey} (${Math.round(hoursDiff)}h old, max ${maxHours}h)`);
-            // Warm RAM cache with Supabase result
             ramCacheSet(queryKey, data.results);
             return data.results;
-        } else {
-            console.log(`[Cache Expired] Los resultados para ${queryKey} tienen más de ${maxHours}h.`);
-            return null;
         }
 
+        console.log(`[Cache Expired] Los resultados para ${queryKey} tienen más de ${maxHours}h.`);
+        return null;
     } catch (err) {
         console.error('Error buscando en la caché de Supabase:', err.message);
         return null;
     }
+}
+
+exports.getCachedResults = async (query, radius, lat, lng, countryCode = 'MX', canonicalKey = '', priceVolatility = 'medium') => {
+    const queryKey = generateCacheKey(query, radius, lat, lng, countryCode);
+    const directHit = await getCachedResultsByKey(queryKey, priceVolatility);
+    if (directHit) return directHit;
+
+    const canonicalCacheKey = generateCanonicalCacheKey(canonicalKey, radius, lat, lng, countryCode);
+    if (!canonicalCacheKey) return null;
+    return getCachedResultsByKey(canonicalCacheKey, priceVolatility);
 };
 
 /**
  * Guarda resultados en Supabase (haciendo un upsert si ya existía la key)
  */
-exports.saveToCache = async (query, radius, lat, lng, results, countryCode = 'MX') => {
-    if (!supabase) return;
+async function persistCacheKey(queryKey, results, priceVolatility = 'medium') {
+    if (!queryKey) return;
 
-    const queryKey = generateCacheKey(query, radius, lat, lng, countryCode);
-
-    // Always warm RAM cache immediately (even if saves fail)
     ramCacheSet(queryKey, results);
 
-    // Save to Redis if available (TTL: 24 hours = 86400s)
     if (redisClient) {
         try {
             await redisClient.set(`lumu:search:${queryKey}`, JSON.stringify(results), 'EX', 86400);
@@ -207,6 +229,8 @@ exports.saveToCache = async (query, radius, lat, lng, results, countryCode = 'MX
             console.error('[Redis Set Error]:', e.message);
         }
     }
+
+    if (!supabase) return;
 
     try {
         const { error } = await supabase
@@ -219,14 +243,25 @@ exports.saveToCache = async (query, radius, lat, lng, results, countryCode = 'MX
 
         if (error) {
             console.error('Error al guardar en caché:', error.message);
-        } else {
-            console.log(`[Cache Saved] Resultados guardados en Supabase para: ${queryKey}`);
-            // Probabilistic cleanup: ~5% of saves trigger cleanup (serverless-safe)
-            if (Math.random() < 0.05) exports.cleanExpiredCache();
+        } else if (Math.random() < 0.05) {
+            exports.cleanExpiredCache();
         }
     } catch (err) {
         console.error('Excepción al guardar en caché Supabase:', err.message);
     }
+}
+
+exports.saveToCache = async (query, radius, lat, lng, results, countryCode = 'MX', canonicalKey = '', priceVolatility = 'medium') => {
+    if (!supabase) return;
+
+    const queryKey = generateCacheKey(query, radius, lat, lng, countryCode);
+    await persistCacheKey(queryKey, results, priceVolatility);
+
+    const canonicalCacheKey = generateCanonicalCacheKey(canonicalKey, radius, lat, lng, countryCode);
+    if (canonicalCacheKey) {
+        await persistCacheKey(canonicalCacheKey, results, priceVolatility);
+    }
+    console.log(`[Cache Saved] Resultados guardados para: ${queryKey}${canonicalCacheKey ? ` y ${canonicalCacheKey}` : ''}`);
 };
 
 /**
@@ -335,3 +370,34 @@ exports.getPriceHistoryMap = async (query, radius, lat, lng, products = [], coun
 
 exports.normalizeProductUrl = normalizeProductUrl;
 exports.generateCacheKey = generateCacheKey;
+exports.generateCanonicalCacheKey = generateCanonicalCacheKey;
+exports.normalizeCanonicalKey = normalizeCanonicalKey;
+exports.getPopularQueries = async (limit = 50) => {
+    if (!supabase) return [];
+    try {
+        const since = new Date(Date.now() - (7 * 24 * 60 * 60 * 1000)).toISOString();
+        const { data, error } = await supabase
+            .from('searches')
+            .select('query, created_at')
+            .gte('created_at', since)
+            .order('created_at', { ascending: false })
+            .limit(5000);
+
+        if (error || !Array.isArray(data)) return [];
+
+        const counter = new Map();
+        data.forEach(row => {
+            const normalized = normalizeQuery(row.query || '');
+            if (!normalized) return;
+            counter.set(normalized, (counter.get(normalized) || 0) + 1);
+        });
+
+        return [...counter.entries()]
+            .sort((a, b) => b[1] - a[1])
+            .slice(0, limit)
+            .map(([query, count]) => ({ query, count }));
+    } catch (err) {
+        console.error('Error obteniendo queries populares:', err.message);
+        return [];
+    }
+};

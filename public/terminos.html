@@ -38,16 +38,16 @@
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5"
                             d="M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z"></path>
                     </svg></div>
-                <span class="text-lg font-display font-extrabold text-slate-900">Lumu</span>
+                <span id="i18n-brand" class="text-lg font-display font-extrabold text-slate-900">Lumu</span>
             </a>
         </div>
     </header>
 
     <main class="max-w-3xl mx-auto px-4 py-16">
-        <h1 class="text-4xl font-display font-black text-slate-900 mb-2">Términos de Servicio</h1>
-        <p class="text-slate-500 mb-10 font-medium">Última actualización: Febrero 2026</p>
+        <h1 id="i18n-title" class="text-4xl font-display font-black text-slate-900 mb-2">Términos de Servicio</h1>
+        <p id="i18n-updated" class="text-slate-500 mb-10 font-medium">Última actualización: Marzo 2026</p>
 
-        <div class="space-y-10 text-slate-700 leading-relaxed">
+        <div id="i18n-body" class="space-y-10 text-slate-700 leading-relaxed">
             <section>
                 <h2 class="text-xl font-display font-bold text-slate-900 mb-3">1. Sobre Lumu</h2>
                 <p>Lumu es una plataforma tecnológica de asistente de compras impulsada por inteligencia
@@ -61,7 +61,8 @@
                 <ul class="list-disc pl-6 mt-2 space-y-1">
                     <li>Los resultados de búsqueda son informativos y reflejan precios en tiempo real de terceros,
                         sujetos a cambios sin previo aviso.</li>
-                    <li>No garantizamos disponibilidad, stock ni precios de los productos mostrados.</li>
+                    <li>No garantizamos disponibilidad, stock, vigencia ni precios finales de los productos mostrados.</li>
+                    <li>El precio final válido de cualquier producto o servicio de terceros es el que aparezca en la tienda, plataforma o checkout correspondiente al momento de la compra.</li>
                     <li>El modelo gratuito permite hasta 3 búsquedas por sesión. El acceso ilimitado requiere
                         suscripción activa.</li>
                     <li>No debes usar el servicio para actividades ilegales o que infrinjan derechos de terceros.</li>
@@ -75,7 +76,7 @@
                     encontramos son vendidos por tiendas de terceros (Amazon, Mercado Libre, Walmart, Coppel, Liverpool,
                     entre otras). Al hacer clic en un enlace de compra, eres redirigido a la tienda original responsable
                     de la venta.</p>
-                <p class="mt-3">Las políticas de devoluciones, cambios y rembolsos son exclusivamente responsabilidad de
+                <p class="mt-3">Las políticas de devoluciones, cambios y reembolsos de productos son exclusivamente responsabilidad de
                     cada tienda vendedora. Lumu no aplica reembolsos propios por productos adquiridos a
                     través de tiendas externas.</p>
                 <p class="mt-3">En el caso del modelo de Dropshipping (si aplica): el vendedor efectivo es quien procesa
@@ -86,6 +87,9 @@
                 <p>La suscripción VIP tiene un costo de <strong>$39 MXN mensuales</strong>, cobrado de forma recurrente
                     via Stripe. Puedes cancelar tu suscripción en cualquier momento desde tu panel de cuenta. Al
                     cancelar, mantendrás el acceso hasta el final del periodo pagado.</p>
+                <p class="mt-3">La suscripción a Lumu es un servicio digital independiente de los productos que encuentres en tiendas de terceros. El pago de la suscripción no implica compra de productos, garantía de disponibilidad ni garantía de ahorro.</p>
+                <p class="mt-3">Salvo que la ley aplicable disponga lo contrario o exista un error de cobro verificable, los cargos ya procesados por la suscripción no son reembolsables de forma proporcional por periodos ya iniciados. Si detectas un cobro duplicado o no reconocido, contáctanos para revisarlo.</p>
+                <p class="mt-3">Cuando mostremos precios equivalentes en otras monedas, dichos importes serán únicamente informativos o estimados. El cobro real de la suscripción puede realizarse en MXN u otra moneda definida en el checkout de Stripe al momento del pago.</p>
             </section>
             <section>
                 <h2 class="text-xl font-display font-bold text-slate-900 mb-3">5. Propiedad Intelectual</h2>
@@ -97,6 +101,7 @@
                 <p>Lumu no se hace responsable de inexactitudes en precios, descripción de productos,
                     problemas con envíos, o cualquier daño derivado de compras realizadas en tiendas de terceros. Usamos
                     la IA para mejorar la precisión, pero los datos provienen de fuentes externas dinámicas.</p>
+                <p class="mt-3">Tampoco garantizamos disponibilidad continua, ausencia de errores, compatibilidad con todos los dispositivos o que las recomendaciones generadas por IA sean completas, exactas o adecuadas para un propósito particular. El uso del servicio se realiza bajo tu propio criterio y responsabilidad.</p>
             </section>
             <section>
                 <h2 class="text-xl font-display font-bold text-slate-900 mb-3">7. Cambios a los Términos</h2>
@@ -104,8 +109,12 @@
                     electrónico si tienes una cuenta registrada. El uso continuo del servicio implica aceptación de los
                     nuevos términos.</p>
             </section>
+            <section>
+                <h2 class="text-xl font-display font-bold text-slate-900 mb-3">8. Contacto</h2>
+                <p>Si tienes dudas sobre estos términos, sobre cargos de suscripción o sobre el uso del servicio, puedes escribirnos a <a href="mailto:jhonatanvillagomez38@gmail.com" class="text-primary font-semibold hover:underline">jhonatanvillagomez38@gmail.com</a>.</p>
+            </section>
         </div>
-        <a href="/"
+        <a id="i18n-back-btn" href="/"
             class="mt-12 inline-flex items-center gap-2 bg-primary hover:bg-emerald-600 text-white font-bold py-3 px-6 rounded-xl transition-colors shadow-md shadow-emerald-500/20">
             ← Volver al inicio
         </a>
@@ -113,18 +122,88 @@
 
     <footer class="w-full bg-slate-900 border-t border-slate-800 text-slate-400 py-8 mt-auto">
         <div class="max-w-5xl mx-auto px-4 flex flex-col md:flex-row justify-between items-center text-sm">
-            <div class="mb-4 md:mb-0">© 2026 Lumu.dev. Todos los derechos reservados.</div>
+            <div id="i18n-footer-copy" class="mb-4 md:mb-0">© 2026 Lumu.dev. Todos los derechos reservados.</div>
             <div class="flex gap-4 flex-wrap justify-center">
-                <a href="/privacidad.html" class="hover:text-white transition-colors">Privacidad</a>
-                <a href="/terminos.html" class="hover:text-white transition-colors">Términos</a>
-                <a href="/sobre-nosotros.html" class="hover:text-white transition-colors">Sobre nosotros</a>
-                <a href="/contacto.html" class="hover:text-white transition-colors">Contacto</a>
+                <a id="i18n-f-privacy" href="/privacidad.html" class="hover:text-white transition-colors">Privacidad</a>
+                <a id="i18n-f-terms" href="/terminos.html" class="hover:text-white transition-colors">Términos</a>
+                <a id="i18n-f-about" href="/sobre-nosotros.html" class="hover:text-white transition-colors">Sobre nosotros</a>
+                <a id="i18n-f-contact" href="/contacto.html" class="hover:text-white transition-colors">Contacto</a>
             </div>
         </div>
     </footer>
 
     <!-- Vercel Analytics -->
     <script defer src="/_vercel/insights/script.js"></script>
+    <script>
+    (function() {
+        const saved = localStorage.getItem('lumu_region_override');
+        const isEN = saved === 'US' || (!saved && (navigator.language || '').toLowerCase().startsWith('en'));
+        if (!isEN) return;
+
+        document.title = 'Terms of Service - Lumu';
+        document.documentElement.lang = 'en';
+
+        const t = id => document.getElementById(id);
+        if (t('i18n-title')) t('i18n-title').textContent = 'Terms of Service';
+        if (t('i18n-updated')) t('i18n-updated').textContent = 'Last updated: March 2026';
+        if (t('i18n-back-btn')) t('i18n-back-btn').textContent = '← Back to home';
+        if (t('i18n-footer-copy')) t('i18n-footer-copy').textContent = '© 2026 Lumu.dev. All rights reserved.';
+        if (t('i18n-f-privacy')) t('i18n-f-privacy').textContent = 'Privacy';
+        if (t('i18n-f-terms')) t('i18n-f-terms').textContent = 'Terms';
+        if (t('i18n-f-about')) t('i18n-f-about').textContent = 'About us';
+        if (t('i18n-f-contact')) t('i18n-f-contact').textContent = 'Contact';
+
+        const body = t('i18n-body');
+        if (body) body.innerHTML = `
+            <section>
+                <h2 class="text-xl font-display font-bold text-slate-900 mb-3">1. About Lumu</h2>
+                <p>Lumu is an AI-powered shopping assistant platform. Our service lets you search and compare product prices across multiple online stores. We act as a technology intermediary, not as a direct seller of any product.</p>
+            </section>
+            <section>
+                <h2 class="text-xl font-display font-bold text-slate-900 mb-3">2. Use of Service</h2>
+                <p>By using Lumu, you agree that:</p>
+                <ul class="list-disc pl-6 mt-2 space-y-1">
+                    <li>Search results are informational and reflect real-time prices from third parties, subject to change without notice.</li>
+                    <li>We do not guarantee availability, stock, validity, or final prices of the products shown.</li>
+                    <li>The valid final price of any third-party product or service is the one displayed on the store, platform, or checkout at the time of purchase.</li>
+                    <li>The free plan allows up to 3 searches per session. Unlimited access requires an active subscription.</li>
+                    <li>You must not use the service for illegal activities or activities that infringe on the rights of third parties.</li>
+                </ul>
+            </section>
+            <section>
+                <h2 class="text-xl font-display font-bold text-slate-900 mb-3">3. Technology Intermediary — No Own Refunds</h2>
+                <p class="font-semibold text-slate-900 mb-2">⚠️ Important: We are not sellers.</p>
+                <p>Lumu acts exclusively as a technology intermediary. The products and services we find are sold by third-party stores (Amazon, Walmart, Best Buy, Target, among others). When you click a purchase link, you are redirected to the original store responsible for the sale.</p>
+                <p class="mt-3">Return, exchange, and refund policies for products are the exclusive responsibility of each selling store. Lumu does not issue its own refunds for products purchased through external stores.</p>
+                <p class="mt-3">In the case of the Dropshipping model (if applicable): the effective seller is the one who processes the order. Check their return policy directly.</p>
+            </section>
+            <section>
+                <h2 class="text-xl font-display font-bold text-slate-900 mb-3">4. Subscription & Payments</h2>
+                <p>The VIP subscription costs <strong>$3.99 USD/month</strong>, billed recurrently via Stripe. You can cancel your subscription at any time from your account panel. Upon cancellation, you retain access until the end of the paid period.</p>
+                <p class="mt-3">The Lumu subscription is a standalone digital service, independent of any products you find in third-party stores. Subscription payment does not imply product purchase, availability guarantee, or savings guarantee.</p>
+                <p class="mt-3">Unless applicable law provides otherwise or a verifiable billing error exists, charges already processed for the subscription are not proportionally refundable for periods already started. If you detect a duplicate or unrecognized charge, contact us for review.</p>
+                <p class="mt-3">When we show equivalent prices in other currencies, such amounts are informational or estimates only. The actual subscription charge may be processed in MXN or another currency defined at the Stripe checkout at the time of payment.</p>
+            </section>
+            <section>
+                <h2 class="text-xl font-display font-bold text-slate-900 mb-3">5. Intellectual Property</h2>
+                <p>All content, design, code, and branding of Lumu are the property of its creators. Reproduction without express authorization is not permitted.</p>
+            </section>
+            <section>
+                <h2 class="text-xl font-display font-bold text-slate-900 mb-3">6. Limitation of Liability</h2>
+                <p>Lumu is not responsible for inaccuracies in pricing, product descriptions, shipping issues, or any damages resulting from purchases made at third-party stores. We use AI to improve accuracy, but data comes from dynamic external sources.</p>
+                <p class="mt-3">We also do not guarantee continuous availability, absence of errors, compatibility with all devices, or that AI-generated recommendations are complete, accurate, or suitable for a particular purpose. Use of the service is at your own discretion and responsibility.</p>
+            </section>
+            <section>
+                <h2 class="text-xl font-display font-bold text-slate-900 mb-3">7. Changes to Terms</h2>
+                <p>We may modify these terms at any time. We will notify you of relevant changes by email if you have a registered account. Continued use of the service implies acceptance of the new terms.</p>
+            </section>
+            <section>
+                <h2 class="text-xl font-display font-bold text-slate-900 mb-3">8. Contact</h2>
+                <p>If you have questions about these terms, subscription charges, or use of the service, you can write to us at <a href="mailto:jhonatanvillagomez38@gmail.com" class="text-primary font-semibold hover:underline">jhonatanvillagomez38@gmail.com</a>.</p>
+            </section>
+        `;
+    })();
+    </script>
 </body>
 
 </html>

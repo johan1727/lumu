@@ -7,6 +7,7 @@ const regionConfigService = require('./regionConfigService');
 // Timeout por defecto para Serper API
 const SERPER_TIMEOUT = 8000;
 const SERPER_MAX_RETRIES = 2;
+const LOCAL_FAST_TIMEOUT = 5000;
 
 function extractSnippetPrice(text) {
     const source = String(text || '');
@@ -67,12 +68,48 @@ async function fetchWithRetry(config, retries = SERPER_MAX_RETRIES) {
     throw lastError;
 }
 
+function getStorePriorityForCategory(category = '', countryCode = 'MX') {
+    const normalizedCategory = String(category || '').toLowerCase();
+    const normalizedCountry = String(countryCode || 'MX').toUpperCase();
+    const priorityMaps = {
+        MX: {
+            smartphone: ['amazon', 'mercado libre', 'liverpool', 'walmart', 'coppel'],
+            laptop: ['amazon', 'liverpool', 'costco', 'walmart', 'best buy'],
+            gaming: ['amazon', 'mercado libre', 'best buy', 'walmart', 'costco'],
+            audio: ['amazon', 'mercado libre', 'liverpool', 'walmart'],
+            home: ['walmart', 'amazon', 'home depot', 'liverpool', 'bodega aurrera'],
+            fashion: ['mercado libre', 'shein', 'liverpool', 'coppel'],
+            appliance: ['walmart', 'liverpool', 'coppel', 'elektra', 'amazon']
+        },
+        CL: {
+            smartphone: ['falabella', 'ripley', 'paris', 'pc factory', 'mercado libre'],
+            laptop: ['pc factory', 'falabella', 'ripley', 'paris', 'solotodo'],
+            gaming: ['microplay', 'sp digital', 'falabella', 'ripley'],
+            home: ['falabella', 'lider', 'easy', 'sodimac'],
+            appliance: ['falabella', 'lider', 'ripley', 'paris']
+        },
+        US: {
+            smartphone: ['amazon', 'walmart', 'best buy', 'target'],
+            laptop: ['amazon', 'best buy', 'walmart', 'costco', 'newegg'],
+            gaming: ['amazon', 'best buy', 'walmart', 'target'],
+            audio: ['amazon', 'best buy', 'target'],
+            home: ['walmart', 'amazon', 'home depot', 'costco'],
+            appliance: ['best buy', 'walmart', 'amazon', 'costco']
+        }
+    };
+
+    return priorityMaps[normalizedCountry]?.[normalizedCategory] || [];
+}
+
 // Helper para limitar concurrencia
-async function runWithConcurrencyLimit(promiseFns, limit) {
+async function runWithConcurrencyLimit(promiseFns, limit, abortSignal) {
     const results = [];
     const executing = new Set();
     
     for (const [index, promiseFn] of promiseFns.entries()) {
+        if (abortSignal?.aborted) {
+            break;
+        }
         const p = Promise.resolve().then(() => promiseFn).then(result => ({ status: 'fulfilled', value: result, index })).catch(err => ({ status: 'rejected', reason: err, index }));
         results.push(p);
         
@@ -88,8 +125,11 @@ async function runWithConcurrencyLimit(promiseFns, limit) {
     return Promise.all(results);
 }
 
-exports.searchGoogleShopping = async (query, radius, lat, lng, intentType, abortSignal, conditionMode = 'all', countryCode = 'MX') => {
+exports.searchGoogleShopping = async (query, radius, lat, lng, intentType, abortSignal, conditionMode = 'all', countryCode = 'MX', alternativeQueries = [], productCategory = '', preferredStoreKeys = []) => {
     const regionCfg = regionConfigService.getRegionConfig(countryCode);
+    const isLocalFastMode = process.env.NODE_ENV !== 'production';
+    const serperTimeout = isLocalFastMode ? LOCAL_FAST_TIMEOUT : SERPER_TIMEOUT;
+    const serperRetries = isLocalFastMode ? 0 : SERPER_MAX_RETRIES;
     console.log(`[ShoppingService] Region: ${regionCfg.countryCode} (gl=${regionCfg.gl}, hl=${regionCfg.hl}, currency=${regionCfg.currency})`);
     const apiKey = process.env.SERPER_API_KEY;
     let serperResults = [];
@@ -109,7 +149,8 @@ exports.searchGoogleShopping = async (query, radius, lat, lng, intentType, abort
                     url: 'https://google.serper.dev/places',
                     headers: { 'X-API-KEY': apiKey, 'Content-Type': 'application/json' },
                     data: JSON.stringify({ q: query, ll: `@${lat},${lng},14z`, gl: regionCfg.gl, hl: regionCfg.hl }),
-                    timeout: SERPER_TIMEOUT
+                    timeout: SERPER_TIMEOUT,
+                    signal: abortSignal
                 };
                 const localRes = await axios(localConfig);
                 const places = localRes.data.places || [];
@@ -143,21 +184,44 @@ exports.searchGoogleShopping = async (query, radius, lat, lng, intentType, abort
             url: 'https://google.serper.dev/shopping',
             headers: { 'X-API-KEY': apiKey, 'Content-Type': 'application/json' },
             data: JSON.stringify({ q: query, gl: regionCfg.gl, hl: regionCfg.hl, num: 40 }),
-            timeout: SERPER_TIMEOUT
-        }).catch(err => { console.error('Error Google Shopping:', err.message); return null; });
+            timeout: serperTimeout,
+            signal: abortSignal
+        }, serperRetries).catch(err => { console.error('Error Google Shopping:', err.message); return null; });
 
         const webPromise = fetchWithRetry({
             method: 'post',
             url: 'https://google.serper.dev/search',
             headers: { 'X-API-KEY': apiKey, 'Content-Type': 'application/json' },
             data: JSON.stringify({
-                q: regionConfigService.buildWebSearchQuery(query, countryCode),
+                q: preferredStoreKeys.length > 0
+                    ? regionConfigService.buildAdaptiveWebSearchQuery(query, countryCode, preferredStoreKeys)
+                    : regionConfigService.buildWebSearchQuery(query, countryCode),
                 gl: regionCfg.gl, hl: regionCfg.hl, num: 20
             }),
-            timeout: SERPER_TIMEOUT
-        }).catch(err => { console.error('Error Serper Web:', err.message); return null; });
+            timeout: serperTimeout,
+            signal: abortSignal
+        }, serperRetries).catch(err => { console.error('Error Serper Web:', err.message); return null; });
 
-        const [shoppingRes, webRes] = await Promise.all([shoppingPromise, webPromise]);
+        // Broad web search removed — shopping + site:web + direct scrapers provide sufficient coverage.
+        // This saves 1 Serper API call per search (~33% cost reduction).
+
+        const serperAltQueryCount = isLocalFastMode ? 0 : (Math.max(0, parseInt(process.env.ALT_QUERY_SERPER_COUNT || '1', 10) || 1));
+        const altShoppingPromises = (alternativeQueries || [])
+            .filter(Boolean)
+            .slice(0, serperAltQueryCount)
+            .map(altQuery => fetchWithRetry({
+                method: 'post',
+                url: 'https://google.serper.dev/shopping',
+                headers: { 'X-API-KEY': apiKey, 'Content-Type': 'application/json' },
+                data: JSON.stringify({ q: altQuery, gl: regionCfg.gl, hl: regionCfg.hl, num: 20 }),
+                timeout: serperTimeout,
+                signal: abortSignal
+            }, serperRetries).catch(err => {
+                console.error(`Error Google Shopping alt query "${altQuery}":`, err.message);
+                return null;
+            }));
+
+        const [shoppingRes, webRes, ...altShoppingResponses] = await Promise.all([shoppingPromise, webPromise, ...altShoppingPromises]);
 
         // Procesar Shopping
         if (shoppingRes?.data?.shopping) {
@@ -186,6 +250,28 @@ exports.searchGoogleShopping = async (query, radius, lat, lng, intentType, abort
             });
             console.log(`[Serper Shopping] ${serperResults.length} resultados procesados`);
         }
+
+        altShoppingResponses.forEach((altRes) => {
+            if (!altRes?.data?.shopping) return;
+            const altMapped = altRes.data.shopping.map(item => {
+                let parsedPrice = null;
+                if (item.price != null) {
+                    const priceStr = String(item.price).replace(/[^0-9.,]/g, '').replace(/,/g, '');
+                    parsedPrice = parseFloat(priceStr);
+                    if (!Number.isFinite(parsedPrice)) parsedPrice = null;
+                }
+                return {
+                    title: item.title || 'Sin Título',
+                    price: parsedPrice,
+                    url: item.link || '',
+                    source: item.source || 'Tienda Desconocida',
+                    image: item.imageUrl || '',
+                    isGoogleRedirect: (item.link || '').includes('google.com/search'),
+                    snippet: item.snippet || ''
+                };
+            });
+            serperResults = [...serperResults, ...altMapped];
+        });
 
         // Procesar Web complementario
         if (webRes?.data?.organic) {
@@ -226,6 +312,8 @@ exports.searchGoogleShopping = async (query, radius, lat, lng, intentType, abort
             console.log(`[Serper Web] Encontró ${webMapped.length} resultados web complementarios`);
         }
 
+        // Broad web results processing removed (call eliminated above)
+
         // Búsqueda local de productos (tiendas físicas) si hay ubicación
         if (lat && lng && radius !== 'global' && radius !== '999999') {
             try {
@@ -247,7 +335,8 @@ exports.searchGoogleShopping = async (query, radius, lat, lng, intentType, abort
                     url: 'https://google.serper.dev/places',
                     headers: { 'X-API-KEY': apiKey, 'Content-Type': 'application/json' },
                     data: JSON.stringify({ q: simplifiedPlacesQuery, ll: `@${lat},${lng},${zoomFromRadius}z`, gl: regionCfg.gl, hl: regionCfg.hl }),
-                    timeout: SERPER_TIMEOUT
+                    timeout: SERPER_TIMEOUT,
+                    signal: abortSignal
                 };
                 const localRes = await axios(localConfig);
                 const places = localRes.data.places || [];
@@ -308,44 +397,56 @@ exports.searchGoogleShopping = async (query, radius, lat, lng, intentType, abort
     // 2. Ejecutar Scrapers DIRECTOS solo si NO es un servicio
     // FIX: Limitar concurrencia a 5 scrapers simultáneos para evitar agotar conexiones
     let directResults = [];
-    if (!isService && intentType !== 'mayoreo_perecedero') {
+    if (!isLocalFastMode && !isService && intentType !== 'mayoreo_perecedero') {
         // Strip Google-only negative keywords (-funda -case etc.) since direct scrapers use URL search params
         const cleanQuery = query.replace(/\s+-\w+/g, '').trim();
         console.log(`Ejecutando scrapers directos rápidos para ${countryCode}: ${cleanQuery} ...`);
 
         const scraperFunctions = [
-            () => monitor.wrap(() => directScraper.scrapeMercadoLibreAPI(cleanQuery, countryCode), 'ml_api_direct'),
-            () => monitor.wrap(directScraper.scrapeAliExpress, 'aliexpress_direct', cleanQuery)
+            () => monitor.wrap(() => directScraper.scrapeMercadoLibreAPI(cleanQuery, countryCode, abortSignal), 'ml_api_direct'),
+            () => monitor.wrap(directScraper.scrapeAliExpress, 'aliexpress_direct', cleanQuery, abortSignal)
         ];
 
         if (countryCode === 'MX') {
-            scraperFunctions.unshift(() => monitor.wrap(directScraper.scrapeAmazonDirect, 'amazon_direct', cleanQuery));
+            scraperFunctions.unshift(() => monitor.wrap(directScraper.scrapeAmazonDirect, 'amazon_direct', cleanQuery, abortSignal));
             scraperFunctions.push(
-                () => monitor.wrap(directScraper.scrapeWalmartMX, 'walmart_direct', cleanQuery),
-                () => monitor.wrap(directScraper.scrapeLiverpoolMX, 'liverpool_direct', cleanQuery),
-                () => monitor.wrap(directScraper.scrapeCoppelMX, 'coppel_direct', cleanQuery),
-                () => monitor.wrap(directScraper.scrapeElektraMX, 'elektra_direct', cleanQuery),
-                () => monitor.wrap(directScraper.scrapeBestBuyMX, 'bestbuy_direct', cleanQuery),
-                () => monitor.wrap(directScraper.scrapeCostcoMX, 'costco_direct', cleanQuery),
-                () => monitor.wrap(directScraper.scrapeSamsClubMX, 'sams_direct', cleanQuery),
-                () => monitor.wrap(directScraper.scrapeHomeDepotMX, 'homedepot_direct', cleanQuery),
-                () => monitor.wrap(directScraper.scrapeOfficeDepotMX, 'officedepot_direct', cleanQuery),
-                () => monitor.wrap(directScraper.scrapeSorianaMX, 'soriana_direct', cleanQuery),
-                () => monitor.wrap(directScraper.scrapeSearsMX, 'sears_direct', cleanQuery),
-                () => monitor.wrap(directScraper.scrapeSheinMX, 'shein_direct', cleanQuery),
-                () => monitor.wrap(directScraper.scrapeTemuMX, 'temu_direct', cleanQuery),
-                () => monitor.wrap(directScraper.scrapeBodegaAurreraMX, 'bodega_aurrera_direct', cleanQuery),
-                () => monitor.wrap(directScraper.scrapeLinioMX, 'linio_direct', cleanQuery),
-                () => monitor.wrap(directScraper.scrapeClaroShopMX, 'claroshop_direct', cleanQuery)
+                () => monitor.wrap(directScraper.scrapeWalmartMX, 'walmart_direct', cleanQuery, abortSignal),
+                () => monitor.wrap(directScraper.scrapeLiverpoolMX, 'liverpool_direct', cleanQuery, abortSignal),
+                () => monitor.wrap(directScraper.scrapeCoppelMX, 'coppel_direct', cleanQuery, abortSignal),
+                () => monitor.wrap(directScraper.scrapeElektraMX, 'elektra_direct', cleanQuery, abortSignal),
+                () => monitor.wrap(directScraper.scrapeBestBuyMX, 'bestbuy_direct', cleanQuery, abortSignal),
+                () => monitor.wrap(directScraper.scrapeCostcoMX, 'costco_direct', cleanQuery, abortSignal),
+                () => monitor.wrap(directScraper.scrapeSamsClubMX, 'sams_direct', cleanQuery, abortSignal),
+                () => monitor.wrap(directScraper.scrapeHomeDepotMX, 'homedepot_direct', cleanQuery, abortSignal),
+                () => monitor.wrap(directScraper.scrapeOfficeDepotMX, 'officedepot_direct', cleanQuery, abortSignal),
+                () => monitor.wrap(directScraper.scrapeSorianaMX, 'soriana_direct', cleanQuery, abortSignal),
+                () => monitor.wrap(directScraper.scrapeSearsMX, 'sears_direct', cleanQuery, abortSignal),
+                () => monitor.wrap(directScraper.scrapeSheinMX, 'shein_direct', cleanQuery, abortSignal),
+                () => monitor.wrap(directScraper.scrapeTemuMX, 'temu_direct', cleanQuery, abortSignal),
+                () => monitor.wrap(directScraper.scrapeBodegaAurreraMX, 'bodega_aurrera_direct', cleanQuery, abortSignal),
+                () => monitor.wrap(directScraper.scrapeLinioMX, 'linio_direct', cleanQuery, abortSignal),
+                () => monitor.wrap(directScraper.scrapeClaroShopMX, 'claroshop_direct', cleanQuery, abortSignal)
             );
         } else if (['CL', 'CO', 'PE'].includes(countryCode)) {
-            scraperFunctions.unshift(() => monitor.wrap(() => directScraper.scrapeFalabellaRegional(cleanQuery, countryCode), 'falabella_direct'));
+            scraperFunctions.unshift(() => monitor.wrap(() => directScraper.scrapeFalabellaRegional(cleanQuery, countryCode, abortSignal), 'falabella_direct'));
         } else if (countryCode === 'US') {
-            scraperFunctions.unshift(() => monitor.wrap(directScraper.scrapeAmazonDirect, 'amazon_direct', cleanQuery));
+            scraperFunctions.unshift(() => monitor.wrap(directScraper.scrapeAmazonDirect, 'amazon_direct', cleanQuery, abortSignal));
+        }
+
+        const preferredStores = getStorePriorityForCategory(productCategory, countryCode);
+        if (preferredStores.length > 0) {
+            scraperFunctions.sort((a, b) => {
+                const rankFor = (fn) => {
+                    const source = String(fn).toLowerCase();
+                    const index = preferredStores.findIndex(store => source.includes(store));
+                    return index === -1 ? 999 : index;
+                };
+                return rankFor(a) - rankFor(b);
+            });
         }
         
         const CONCURRENCY_LIMIT = 5;
-        const scraperResultsRaw = await runWithConcurrencyLimit(scraperFunctions, CONCURRENCY_LIMIT);
+        const scraperResultsRaw = await runWithConcurrencyLimit(scraperFunctions, CONCURRENCY_LIMIT, abortSignal);
         
         scraperResultsRaw.forEach(result => {
             if (result.status === 'fulfilled' && result.value) {
@@ -355,5 +456,14 @@ exports.searchGoogleShopping = async (query, radius, lat, lng, intentType, abort
     }
 
     // 3. Unir resultados
-    return [...serperResults, ...directResults];
+    const dedupedByUrl = [];
+    const seenUrls = new Set();
+    [...serperResults, ...directResults].forEach(result => {
+        const key = String(result?.url || '').split('?')[0].toLowerCase();
+        if (!key || !seenUrls.has(key)) {
+            if (key) seenUrls.add(key);
+            dedupedByUrl.push(result);
+        }
+    });
+    return dedupedByUrl;
 };

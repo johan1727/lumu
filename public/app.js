@@ -355,8 +355,13 @@ const REGION_UI_COPY = {
             close: 'Cerrar'
         },
         auth: {
-            title: 'Bienvenido',
-            copy: 'Inicia sesión para guardar tus favoritos y ver tu historial.',
+            title: 'Crea tu cuenta gratis',
+            copy: 'Desbloquea más búsquedas, favoritos, historial y alertas de precio.',
+            bonus: '🎁 Bono de bienvenida: +5 búsquedas extra',
+            benefit1: 'Más búsquedas al registrarte',
+            benefit2: 'Gana Lumu Coins con cada búsqueda',
+            benefit3: 'Guarda favoritos e historial',
+            benefit4: 'Activa alertas de precio',
             google: 'Continuar con Google',
             termsHtml: 'Al continuar, aceptas nuestros <a href="/terminos.html" class="underline hover:text-primary">Términos</a> y <a href="/privacidad.html" class="underline hover:text-primary">Privacidad</a>.'
         },
@@ -587,8 +592,13 @@ const REGION_UI_COPY = {
             close: 'Close'
         },
         auth: {
-            title: 'Welcome',
-            copy: 'Sign in to save your favorites and view your history.',
+            title: 'Create your free account',
+            copy: 'Unlock more searches, favorites, history, and price alerts.',
+            bonus: '🎁 Welcome bonus: +5 extra searches',
+            benefit1: 'More searches when you sign up',
+            benefit2: 'Earn Lumu Coins with each search',
+            benefit3: 'Save favorites and history',
+            benefit4: 'Enable price alerts',
             google: 'Continue with Google',
             termsHtml: 'By continuing, you agree to our <a href="/terms.html" class="underline hover:text-primary">Terms</a> and <a href="/privacy.html" class="underline hover:text-primary">Privacy</a>.'
         },
@@ -665,12 +675,25 @@ let lastB2bData = null;
 let currentPhoneAttempt = '';
 let currentStep = 1;
 const totalSteps = 3;
+let _authModalWasOpened = false;
+let _authModalCompleted = false;
+let _isSearchInProgress = false;
+let _activeSearchAbortController = null;
 
 // --- Conversion Analytics ---
 const _detectDevice = () => /Mobi|Android/i.test(navigator.userAgent) ? (/iPad|Tablet/i.test(navigator.userAgent) ? 'tablet' : 'mobile') : 'desktop';
+let _conversionBounceTimer = null;
+window._lastSearchContext = { canonical_key: '', product_category: '' };
 function _trackEvent(event_type, extra = {}) {
     try {
-        const body = { event_type, device: _detectDevice(), ...extra };
+        const searchContext = window._lastSearchContext || {};
+        const body = {
+            event_type,
+            device: _detectDevice(),
+            canonical_key: searchContext.canonical_key || undefined,
+            product_category: searchContext.product_category || undefined,
+            ...extra
+        };
         const headers = { 'Content-Type': 'application/json' };
         if (window.supabaseClient && window.currentUser) {
             window.supabaseClient.auth.getSession().then(({ data }) => {
@@ -760,6 +783,11 @@ document.addEventListener('DOMContentLoaded', () => {
 // --- Modal Transitions ---
 function openModal() {
     if (!authModal) return;
+    if (!_authModalWasOpened) {
+        _authModalWasOpened = true;
+        _authModalCompleted = false;
+        _trackEvent('auth_modal_open');
+    }
     authModal.classList.remove('invisible', 'opacity-0');
     const panel = authModal.querySelector('.glass-panel');
     if (panel) {
@@ -770,6 +798,10 @@ function openModal() {
 
 function closeModal() {
     if (!authModal) return;
+    if (_authModalWasOpened && !_authModalCompleted && !currentUser) {
+        _trackEvent('auth_modal_dismiss');
+    }
+    _authModalWasOpened = false;
     authModal.classList.add('invisible', 'opacity-0');
     const panel = authModal.querySelector('.glass-panel');
     if (panel) {
@@ -1191,6 +1223,11 @@ function applyRegionalCopy() {
 
     setTextById('auth-title', ui.auth.title);
     setTextById('auth-copy', ui.auth.copy);
+    setTextById('auth-bonus', ui.auth.bonus);
+    setTextById('auth-benefit-1', ui.auth.benefit1);
+    setTextById('auth-benefit-2', ui.auth.benefit2);
+    setTextById('auth-benefit-3', ui.auth.benefit3);
+    setTextById('auth-benefit-4', ui.auth.benefit4);
     setTextById('google-login-label', ui.auth.google);
     setHTMLById('auth-terms-copy', ui.auth.termsHtml);
 
@@ -2453,7 +2490,7 @@ async function initApp() {
         if (btnPricingVip) btnPricingVip.addEventListener('click', () => {
             if (!currentUser) {
                 showToast('Inicia sesión primero para suscribirte', 'info');
-                if (authModal) authModal.classList.remove('hidden');
+                openModal();
                 return;
             }
             if (stripePaymentLink) {
@@ -2466,7 +2503,7 @@ async function initApp() {
         if (btnPricingB2b) btnPricingB2b.addEventListener('click', () => {
             if (!currentUser) {
                 showToast('Inicia sesión primero para suscribirte', 'info');
-                if (authModal) authModal.classList.remove('hidden');
+                openModal();
                 return;
             }
             if (window.stripeB2bPaymentLink) {
@@ -2855,6 +2892,8 @@ async function initApp() {
                     const isNewUser = (now - createdAt) < 60000;
 
                     if (isNewUser && !sessionStorage.getItem('lumu_confetti_fired')) {
+                        _authModalCompleted = true;
+                        _trackEvent('signup_complete');
                         setTimeout(() => {
                             confetti({
                                 particleCount: 150,
@@ -2864,6 +2903,18 @@ async function initApp() {
                             });
                         }, 500);
                         sessionStorage.setItem('lumu_confetti_fired', 'true');
+                        fetch('/api/signup-bonus', {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json',
+                                'Authorization': `Bearer ${session.access_token || ''}`
+                            }
+                        }).then(res => res.json()).then(data => {
+                            if (data?.bonus > 0) {
+                                _trackEvent('signup_bonus', { search_query: 'welcome_bonus' });
+                                showGlobalFeedback(currentRegion === 'US' ? `Welcome! You unlocked ${data.bonus} extra searches.` : `¡Bienvenido! Desbloqueaste ${data.bonus} búsquedas extra.`, 'success');
+                            }
+                        }).catch(() => { });
                     }
                 }
             });
@@ -3264,13 +3315,34 @@ async function initApp() {
             });
         }
 
+        let _lastSubmittedQuery = '';
+        let _lastSubmittedAt = 0;
+
         async function executeSearch(query, skipLLM = false) {
+            // Dedup: prevent identical query within 3s (double-click / double-submit)
+            const now = Date.now();
+            if (query === _lastSubmittedQuery && (now - _lastSubmittedAt) < 3000) {
+                console.log('[Search Dedup] Skipping duplicate query:', query);
+                return;
+            }
+            _lastSubmittedQuery = query;
+            _lastSubmittedAt = now;
+
+            if (_isSearchInProgress && _activeSearchAbortController) {
+                try { _activeSearchAbortController.abort(); } catch { }
+            }
             const radius = locRadiusInput?.value || 'global';
             const lat = userLatInput?.value || null;
             const lng = userLngInput?.value || null;
             const includeKnownMarketplaces = includeKnownMarketplacesInput?.value !== 'false';
             const includeHighRiskMarketplaces = includeHighRiskMarketplacesInput?.value === 'true';
 
+            _isSearchInProgress = true;
+            if (_activeSearchAbortController) {
+                try { _activeSearchAbortController.abort(); } catch { }
+            }
+            const requestAbortController = new AbortController();
+            _activeSearchAbortController = requestAbortController;
             searchButton.disabled = true;
             const originalButtonHTML = getSearchButtonIdleHTML();
             // Asegurar que el spinner tenga el mismo tamaño que el texto para evitar que el botón cambie de tamaño bruscamente
@@ -3370,11 +3442,15 @@ async function initApp() {
                 // Track search event for conversion analytics
                 _trackEvent('search', { search_query: finalQuery });
                 window._lastSearchQuery = finalQuery;
+                window._lastSearchHadClick = false;
+                window._lastSearchContext = { canonical_key: '', product_category: '' };
+                if (_conversionBounceTimer) clearTimeout(_conversionBounceTimer);
 
                 const response = await fetch('/api/buscar', {
                     method: 'POST',
                     headers: fetchHeaders,
-                    body: JSON.stringify(searchBody)
+                    body: JSON.stringify(searchBody),
+                    signal: requestAbortController.signal
                 });
 
                 // FIX #2: Defensive parsing to prevent "Unexpected token 'A'" crash
@@ -3417,12 +3493,17 @@ async function initApp() {
                             addChatBubble('ai', rewardAvailable
                                 ? `🔒 **${getLocalizedText('Límite de búsquedas gratuitas alcanzado.', 'Free search limit reached.')}** ${getLocalizedText('Hazte VIP para obtener mayor capacidad de búsqueda o mira un anuncio para 3 búsquedas gratis.', 'Upgrade to VIP for more searches or watch an ad for 3 free searches.')}`
                                 : `🔒 **${getLocalizedText('Límite de búsquedas gratuitas alcanzado.', 'Free search limit reached.')}** ${getLocalizedText('Hazte VIP para obtener mayor capacidad de búsqueda.', 'Upgrade to VIP for more searches.')}`, [], false);
+                            const signupButton = !currentUser ? `
+                                        <button onclick="window.openSignupPrompt();" class="w-full bg-slate-900 hover:bg-slate-800 text-white px-8 py-3.5 rounded-2xl font-bold transition-all">
+                                            ${getLocalizedText('Crear cuenta gratis (+5 búsquedas)', 'Create free account (+5 searches)')}
+                                        </button>` : '';
                             resultsContainer.innerHTML = `
                                 <div class="col-span-full flex flex-col items-center text-center py-12 px-6 bg-gradient-to-br from-amber-50 to-orange-50 rounded-3xl border border-amber-200">
                                     <div class="text-5xl mb-4">⚡</div>
                                     <h3 class="text-xl font-black text-slate-800 mb-2">${getLocalizedText('Límite Alcanzado', 'Limit Reached')}</h3>
                                     <p class="text-slate-600 font-medium mb-6 max-w-sm">${rewardAvailable ? getLocalizedText('Desbloquea una mayor capacidad de búsqueda con VIP o gana 3 búsquedas hoy patrocinadas por anuncios.', 'Unlock more searches with VIP or earn 3 free searches today by watching an ad.') : getLocalizedText('Desbloquea una mayor capacidad de búsqueda con VIP para seguir buscando sin esperar al próximo reinicio diario.', 'Unlock more searches with VIP to keep searching without waiting for the next daily reset.')}</p>
                                     <div class="flex flex-col gap-3 w-full max-w-xs">
+                                        ${signupButton}
                                         <a href="${sanitize(vipUrl)}" target="_blank" class="w-full bg-amber-500 hover:bg-amber-600 text-white px-8 py-3.5 rounded-2xl font-bold transition-all shadow-lg shadow-amber-500/20">${getLocalizedText('Obtener VIP - $39 MXN/mes', 'Get VIP - $39 MXN/mo')}</a>
                                         ${rewardAvailable ? `
                                         <button onclick="window.watchRewardedAdForSearches();" class="w-full bg-white hover:bg-slate-50 text-slate-700 border border-slate-200 px-8 py-3.5 rounded-2xl font-bold transition-all flex justify-center items-center gap-2">
@@ -3462,6 +3543,10 @@ async function initApp() {
                     chatHistory = [];
                     chatContainer.classList.add('hidden');
                     chatContainer.innerHTML = '';
+                    window._lastSearchContext = {
+                        canonical_key: data.search_metadata?.canonical_key || '',
+                        product_category: data.search_metadata?.product_category || ''
+                    };
                     // Increment search count after successful result
                     let sgData = JSON.parse(localStorage.getItem('lumu_searches_data') || '{"count": 0, "date": ""}');
                     sgData.count = (sgData.count || 0) + 1;
@@ -3487,6 +3572,23 @@ async function initApp() {
                         }
                     }
 
+                    if (!currentUser && !sessionStorage.getItem('lumu_signup_nudge_shown')) {
+                        setTimeout(() => {
+                            if (!resultsContainer || currentUser || sessionStorage.getItem('lumu_signup_nudge_shown')) return;
+                            const nudge = document.createElement('div');
+                            nudge.className = 'col-span-full mt-4 rounded-3xl border border-emerald-200 bg-gradient-to-r from-emerald-50 to-teal-50 px-6 py-5 flex flex-col md:flex-row items-center justify-between gap-4';
+                            nudge.innerHTML = `
+                                <div class="text-center md:text-left">
+                                    <h3 class="text-base font-black text-slate-900">${getLocalizedText('¿Te gustaron estos resultados?', 'Did you like these results?')}</h3>
+                                    <p class="text-sm text-slate-600 font-medium">${getLocalizedText('Crea tu cuenta gratis para guardar productos, recibir alertas y obtener +5 búsquedas de bienvenida.', 'Create your free account to save products, enable alerts, and get +5 welcome searches.')}</p>
+                                </div>
+                                <button class="signup-nudge-btn w-full md:w-auto bg-slate-900 hover:bg-slate-800 text-white px-6 py-3 rounded-2xl font-bold transition-colors">${getLocalizedText('Crear cuenta gratis', 'Create free account')}</button>
+                            `;
+                            nudge.querySelector('.signup-nudge-btn')?.addEventListener('click', () => openModal());
+                            resultsContainer.appendChild(nudge);
+                            sessionStorage.setItem('lumu_signup_nudge_shown', 'true');
+                        }, 3000);
+                    }
                     // Guardar la búsqueda en la base de datos "searches" o LocalStorage
                     if (data.intencion_detectada?.busqueda) {
                         const busqueda = data.intencion_detectada.busqueda;
@@ -3518,8 +3620,27 @@ async function initApp() {
                         resultCount: data.top_5_baratos?.length || 0
                     });
 
+                    if (!data.top_5_baratos || data.top_5_baratos.length === 0) {
+                        _trackEvent('zero_results', {
+                            search_query: data.intencion_detectada?.busqueda || finalQuery,
+                            safe_stores_only: !!safeStoresOnly,
+                            include_known_marketplaces: !!includeKnownMarketplaces,
+                            include_high_risk_marketplaces: !!includeHighRiskMarketplaces,
+                            condition_mode: getConditionMode()
+                        });
+                    }
+
                     if (data.top_5_baratos && data.top_5_baratos.length > 0) {
                         await renderProducts(data.top_5_baratos);
+                        if (_conversionBounceTimer) clearTimeout(_conversionBounceTimer);
+                        _conversionBounceTimer = setTimeout(() => {
+                            if (!window._lastSearchHadClick && window._lastSearchQuery) {
+                                _trackEvent('bounce', {
+                                    search_query: window._lastSearchQuery,
+                                    result_count: data.top_5_baratos?.length || 0
+                                });
+                            }
+                        }, 30000);
                         
                         // Track search in Google Analytics
                         if (typeof trackSearch === 'function') {
@@ -3631,6 +3752,9 @@ async function initApp() {
 
             } catch (error) {
                 console.error('Fetch Error:', error);
+                if (error?.name === 'AbortError') {
+                    return;
+                }
                 removeTypingIndicator();
                 if (_skeletonMsgInterval) { clearInterval(_skeletonMsgInterval); _skeletonMsgInterval = null; }
                 
@@ -3648,8 +3772,12 @@ async function initApp() {
                 resultsContainer.innerHTML = '';
                 resultsWrapper.classList.add('hidden');
             } finally {
-                searchButton.disabled = false;
-                searchButton.innerHTML = originalButtonHTML;
+                if (_activeSearchAbortController === requestAbortController) {
+                    _activeSearchAbortController = null;
+                    _isSearchInProgress = false;
+                    searchButton.disabled = false;
+                    searchButton.innerHTML = originalButtonHTML;
+                }
             }
         }
 
@@ -4765,7 +4893,7 @@ async function initApp() {
                         </div>
                     </div>
                     
-                    <h3 class="text-[13px] md:text-sm font-bold text-slate-800 dark:text-slate-200 leading-snug line-clamp-2 min-h-[2.6rem] mb-2.5 group-hover:text-emerald-700 dark:group-hover:text-emerald-400 transition-colors" title="${sanitize(product.titulo)}">
+                    <h3 class="text-[13px] md:text-sm font-extrabold text-slate-900 dark:text-slate-100 leading-snug line-clamp-2 min-h-[2.6rem] mb-2.5 group-hover:text-emerald-700 dark:group-hover:text-emerald-400 transition-colors" title="${sanitize(product.titulo)}">
                         ${sanitize(product.titulo)}
                     </h3>
                     ${localDetailHtml}
@@ -4862,6 +4990,11 @@ async function initApp() {
                     btnOpenOffer.addEventListener('click', (e) => {
                         e.preventDefault();
                         const target = btnOpenOffer.getAttribute('data-target-url');
+                        window._lastSearchHadClick = true;
+                        if (_conversionBounceTimer) {
+                            clearTimeout(_conversionBounceTimer);
+                            _conversionBounceTimer = null;
+                        }
                         
                         // Track product click in Google Analytics
                         if (typeof trackProductClick === 'function') {
@@ -5709,6 +5842,11 @@ window.openAdGateway = async function (targetUrlOriginal, isReward = false) {
         const urlObj = new URL(targetUrl);
         const host = urlObj.hostname.replace('www.', '');
         const store = host.split('.')[0] || host;
+        window._lastSearchHadClick = true;
+        if (_conversionBounceTimer) {
+            clearTimeout(_conversionBounceTimer);
+            _conversionBounceTimer = null;
+        }
         _trackEvent('click', { url: targetUrl, store, search_query: window._lastSearchQuery || '' });
     } catch (e) { /* ignore */ }
 
@@ -6045,6 +6183,10 @@ window.closeAdGateway = function () {
         adModal.style.visibility = 'hidden';
         adModal.style.opacity = '0';
     }
+};
+
+window.openSignupPrompt = function () {
+    openModal();
 };
 
 // ============================================
@@ -6953,4 +7095,7 @@ document.addEventListener('keydown', (e) => {
         }
     }
 });
+
+
+
 

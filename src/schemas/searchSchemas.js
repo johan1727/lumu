@@ -56,8 +56,8 @@ const feedbackSchema = z.object({
 });
 
 const trackEventSchema = z.object({
-    event_type: z.enum(['click', 'ad_view', 'ad_skip', 'search', 'favorite', 'alert_create'], {
-        errorMap: () => ({ message: 'event_type debe ser: click, ad_view, ad_skip, search, favorite, alert_create' })
+    event_type: z.enum(['click', 'ad_view', 'ad_skip', 'search', 'favorite', 'alert_create', 'zero_results', 'bounce', 'auth_modal_open', 'auth_modal_dismiss', 'signup_complete', 'signup_bonus'], {
+        errorMap: () => ({ message: 'event_type debe ser: click, ad_view, ad_skip, search, favorite, alert_create, zero_results, bounce, auth_modal_open, auth_modal_dismiss, signup_complete, signup_bonus' })
     }),
     product_title: z.string().max(500).optional().default(''),
     store: z.string().max(200).optional().default(''),

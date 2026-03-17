@@ -93,6 +93,7 @@ router.post('/push-subscribe', authMiddleware, requireAuth, priceAlertController
 
 // Rewarded Ads: Claim bonus searches
 router.post('/claim-reward', authMiddleware, requireFrontendRequest, searchController.claimReward);
+router.post('/signup-bonus', authMiddleware, requireFrontendRequest, searchController.claimSignupBonus);
 
 // GET /api/config
 const regionConfigService = require('../services/regionConfigService');
@@ -194,6 +195,8 @@ router.get('/admin/dropship/stats', requireAdmin, dropshipController.getStats);
 
 // Conversion Analytics (admin only)
 router.get('/admin/analytics', requireAdmin, analyticsController.getAnalytics);
+router.get('/admin/llm-logs', requireAdmin, analyticsController.getLLMLogs);
+router.get('/admin/scraper-health', requireAdmin, analyticsController.getScraperHealth);
 
 // Supplier Auto-Check (admin only)
 router.post('/admin/supplier-check', requireAdmin, async (req, res) => {

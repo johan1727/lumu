@@ -317,14 +317,60 @@ function getRegionConfig(countryCode) {
     return REGION_CONFIGS[(countryCode || 'MX').toUpperCase()] || REGION_CONFIGS.MX;
 }
 
+function getPriorityWebDomains(countryCode, limit = 6) {
+    const config = getRegionConfig(countryCode);
+    return (config.webSearchDomains || []).slice(0, Math.max(1, limit));
+}
+
 /**
  * Build the Serper web search query with region-specific domains
  */
 function buildWebSearchQuery(query, countryCode) {
     const config = getRegionConfig(countryCode);
-    const siteFilters = config.webSearchDomains
+    const siteFilters = getPriorityWebDomains(countryCode)
         .map(d => `site:${d}`)
         .join(' OR ');
+    return `${query} ${config.searchSuffix} ${siteFilters}`;
+}
+
+function buildBroadWebSearchQuery(query, countryCode) {
+    const config = getRegionConfig(countryCode);
+    return `${query} ${config.searchSuffix}`.trim();
+}
+
+/**
+ * Build adaptive web search query using preferred stores from intent memory.
+ * Maps store name keys (e.g. "amazon mx") back to domains, prioritizes them,
+ * then fills remaining slots from the static list.
+ */
+function buildAdaptiveWebSearchQuery(query, countryCode, preferredStoreKeys = []) {
+    const config = getRegionConfig(countryCode);
+    if (!preferredStoreKeys || preferredStoreKeys.length === 0) {
+        return buildWebSearchQuery(query, countryCode);
+    }
+
+    // Reverse map: store name (lowercase) -> domain
+    const reverseMap = {};
+    for (const [domain, name] of Object.entries(config.storeMap)) {
+        reverseMap[name.toLowerCase().trim()] = domain;
+    }
+
+    // Map preferred store keys to domains
+    const preferredDomains = [];
+    for (const key of preferredStoreKeys) {
+        const domain = reverseMap[key];
+        if (domain) preferredDomains.push(domain);
+    }
+
+    // Fill remaining slots from static list (up to 6 total)
+    const staticDomains = (config.webSearchDomains || []);
+    const finalDomains = [...preferredDomains];
+    for (const d of staticDomains) {
+        if (finalDomains.length >= 6) break;
+        if (!finalDomains.includes(d)) finalDomains.push(d);
+    }
+
+    const siteFilters = finalDomains.map(d => `site:${d}`).join(' OR ');
     return `${query} ${config.searchSuffix} ${siteFilters}`;
 }
 
@@ -353,7 +399,10 @@ module.exports = {
     detectCountryFromAcceptLanguage,
     resolveCountry,
     getRegionConfig,
+    getPriorityWebDomains,
     buildWebSearchQuery,
+    buildBroadWebSearchQuery,
+    buildAdaptiveWebSearchQuery,
     resolveStoreName,
     getSupportedCountries
 };

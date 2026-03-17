@@ -44,10 +44,10 @@
     </header>
 
     <main class="max-w-3xl mx-auto px-4 py-16">
-        <h1 class="text-4xl font-display font-black text-slate-900 mb-2">Política de Privacidad</h1>
-        <p class="text-slate-500 mb-10 font-medium">Última actualización: Febrero 2026</p>
+        <h1 id="i18n-title" class="text-4xl font-display font-black text-slate-900 mb-2">Política de Privacidad</h1>
+        <p id="i18n-updated" class="text-slate-500 mb-10 font-medium">Última actualización: Marzo 2026</p>
 
-        <div class="space-y-10 text-slate-700 leading-relaxed">
+        <div id="i18n-body" class="space-y-10 text-slate-700 leading-relaxed">
             <section>
                 <h2 class="text-xl font-display font-bold text-slate-900 mb-3">1. Información que Recopilamos</h2>
                 <p>Al usar Lumu, podemos recopilar:</p>
@@ -56,11 +56,14 @@
                     </li>
                     <li><strong>Historial de búsquedas:</strong> Las consultas que realizas en nuestra plataforma,
                         asociadas a tu cuenta.</li>
+                    <li><strong>Eventos de uso y clics:</strong> Interacciones con resultados, búsquedas, favoritos, alertas y otras acciones dentro de la plataforma.</li>
                     <li><strong>Favoritos:</strong> Productos que marcas con el corazón para guardar.</li>
                     <li><strong>Datos de pago:</strong> Procesados de forma segura por Stripe — nunca almacenamos datos
                         de tarjetas.</li>
                     <li><strong>Datos de uso:</strong> Páginas visitadas, duración de sesión e interacciones generales
                         con la plataforma.</li>
+                    <li><strong>Datos técnicos y de región:</strong> Información aproximada como país, idioma, navegador, dispositivo, dirección IP o cabeceras técnicas para proteger la plataforma, detectar la región y mejorar la experiencia.</li>
+                    <li><strong>Notificaciones push:</strong> Si las activas, almacenamos la suscripción técnica necesaria para enviarte alertas o avisos relacionados con tu cuenta y funciones del servicio.</li>
                 </ul>
             </section>
             <section>
@@ -70,6 +73,8 @@
                     <li>Gestionar tu cuenta, suscripción y acceso al servicio premium.</li>
                     <li>Enviarte notificaciones relevantes sobre tu cuenta (no spam comercial).</li>
                     <li>Mejorar los algoritmos de nuestra IA de búsqueda de forma agregada y anónima.</li>
+                    <li>Detectar tu región o país aproximado para mostrar resultados, moneda, contenido y disponibilidad más relevantes.</li>
+                    <li>Prevenir abuso, fraude, accesos no autorizados y uso indebido de la plataforma.</li>
                 </ul>
             </section>
             <section>
@@ -80,13 +85,16 @@
                     <li><strong>Supabase:</strong> Para gestión de base de datos y autenticación segura.</li>
                     <li><strong>Stripe:</strong> Para procesamiento de pagos bajo cumplimiento PCI-DSS.</li>
                     <li><strong>Google:</strong> Para autenticación OAuth (inicio de sesión con Google).</li>
+                    <li><strong>Vercel:</strong> Para hosting, rendimiento y analítica técnica del servicio.</li>
                 </ul>
             </section>
             <section>
-                <h2 class="text-xl font-display font-bold text-slate-900 mb-3">4. Cookies y Almacenamiento Local</h2>
+                <h2 class="text-xl font-display font-bold text-slate-900 mb-3">4. Cookies, Analítica y Almacenamiento Local</h2>
                 <p>Utilizamos <code class="bg-slate-100 px-1 py-0.5 rounded text-sm">localStorage</code> del navegador
                     para recordar el conteo de búsquedas gratuitas. No utilizamos cookies de rastreo de terceros con
                     fines publicitarios.</p>
+                <p class="mt-3">También podemos usar herramientas de analítica técnica y medición de producto para entender el rendimiento de la plataforma,
+                    mejorar la experiencia del usuario y detectar posibles problemas técnicos.</p>
             </section>
             <section>
                 <h2 class="text-xl font-display font-bold text-slate-900 mb-3">5. Tus Derechos</h2>
@@ -101,12 +109,15 @@
                     autorizados.</p>
             </section>
             <section>
-                <h2 class="text-xl font-display font-bold text-slate-900 mb-3">7. Contacto</h2>
-                <p>Si tienes preguntas sobre esta política de privacidad, puedes contactarnos a través de la plataforma
-                    o por correo electrónico.</p>
+                <h2 class="text-xl font-display font-bold text-slate-900 mb-3">7. Conservación de Datos</h2>
+                <p>Conservamos la información personal y técnica durante el tiempo razonablemente necesario para operar la plataforma, cumplir obligaciones legales, resolver disputas, prevenir fraude y hacer cumplir nuestros términos. Cuando ya no sea necesaria, procuraremos eliminarla, anonimizarla o desasociarla de tu cuenta, salvo que debamos conservarla por obligación legal o motivos legítimos de seguridad.</p>
+            </section>
+            <section>
+                <h2 class="text-xl font-display font-bold text-slate-900 mb-3">8. Contacto</h2>
+                <p>Si tienes preguntas sobre esta política de privacidad o deseas ejercer derechos de acceso, corrección o eliminación de datos, puedes escribirnos a <a href="mailto:jhonatanvillagomez38@gmail.com" class="text-primary font-semibold hover:underline">jhonatanvillagomez38@gmail.com</a>.</p>
             </section>
         </div>
-        <a href="/"
+        <a id="i18n-back-btn" href="/"
             class="mt-12 inline-flex items-center gap-2 bg-primary hover:bg-emerald-600 text-white font-bold py-3 px-6 rounded-xl transition-colors shadow-md shadow-emerald-500/20">
             ← Volver al inicio
         </a>
@@ -114,18 +125,98 @@
 
     <footer class="w-full bg-slate-900 border-t border-slate-800 text-slate-400 py-8 mt-auto">
         <div class="max-w-5xl mx-auto px-4 flex flex-col md:flex-row justify-between items-center text-sm">
-            <div class="mb-4 md:mb-0">© 2026 Lumu.dev. Todos los derechos reservados.</div>
+            <div id="i18n-footer-copy" class="mb-4 md:mb-0">© 2026 Lumu.dev. Todos los derechos reservados.</div>
             <div class="flex gap-4 flex-wrap justify-center">
-                <a href="/privacidad.html" class="hover:text-white transition-colors">Privacidad</a>
-                <a href="/terminos.html" class="hover:text-white transition-colors">Términos</a>
-                <a href="/sobre-nosotros.html" class="hover:text-white transition-colors">Sobre nosotros</a>
-                <a href="/contacto.html" class="hover:text-white transition-colors">Contacto</a>
+                <a id="i18n-f-privacy" href="/privacidad.html" class="hover:text-white transition-colors">Privacidad</a>
+                <a id="i18n-f-terms" href="/terminos.html" class="hover:text-white transition-colors">Términos</a>
+                <a id="i18n-f-about" href="/sobre-nosotros.html" class="hover:text-white transition-colors">Sobre nosotros</a>
+                <a id="i18n-f-contact" href="/contacto.html" class="hover:text-white transition-colors">Contacto</a>
             </div>
         </div>
     </footer>
 
     <!-- Vercel Analytics -->
     <script defer src="/_vercel/insights/script.js"></script>
+    <script>
+    (function() {
+        const saved = localStorage.getItem('lumu_region_override');
+        const isEN = saved === 'US' || (!saved && (navigator.language || '').toLowerCase().startsWith('en'));
+        if (!isEN) return;
+
+        document.title = 'Privacy Policy - Lumu';
+        document.documentElement.lang = 'en';
+
+        const t = id => document.getElementById(id);
+        if (t('i18n-title')) t('i18n-title').textContent = 'Privacy Policy';
+        if (t('i18n-updated')) t('i18n-updated').textContent = 'Last updated: March 2026';
+        if (t('i18n-back-btn')) t('i18n-back-btn').textContent = '\u2190 Back to home';
+        if (t('i18n-footer-copy')) t('i18n-footer-copy').textContent = '\u00a9 2026 Lumu.dev. All rights reserved.';
+        if (t('i18n-f-privacy')) t('i18n-f-privacy').textContent = 'Privacy';
+        if (t('i18n-f-terms')) t('i18n-f-terms').textContent = 'Terms';
+        if (t('i18n-f-about')) t('i18n-f-about').textContent = 'About us';
+        if (t('i18n-f-contact')) t('i18n-f-contact').textContent = 'Contact';
+
+        const body = t('i18n-body');
+        if (body) body.innerHTML = `
+            <section>
+                <h2 class="text-xl font-display font-bold text-slate-900 mb-3">1. Information We Collect</h2>
+                <p>When using Lumu, we may collect:</p>
+                <ul class="list-disc pl-6 mt-2 space-y-1">
+                    <li><strong>Account data:</strong> Name, email, and profile picture when you sign up with Google.</li>
+                    <li><strong>Search history:</strong> The queries you make on our platform, associated with your account.</li>
+                    <li><strong>Usage events and clicks:</strong> Interactions with results, searches, favorites, alerts, and other actions within the platform.</li>
+                    <li><strong>Favorites:</strong> Products you bookmark to save.</li>
+                    <li><strong>Payment data:</strong> Processed securely by Stripe \u2014 we never store card data.</li>
+                    <li><strong>Usage data:</strong> Pages visited, session duration, and general interactions with the platform.</li>
+                    <li><strong>Technical and region data:</strong> Approximate information such as country, language, browser, device, IP address, or technical headers to protect the platform, detect region, and improve the experience.</li>
+                    <li><strong>Push notifications:</strong> If enabled, we store the technical subscription needed to send you alerts or notices related to your account and service features.</li>
+                </ul>
+            </section>
+            <section>
+                <h2 class="text-xl font-display font-bold text-slate-900 mb-3">2. How We Use Your Information</h2>
+                <ul class="list-disc pl-6 mt-2 space-y-1">
+                    <li>Personalize and improve your product search experience.</li>
+                    <li>Manage your account, subscription, and access to premium services.</li>
+                    <li>Send you relevant notifications about your account (no commercial spam).</li>
+                    <li>Improve our AI search algorithms in an aggregated and anonymous manner.</li>
+                    <li>Detect your approximate region or country to show more relevant results, currency, content, and availability.</li>
+                    <li>Prevent abuse, fraud, unauthorized access, and misuse of the platform.</li>
+                </ul>
+            </section>
+            <section>
+                <h2 class="text-xl font-display font-bold text-slate-900 mb-3">3. Data Sharing</h2>
+                <p>We do not sell or rent your personal information to third parties. However, we use trusted infrastructure providers:</p>
+                <ul class="list-disc pl-6 mt-2 space-y-1">
+                    <li><strong>Supabase:</strong> For database management and secure authentication.</li>
+                    <li><strong>Stripe:</strong> For payment processing under PCI-DSS compliance.</li>
+                    <li><strong>Google:</strong> For OAuth authentication (sign in with Google).</li>
+                    <li><strong>Vercel:</strong> For hosting, performance, and technical analytics of the service.</li>
+                </ul>
+            </section>
+            <section>
+                <h2 class="text-xl font-display font-bold text-slate-900 mb-3">4. Cookies, Analytics & Local Storage</h2>
+                <p>We use the browser's <code class="bg-slate-100 px-1 py-0.5 rounded text-sm">localStorage</code> to remember the free search count. We do not use third-party tracking cookies for advertising purposes.</p>
+                <p class="mt-3">We may also use technical analytics and product measurement tools to understand platform performance, improve the user experience, and detect potential technical issues.</p>
+            </section>
+            <section>
+                <h2 class="text-xl font-display font-bold text-slate-900 mb-3">5. Your Rights</h2>
+                <p>You have the right to request access, correction, or deletion of your personal data at any time. To exercise these rights, contact us. You can also delete your account directly from your profile settings.</p>
+            </section>
+            <section>
+                <h2 class="text-xl font-display font-bold text-slate-900 mb-3">6. Security</h2>
+                <p>We implement industry-standard security measures, including HTTPS, encrypted authentication, and Row Level Security (RLS) in our database, to protect your information from unauthorized access.</p>
+            </section>
+            <section>
+                <h2 class="text-xl font-display font-bold text-slate-900 mb-3">7. Data Retention</h2>
+                <p>We retain personal and technical information for the time reasonably necessary to operate the platform, fulfill legal obligations, resolve disputes, prevent fraud, and enforce our terms. When no longer needed, we will endeavor to delete, anonymize, or disassociate it from your account, unless we must retain it due to legal obligation or legitimate security reasons.</p>
+            </section>
+            <section>
+                <h2 class="text-xl font-display font-bold text-slate-900 mb-3">8. Contact</h2>
+                <p>If you have questions about this privacy policy or wish to exercise data access, correction, or deletion rights, you can write to us at <a href="mailto:jhonatanvillagomez38@gmail.com" class="text-primary font-semibold hover:underline">jhonatanvillagomez38@gmail.com</a>.</p>
+            </section>
+        `;
+    })();
+    </script>
 </body>
 
 </html>

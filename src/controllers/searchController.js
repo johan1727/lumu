@@ -28,6 +28,34 @@ function buildFallbackSuggestions(baseQuery, altQueries = []) {
         .slice(0, 4);
 }
 
+async function resolveWithSoftTimeout(label, promiseFactory, fallbackValue, timeoutMs) {
+    const startedAt = Date.now();
+    let timeoutId = null;
+    try {
+        const result = await Promise.race([
+            Promise.resolve().then(() => promiseFactory()),
+            new Promise(resolve => {
+                timeoutId = setTimeout(() => resolve({ __softTimeout: true }), timeoutMs);
+            })
+        ]);
+        if (timeoutId) clearTimeout(timeoutId);
+
+        const elapsed = Date.now() - startedAt;
+        if (result && result.__softTimeout) {
+            console.warn(`[Search Timing] ${label} timed out after ${elapsed}ms. Using fallback.`);
+            return fallbackValue;
+        }
+
+        console.log(`[Search Timing] ${label} completed in ${elapsed}ms`);
+        return result;
+    } catch (err) {
+        if (timeoutId) clearTimeout(timeoutId);
+        const elapsed = Date.now() - startedAt;
+        console.warn(`[Search Timing] ${label} failed after ${elapsed}ms: ${err.message}`);
+        return fallbackValue;
+    }
+}
+
 function buildDealVerdict(currentPrice, history = []) {
     const normalizedHistory = (history || [])
         .map(entry => ({
@@ -68,11 +96,26 @@ function buildDealVerdict(currentPrice, history = []) {
         };
     }
 
-    if (currentPrice <= minPrice * 1.03 || belowAveragePct >= 10) {
+    if (currentPrice <= minPrice * 1.01 || belowAveragePct >= 15) {
         return {
             status: 'real_deal',
-            label: 'Oferta real',
-            confidence: currentPrice <= minPrice * 1.01 || belowAveragePct >= 18 ? 'alta' : 'media',
+            label: 'Oferta verificada',
+            confidence: currentPrice <= minPrice * 1.01 || belowAveragePct >= 20 ? 'alta' : 'media',
+            stats: {
+                avgPrice: Number(avgPrice.toFixed(2)),
+                minPrice: Number(minPrice.toFixed(2)),
+                maxPrice: Number(maxPrice.toFixed(2)),
+                belowAveragePct,
+                belowMaxPct
+            }
+        };
+    }
+
+    if (currentPrice >= avgPrice * 1.1) {
+        return {
+            status: 'above_average',
+            label: 'Por encima del promedio',
+            confidence: currentPrice >= avgPrice * 1.2 ? 'alta' : 'media',
             stats: {
                 avgPrice: Number(avgPrice.toFixed(2)),
                 minPrice: Number(minPrice.toFixed(2)),
@@ -148,6 +191,27 @@ function buildMatchSignals(searchText = '', titleText = '') {
         strongMatch: matchScore >= 0.72 || (matchedTokens >= 3 && matchScore >= 0.6),
         weakMatch: matchScore < 0.45
     };
+}
+
+function simplifySearchQuery(query = '') {
+    return String(query || '')
+        .replace(/\s+-\w+/g, ' ')
+        .replace(/\b(usado|reacondicionado|refurbished|open box|segunda mano|seminuevo|mercadolibre|marketplace)\b/gi, ' ')
+        .replace(/\b\d+(gb|tb|ram|ssd|hdd|mah|hz|pulgadas?)\b/gi, ' ')
+        .split(/\s+/)
+        .filter(token => token.length > 2)
+        .slice(0, 4)
+        .join(' ')
+        .trim();
+}
+
+function calculateMedian(values = []) {
+    const sorted = values.filter(Number.isFinite).sort((a, b) => a - b);
+    if (sorted.length === 0) return null;
+    const mid = Math.floor(sorted.length / 2);
+    return sorted.length % 2 === 0
+        ? (sorted[mid - 1] + sorted[mid]) / 2
+        : sorted[mid];
 }
 
 function bumpProviderCostMetrics(metrics, { intentType, radius, lat, lng }) {
@@ -267,7 +331,7 @@ exports.searchProduct = async (req, res) => {
 
                     if (!error && count >= ANON_DAILY_LIMIT) {
                         return res.status(402).json({
-                            error: `Límite diario de ${ANON_DAILY_LIMIT} búsquedas gratuitas alcanzado.Inicia sesión o hazte VIP para más búsquedas.`,
+                            error: `Límite diario de ${ANON_DAILY_LIMIT} búsquedas gratuitas alcanzado. Inicia sesión o hazte VIP para más búsquedas.`,
                             paywall: true
                         });
                     }
@@ -284,7 +348,7 @@ exports.searchProduct = async (req, res) => {
                 global._anonSearchLog[ipKey] = (global._anonSearchLog[ipKey] || 0) + 1;
                 if (global._anonSearchLog[ipKey] > ANON_DAILY_LIMIT) {
                     return res.status(402).json({
-                        error: `Límite diario de ${ANON_DAILY_LIMIT} búsquedas gratuitas alcanzado.Inicia sesión o hazte VIP para más búsquedas.`,
+                        error: `Límite diario de ${ANON_DAILY_LIMIT} búsquedas gratuitas alcanzado. Inicia sesión o hazte VIP para más búsquedas.`,
                         paywall: true
                     });
                 }
@@ -349,7 +413,7 @@ exports.searchProduct = async (req, res) => {
                     if (effectiveUsed >= reqLimit) {
                         const errorMsg = isDaily
                             ? 'Límite diario de búsquedas gratuitas alcanzado. Mejora a VIP para búsquedas sin límites.'
-                            : `Límite mensual de búsquedas alcanzado(${reqLimit} para el plan ${planName}).Por favor espera a tu siguiente ciclo o contacta a soporte.`;
+                            : `Límite mensual de búsquedas alcanzado (${reqLimit} para el plan ${planName}). Por favor espera a tu siguiente ciclo o contacta a soporte.`;
                         return res.status(402).json({
                             error: errorMsg,
                             paywall: !profile.is_premium && !hasTempVIP,
@@ -359,9 +423,9 @@ exports.searchProduct = async (req, res) => {
 
                     // Generar Warning si está cerca del límite
                     if (!isDaily && effectiveUsed >= reqLimit * 0.9) {
-                        usageWarning = `⚠️ Te estás acercando a tu límite mensual(${effectiveUsed} / ${reqLimit} búsquedas).`;
+                        usageWarning = `âš ï¸ Te estás acercando a tu límite mensual(${effectiveUsed} / ${reqLimit} búsquedas).`;
                     } else if (isDaily && effectiveUsed === reqLimit - 1) {
-                        usageWarning = `⚠️ Te queda 1 búsqueda gratuita hoy.`;
+                        usageWarning = `âš ï¸ Te queda 1 búsqueda gratuita hoy.`;
                     }
                 }
             }
@@ -371,6 +435,18 @@ exports.searchProduct = async (req, res) => {
         const MASTER_TIMEOUT_MS = 45000;
         const abortController = new AbortController();
         const searchStartTime = Date.now();
+        req.on('aborted', () => {
+            if (!abortController.signal.aborted) {
+                console.warn('[Search Abort] Request aborted by client');
+                abortController.abort();
+            }
+        });
+        res.on('close', () => {
+            if (!res.writableEnded && !abortController.signal.aborted) {
+                console.warn('[Search Abort] Response closed before completion');
+                abortController.abort();
+            }
+        });
         
         // Setup timeout abort
         const timeoutId = setTimeout(() => {
@@ -396,12 +472,35 @@ exports.searchProduct = async (req, res) => {
                 action: 'search',
                 searchQuery: query,
                 condition: conditionMode === 'used' ? 'used' : 'new',
-                reason: 'Direct category search'
+                reason: 'Direct category search',
+                canonicalKey: cacheService.normalizeCanonicalKey(query),
+                priceVolatility: 'medium',
+                productCategory: ''
             };
         } else {
             // 1. Evaluar el mensaje del usuario con la IA Conversacional (incluyendo historial)
-            llmAnalysis = await llmService.analyzeMessage(query, chatHistory, abortController.signal);
+            llmAnalysis = await llmService.analyzeMessage(query, chatHistory, {
+                countryCode,
+                abortSignal: abortController.signal
+            });
             console.log('Análisis LLM:', llmAnalysis);
+        }
+
+        llmAnalysis.canonicalKey = cacheService.normalizeCanonicalKey(llmAnalysis.canonicalKey || llmAnalysis.searchQuery || query);
+        llmAnalysis.priceVolatility = llmAnalysis.priceVolatility || 'medium';
+        llmAnalysis.productCategory = llmAnalysis.productCategory || '';
+
+        if (supabase && !skipLLM) {
+            supabase.from('llm_analysis_log').insert({
+                user_query: query,
+                llm_action: llmAnalysis.action || null,
+                llm_search_query: llmAnalysis.searchQuery || null,
+                llm_alternatives: llmAnalysis.alternativeQueries || [],
+                llm_intent_type: llmAnalysis.intent_type || null,
+                llm_condition: llmAnalysis.condition || null,
+                country_code: countryCode,
+                created_at: new Date().toISOString()
+            }).then(() => { }).catch((err) => console.error('[LLM Log] Error:', err.message));
         }
 
         if (conditionMode === 'used') {
@@ -424,6 +523,24 @@ exports.searchProduct = async (req, res) => {
             });
         }
 
+        // 2b. Smart Routing: detect non-shoppable & multi-category queries
+        const NON_SHOPPABLE_PATTERNS = /\b(hyundai|toyota|honda|nissan|chevrolet|ford|volkswagen|bmw|audi|mercedes|kia|mazda|suzuki|subaru|jeep|dodge|ram|tesla|porsche|ferrari|lamborghini)\s+(i\d+|corolla|civic|sentra|versa|kicks|march|aveo|jetta|polo|golf|tiguan|tucson|sportage|cx-\d|swift|model\s*[3ysx]|mustang|camaro|wrangler|rav4|crv|hrv|outback|forester)\b/i;
+        const REAL_ESTATE_PATTERNS = /\b(casa|departamento|terreno|lote|rancho|hacienda|apartment|house|condo|land|property)\s+(en\s+venta|en\s+renta|for\s+sale|for\s+rent)\b/i;
+
+        if (NON_SHOPPABLE_PATTERNS.test(llmAnalysis.searchQuery || query)) {
+            console.log(`[Smart Routing] Non-shoppable vehicle detected: "${llmAnalysis.searchQuery}"`);
+            if (lat && lng && radius !== 'global') {
+                llmAnalysis.intent_type = 'servicio_local';
+                llmAnalysis.searchQuery = `${llmAnalysis.searchQuery} concesionario dealer`;
+            }
+        }
+        if (REAL_ESTATE_PATTERNS.test(llmAnalysis.searchQuery || query)) {
+            console.log(`[Smart Routing] Real estate query detected: "${llmAnalysis.searchQuery}"`);
+            if (lat && lng && radius !== 'global') {
+                llmAnalysis.intent_type = 'servicio_local';
+            }
+        }
+
         // 3. Si la acción es 'search', ejecutamos Google Shopping
         let searchQuery = llmAnalysis.searchQuery;
         if (conditionMode === 'used') {
@@ -432,8 +549,24 @@ exports.searchProduct = async (req, res) => {
             searchQuery = `${searchQuery} -usado -reacondicionado -refurbished -"open box"`;
         }
 
+        const isLocalFastMode = process.env.NODE_ENV !== 'production';
+        const preSearchTimeoutMs = isLocalFastMode ? 1200 : 4000;
+
         // NUEVO: Verificamos en Caché
-        const cachedResults = await cacheService.getCachedResults(searchQuery, radius, lat, lng, countryCode);
+        const cachedResults = await resolveWithSoftTimeout(
+            'cacheService.getCachedResults',
+            () => cacheService.getCachedResults(
+                searchQuery,
+                radius,
+                lat,
+                lng,
+                countryCode,
+                llmAnalysis.canonicalKey,
+                llmAnalysis.priceVolatility
+            ),
+            null,
+            preSearchTimeoutMs
+        );
         if (cachedResults) {
             costMetrics.cacheHit = true;
             logSearchCostMetrics('search.cache_hit', costMetrics, {
@@ -447,6 +580,10 @@ exports.searchProduct = async (req, res) => {
                     busqueda: searchQuery,
                     condicion: llmAnalysis.condition,
                     desde_cache: true
+                },
+                search_metadata: {
+                    canonical_key: llmAnalysis.canonicalKey,
+                    product_category: llmAnalysis.productCategory || ''
                 },
                 region: {
                     country: countryCode,
@@ -466,97 +603,91 @@ exports.searchProduct = async (req, res) => {
         }
 
         bumpProviderCostMetrics(costMetrics, { intentType: llmAnalysis.intent_type, radius, lat, lng });
-        console.log(`[Search Pipeline] Buscando: "${searchQuery}" | radius=${radius} | lat=${lat} | lng=${lng} | intent=${llmAnalysis.intent_type}`);
-        const shoppingResults = await shoppingService.searchGoogleShopping(searchQuery, radius, lat, lng, llmAnalysis.intent_type, abortController.signal, conditionMode, countryCode);
-        console.log(`[Search Pipeline] Resultados de shoppingService: ${shoppingResults.length}`);
 
-        // Check remaining time before alt queries (skip if running low)
-        const elapsedMs = Date.now() - searchStartTime;
-        const remainingMs = MASTER_TIMEOUT_MS - elapsedMs;
-        console.log(`[Search Pipeline] Elapsed: ${elapsedMs}ms, Remaining: ${remainingMs}ms`);
+        // --- QUERY INTENT MEMORY: Boost stores with historical click data ---
+        // Runs BEFORE shopping call so preferred stores can influence site: operators
+        let intentBoostMap = {}; // storeKey -> boost value (negative = better)
+        if (supabase) {
+            const resolvedIntentBoostMap = await resolveWithSoftTimeout(
+                'query_intent_memory lookup',
+                async () => {
+                const normalizedQ = (llmAnalysis.searchQuery || query).toLowerCase().trim();
+                const canonicalK = llmAnalysis.canonicalKey || '';
+                let intentQuery = supabase.from('query_intent_memory')
+                    .select('store_name_key, clicked_count, success_score')
+                    .eq('country_code', countryCode)
+                    .order('clicked_count', { ascending: false })
+                    .limit(20);
 
-        // NUEVO: Multi-Query Background Scraper para Variantes (skip if < 15s remaining)
-        const cleanSearchQuery = searchQuery.replace(/\s+-\w+/g, '').trim();
-        const altQueries = llmAnalysis.alternativeQueries || [];
-        if (altQueries.length > 0 && remainingMs > 15000 && !abortController.signal.aborted) {
-            console.log(`Ejecutando Multi-Query alternativas: ${altQueries.join(', ')}`);
-            const directScraper = require('../services/directScraper');
-            const altPromises = [];
-            const altAbortControllers = [];
-            
-            for (const altQ of altQueries.slice(0, 2)) {
-                const cleanAltQ = altQ.replace(/\bsite:\S+/gi, '').trim();
-                if (!cleanAltQ) continue;
-                
-                // Crear AbortController para cada scraper
-                const altAbortController = new AbortController();
-                altAbortControllers.push(altAbortController);
-                
-                altPromises.push(
-                    directScraper.scrapeMercadoLibreDirect(cleanAltQ, altAbortController.signal)
-                        .catch(() => []),
-                    directScraper.scrapeAmazonDirect(cleanAltQ, altAbortController.signal)
-                        .catch(() => [])
-                );
-            }
+                if (canonicalK) {
+                    intentQuery = intentQuery.or(`normalized_query.eq.${normalizedQ},canonical_key.eq.${canonicalK}`);
+                } else {
+                    intentQuery = intentQuery.eq('normalized_query', normalizedQ);
+                }
 
-            costMetrics.altQueryDirectCalls += altPromises.length;
-            
-            // Race alt queries against remaining time minus buffer
-            const altTimeout = Math.min(remainingMs - 10000, 10000);
-            
-            let altResultsRaw;
-            try {
-                altResultsRaw = await Promise.race([
-                    Promise.allSettled(altPromises),
-                    new Promise((_, reject) => {
-                        const timer = setTimeout(() => {
-                            // Abortar todos los scrapers
-                            altAbortControllers.forEach(ctrl => ctrl.abort());
-                            reject(new Error('AltQueries timeout'));
-                        }, altTimeout);
-                        abortController.signal.addEventListener('abort', () => {
-                            clearTimeout(timer);
-                            altAbortControllers.forEach(ctrl => ctrl.abort());
-                            reject(new Error('Aborted'));
+                    const { data: intentData, error: intentErr } = await intentQuery;
+                    const nextBoostMap = {};
+                    if (!intentErr && intentData && intentData.length > 0) {
+                        const maxClicks = Math.max(...intentData.map(r => r.clicked_count));
+                        intentData.forEach(row => {
+                            const boost = -Math.min(500, Math.round((row.clicked_count / Math.max(maxClicks, 1)) * 500));
+                            const key = row.store_name_key;
+                            if (key) nextBoostMap[key] = boost;
                         });
-                    })
-                ]);
-            } catch (timeoutErr) {
-                console.log(`[Search Pipeline] Alt queries timeout o abortado`);
-                altAbortControllers.forEach(ctrl => ctrl.abort());
-                altResultsRaw = [];
-            }
-            
-            if (Array.isArray(altResultsRaw)) {
-                altResultsRaw.forEach(altResult => {
-                    if (altResult.status === 'fulfilled' && altResult.value) {
-                        shoppingResults.push(...altResult.value);
+                        console.log(`[Intent Memory] Found ${intentData.length} store preferences for "${normalizedQ}" (boost map: ${JSON.stringify(nextBoostMap)})`);
                     }
-                });
-            }
-            
-            // Limpiar AbortControllers
-            altAbortControllers.forEach(ctrl => ctrl.abort());
-        } else if (altQueries.length > 0) {
-            console.log(`[Search Pipeline] Skipping alt queries — only ${remainingMs}ms remaining o abortado`);
+                    return nextBoostMap;
+                },
+                {},
+                preSearchTimeoutMs
+            );
+            intentBoostMap = resolvedIntentBoostMap || {};
         }
+
+        console.log(`[Search Pipeline] Buscando: "${searchQuery}" | radius=${radius} | lat=${lat} | lng=${lng} | intent=${llmAnalysis.intent_type}`);
+        // Extract preferred store keys from intent memory for adaptive site: operators
+        const preferredStoreKeys = Object.keys(intentBoostMap).filter(k => intentBoostMap[k] < 0).slice(0, 4);
+        const shoppingResults = await shoppingService.searchGoogleShopping(
+            searchQuery,
+            radius,
+            lat,
+            lng,
+            llmAnalysis.intent_type,
+            abortController.signal,
+            conditionMode,
+            countryCode,
+            llmAnalysis.alternativeQueries || [],
+            llmAnalysis.productCategory || '',
+            preferredStoreKeys
+        );
+        console.log(`[Search Pipeline] Resultados de shoppingService: ${shoppingResults.length}`);
 
         console.log(`[Search Pipeline] Total resultados(con alt queries): ${shoppingResults.length} `);
 
-        if (shoppingResults.length === 0) {
-            console.warn(`[Search Pipeline] ⚠️ CERO resultados para "${searchQuery}".Serper key: ${process.env.SERPER_API_KEY ? 'SET' : 'MISSING'} `);
+        if (shoppingResults.length < 3) {
+            console.warn(`[Search Pipeline] âš ï¸ CERO resultados para "${searchQuery}".Serper key: ${process.env.SERPER_API_KEY ? 'SET' : 'MISSING'} `);
             
             // --- NUEVO: Fallback Simplificado ---
-            const simplifiedQuery = searchQuery.split(/\s+/).slice(0, 3).join(' ');
-            if (simplifiedQuery.length < searchQuery.length) {
-                console.log(`[Search Pipeline] 🔄 Reintentando con query simplificado: "${simplifiedQuery}"`);
+            const simplifiedQuery = simplifySearchQuery(searchQuery);
+            if (!isLocalFastMode && simplifiedQuery.length < searchQuery.length) {
+                console.log(`[Search Pipeline] ðŸ”„ Reintentando con query simplificado: "${simplifiedQuery}"`);
                 costMetrics.retrySearches += 1;
                 bumpProviderCostMetrics(costMetrics, { intentType: llmAnalysis.intent_type, radius, lat, lng });
-                const retryResults = await shoppingService.searchGoogleShopping(simplifiedQuery, radius, lat, lng, llmAnalysis.intent_type, null, conditionMode, countryCode);
+                const retryResults = await shoppingService.searchGoogleShopping(
+                    simplifiedQuery,
+                    radius,
+                    lat,
+                    lng,
+                    llmAnalysis.intent_type,
+                    abortController.signal,
+                    conditionMode,
+                    countryCode,
+                    [],
+                    llmAnalysis.productCategory || ''
+                );
                 if (retryResults && retryResults.length > 0) {
                     shoppingResults.push(...retryResults);
-                    console.log(`[Search Pipeline] ✅ Reintento exitoso: ${retryResults.length} resultados.`);
+                    console.log(`[Search Pipeline] âœ… Reintento exitoso: ${retryResults.length} resultados.`);
                 }
             }
 
@@ -635,11 +766,23 @@ exports.searchProduct = async (req, res) => {
             if (expensiveProductSearch && price < 1500) {
                 item.isSuspicious = true;
             }
-            // Remove suspiciously cheap items (likely price-per-unit or errors) — lowered from 10 to 5
+            // Remove suspiciously cheap items (likely price-per-unit or errors) â€” lowered from 10 to 5
             if (price < 5) return false;
             return true;
         });
         console.log(`[Search Pipeline] Después de pre - filter: ${cleanedResults.length} de ${shoppingResults.length} `);
+
+        const medianPrice = calculateMedian(cleanedResults.map(item => Number(item.price)).filter(Number.isFinite));
+        if (medianPrice && medianPrice > 0) {
+            cleanedResults.forEach((item) => {
+                const numericPrice = Number(item.price);
+                if (!Number.isFinite(numericPrice) || numericPrice <= 0) return;
+                if (numericPrice < (medianPrice * 0.10) || numericPrice > (medianPrice * 5)) {
+                    item.isPriceAnomaly = true;
+                    item.isSuspicious = true;
+                }
+            });
+        }
 
         const classifyCondition = (item) => {
             const text = `${item.title || ''} ${item.snippet || ''} ${item.source || ''} ${item.url || ''}`.toLowerCase();
@@ -736,18 +879,26 @@ exports.searchProduct = async (req, res) => {
             });
             const aSuspiciousPenalty = a.isSuspicious ? 3000 : 0;
             const bSuspiciousPenalty = b.isSuspicious ? 3000 : 0;
+            const aAnomalyPenalty = a.isPriceAnomaly ? 2200 : 0;
+            const bAnomalyPenalty = b.isPriceAnomaly ? 2200 : 0;
             const aMatchPenalty = a.weakMatch ? (isMainProductSearch ? 900 : 320) : (a.strongMatch ? -120 : 0);
             const bMatchPenalty = b.weakMatch ? (isMainProductSearch ? 900 : 320) : (b.strongMatch ? -120 : 0);
 
             const aPrice = a.price == null ? Infinity : parseFloat(a.price);
             const bPrice = b.price == null ? Infinity : parseFloat(b.price);
 
+            // Intent Memory boost: reward stores with historical clicks
+            const aStoreKey = (a.source || '').toLowerCase().trim();
+            const bStoreKey = (b.source || '').toLowerCase().trim();
+            const aIntentBoost = intentBoostMap[aStoreKey] || 0;
+            const bIntentBoost = intentBoostMap[bStoreKey] || 0;
+
             if (hasLocation) {
                 const aBoost = a.isLocalStore ? Math.min(aPrice * 0.10, 150) : 0;
                 const bBoost = b.isLocalStore ? Math.min(bPrice * 0.10, 150) : 0;
-                return (aPrice - aBoost + aConditionBoost + aTrustPenalty + aMatchPenalty + aSuspiciousPenalty) - (bPrice - bBoost + bConditionBoost + bTrustPenalty + bMatchPenalty + bSuspiciousPenalty);
+                return (aPrice - aBoost + aConditionBoost + aTrustPenalty + aMatchPenalty + aSuspiciousPenalty + aAnomalyPenalty + aIntentBoost) - (bPrice - bBoost + bConditionBoost + bTrustPenalty + bMatchPenalty + bSuspiciousPenalty + bAnomalyPenalty + bIntentBoost);
             } else {
-                return (aPrice + aConditionBoost + aTrustPenalty + aMatchPenalty + aSuspiciousPenalty) - (bPrice + bConditionBoost + bTrustPenalty + bMatchPenalty + bSuspiciousPenalty);
+                return (aPrice + aConditionBoost + aTrustPenalty + aMatchPenalty + aSuspiciousPenalty + aAnomalyPenalty + aIntentBoost) - (bPrice + bConditionBoost + bTrustPenalty + bMatchPenalty + bSuspiciousPenalty + bAnomalyPenalty + bIntentBoost);
             }
         });
 
@@ -794,7 +945,8 @@ exports.searchProduct = async (req, res) => {
                 riskFlags: product.storeTrust?.riskFlags || [],
                 matchScore: Number(product.matchScore || 0),
                 strongMatch: Boolean(product.strongMatch),
-                weakMatch: Boolean(product.weakMatch)
+                weakMatch: Boolean(product.weakMatch),
+                isPriceAnomaly: Boolean(product.isPriceAnomaly)
             };
         });
 
@@ -839,7 +991,7 @@ exports.searchProduct = async (req, res) => {
         });
 
         // NUEVO: Guardar en Caché
-        await cacheService.saveToCache(searchQuery, radius, lat, lng, productsWithTrend, countryCode);
+        await cacheService.saveToCache(searchQuery, radius, lat, lng, productsWithTrend, countryCode, llmAnalysis.canonicalKey, llmAnalysis.priceVolatility);
         await cacheService.savePriceSnapshot(searchQuery, radius, lat, lng, productsWithTrend, countryCode);
 
         // FIX #6: Unificar logging - solo loguear en searches (no en rate_limits para autenticados)
@@ -894,6 +1046,10 @@ exports.searchProduct = async (req, res) => {
                 condicion: llmAnalysis.condition,
                 modo_condicion: conditionMode
             },
+            search_metadata: {
+                canonical_key: llmAnalysis.canonicalKey,
+                product_category: llmAnalysis.productCategory || ''
+            },
             region: {
                 country: countryCode,
                 currency: regionCfg.currency,
@@ -910,7 +1066,7 @@ exports.searchProduct = async (req, res) => {
         // Clear timeout on error
         if (typeof timeoutId !== 'undefined') clearTimeout(timeoutId);
         
-        console.error('🔥🔥🔥 ERROR FATAL en /buscar:', error.stack || error);
+        console.error('ðŸ”¥ðŸ”¥ðŸ”¥ ERROR FATAL en /buscar:', error.stack || error);
         try {
             logSearchCostMetrics('search.error', costMetrics, {
                 query,
@@ -963,7 +1119,7 @@ exports.bulkSearch = async (req, res) => {
                 return res.status(402).json({ error: `Límite mensual B2B alcanzado(${reqLimit} búsquedas).Por favor espera a tu siguiente ciclo para más lotes.`, upgrade_required: false });
             }
             if (count >= reqLimit * 0.9) {
-                usageWarning = `⚠️ Límite mensual al ${Math.floor((count / reqLimit) * 100)}% (${count}/${reqLimit}).`;
+                usageWarning = `âš ï¸ Límite mensual al ${Math.floor((count / reqLimit) * 100)}% (${count}/${reqLimit}).`;
             }
         }
 
@@ -1112,7 +1268,6 @@ exports.claimReward = async (req, res) => {
             await supabase.from('rate_limits').insert(creditEntries);
         } else {
             // Anonymous user
-            const ip = req.headers['x-vercel-forwarded-for']?.split(',')[0]?.trim() || req.headers['x-real-ip'] || req.headers['x-forwarded-for']?.split(',').pop()?.trim() || req.ip || 'unknown';
             const searchIpKey = `search:${ip}`;
             const todayStart = new Date();
             todayStart.setHours(0, 0, 0, 0);
@@ -1139,6 +1294,44 @@ exports.claimReward = async (req, res) => {
 };
 
 // NUEVO: Fase 6 - Lumu Coins (with real 1-hour VIP unlock)
+exports.claimSignupBonus = async (req, res) => {
+    try {
+        const userId = req.userId || null;
+        const BONUS_SEARCHES = 5;
+
+        if (!userId) {
+            return res.status(401).json({ error: 'Inicia sesión para reclamar el bono de bienvenida.' });
+        }
+
+        if (!supabase) {
+            return res.json({ success: true, bonus: BONUS_SEARCHES, msg: 'Modo local (sin Supabase)' });
+        }
+
+        const bonusKey = `signup-bonus:user:${userId}`;
+        const { count, error: bonusCheckErr } = await supabase
+            .from('rate_limits')
+            .select('*', { count: 'exact', head: true })
+            .eq('ip', bonusKey);
+
+        if (!bonusCheckErr && count > 0) {
+            return res.json({ success: true, bonus: 0, already_claimed: true });
+        }
+
+        await supabase.from('rate_limits').insert({ ip: bonusKey, created_at: new Date().toISOString() });
+
+        const creditEntries = [];
+        for (let i = 0; i < BONUS_SEARCHES; i++) {
+            creditEntries.push({ ip: `bonus:user:${userId}`, created_at: new Date().toISOString() });
+        }
+        await supabase.from('rate_limits').insert(creditEntries);
+
+        return res.json({ success: true, bonus: BONUS_SEARCHES });
+    } catch (err) {
+        console.error('[SignupBonus] Error:', err);
+        return res.status(500).json({ error: 'Error al reclamar bono de bienvenida' });
+    }
+};
+
 exports.getCoins = async (req, res) => {
     try {
         const userId = req.userId;
@@ -1207,3 +1400,4 @@ exports.getCoins = async (req, res) => {
         return res.status(500).json({ error: 'Fallo interno' });
     }
 };
+
