@@ -1,4 +1,4 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="es">
 
 <head>
@@ -723,6 +723,63 @@
             background: rgba(16, 185, 129, 0.15);
         }
 
+        .browse-nav-chip {
+            border-radius: 9999px;
+            border: 1px solid rgba(16, 185, 129, 0.12);
+            background: rgba(255, 255, 255, 0.88);
+            color: #475569;
+            box-shadow: 0 8px 24px rgba(15, 23, 42, 0.05);
+            transition: all 0.2s ease;
+        }
+
+        .browse-nav-chip:hover,
+        .browse-nav-chip:focus-visible {
+            border-color: rgba(16, 185, 129, 0.35);
+            background: rgba(236, 253, 245, 0.96);
+            color: #065f46;
+            outline: none;
+            transform: translateY(-1px);
+        }
+
+        .browse-nav-chip-active {
+            border-color: rgba(16, 185, 129, 0.42);
+            background: linear-gradient(135deg, rgba(16, 185, 129, 0.14) 0%, rgba(45, 212, 191, 0.16) 100%);
+            color: #065f46;
+            box-shadow: 0 12px 24px rgba(16, 185, 129, 0.10);
+        }
+
+        .browse-hub-card {
+            position: relative;
+            overflow: hidden;
+            border-radius: 1.75rem;
+            border: 1px solid rgba(209, 250, 229, 0.95);
+            background: linear-gradient(180deg, rgba(255, 255, 255, 0.92) 0%, rgba(248, 250, 252, 0.88) 100%);
+            box-shadow: 0 18px 45px rgba(15, 23, 42, 0.05);
+            transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease;
+        }
+
+        .browse-hub-card:hover {
+            transform: translateY(-4px);
+            border-color: rgba(110, 231, 183, 0.95);
+            box-shadow: 0 22px 52px rgba(16, 185, 129, 0.10);
+        }
+
+        .browse-mini-chip {
+            border-radius: 9999px;
+            border: 1px solid rgba(226, 232, 240, 0.95);
+            background: rgba(255, 255, 255, 0.92);
+            color: #475569;
+            transition: all 0.2s ease;
+        }
+
+        .browse-mini-chip:hover,
+        .browse-mini-chip:focus-visible {
+            border-color: rgba(16, 185, 129, 0.32);
+            background: rgba(236, 253, 245, 0.96);
+            color: #047857;
+            outline: none;
+        }
+
         /* === LOCATION FILTER PILLS === */
         .loc-filter-btn {
             transition: all 0.2s ease;
@@ -1121,11 +1178,82 @@
             transition: max-height 0.3s ease, opacity 0.25s ease, margin 0.25s ease;
         }
 
+        @media (max-width: 639px) {
+            .filters-shell {
+                border-radius: 1.5rem;
+            }
+
+            .filter-chip-base,
+            .condition-chip,
+            .search-prompt-chip,
+            .loc-filter-btn {
+                min-height: 44px;
+                padding-top: 0.75rem !important;
+                padding-bottom: 0.75rem !important;
+                padding-left: 1rem !important;
+                padding-right: 1rem !important;
+                font-size: 12px !important;
+                line-height: 1.15;
+                justify-content: center;
+            }
+
+            .filters-mobile-overlay {
+                position: fixed;
+                inset: 0;
+                background: rgba(15, 23, 42, 0.48);
+                backdrop-filter: blur(6px);
+                z-index: 70;
+                opacity: 0;
+                pointer-events: none;
+                transition: opacity 0.25s ease;
+            }
+
+            .filters-mobile-overlay.filters-open {
+                opacity: 1;
+                pointer-events: auto;
+            }
+
+            .filters-collapsible {
+                position: fixed;
+                left: 0;
+                right: 0;
+                bottom: 0;
+                z-index: 80;
+                max-height: min(82vh, 720px);
+                margin-top: 0 !important;
+                padding: 1rem 1rem calc(1rem + env(safe-area-inset-bottom, 0px));
+                border-top-left-radius: 1.75rem;
+                border-top-right-radius: 1.75rem;
+                background: linear-gradient(180deg, rgba(255, 255, 255, 0.98) 0%, rgba(248, 250, 252, 0.98) 100%);
+                box-shadow: 0 -20px 50px rgba(15, 23, 42, 0.20);
+                overflow-y: auto;
+                transform: translateY(0);
+                transition: transform 0.28s ease, opacity 0.25s ease;
+            }
+
+            .filters-collapsible::before {
+                content: "";
+                display: block;
+                width: 56px;
+                height: 5px;
+                border-radius: 999px;
+                background: rgba(148, 163, 184, 0.65);
+                margin: 0 auto 0.85rem auto;
+            }
+        }
+
         .filters-collapsible.filters-collapsed {
             max-height: 0;
             opacity: 0;
             margin-top: 0 !important;
             pointer-events: none;
+        }
+
+        @media (max-width: 639px) {
+            .filters-collapsible.filters-collapsed {
+                max-height: min(82vh, 720px);
+                transform: translateY(110%);
+            }
         }
 
         .filter-section-label {
@@ -1250,6 +1378,7 @@
 
             #results-toolbar {
                 gap: 0.75rem;
+                flex-wrap: wrap; /* Fix: allow filters to wrap on small screens to prevent truncation */
             }
         }
 
@@ -1364,6 +1493,14 @@
                     </div>
                 </nav>
             </div>
+            <div id="header-browse-strip" class="hidden md:flex items-center justify-center gap-2 px-4 pb-3">
+                <button type="button" data-header-category="smartphones" data-browse-query="iPhone Samsung Xiaomi celulares" class="browse-nav-chip px-4 py-2 text-[11px] font-black uppercase tracking-[0.18em]">Smartphones</button>
+                <button type="button" data-header-category="laptops" data-browse-query="laptop macbook lenovo hp asus" class="browse-nav-chip px-4 py-2 text-[11px] font-black uppercase tracking-[0.18em]">Laptops</button>
+                <button type="button" data-header-category="gaming" data-browse-query="PS5 Xbox Nintendo Switch gaming" class="browse-nav-chip px-4 py-2 text-[11px] font-black uppercase tracking-[0.18em]">Gaming</button>
+                <button type="button" data-header-category="audio" data-browse-query="airpods audifonos bocinas bluetooth sony jbl" class="browse-nav-chip px-4 py-2 text-[11px] font-black uppercase tracking-[0.18em]">Audio</button>
+                <button type="button" data-header-category="tv" data-browse-query="smart tv 4k oled qled 55 pulgadas" class="browse-nav-chip px-4 py-2 text-[11px] font-black uppercase tracking-[0.18em]">TVs</button>
+                <button type="button" data-header-category="home" data-browse-query="freidora aspiradora robot refrigerador hogar" class="browse-nav-chip px-4 py-2 text-[11px] font-black uppercase tracking-[0.18em]">Hogar</button>
+            </div>
         </header>
 
         <!-- Área Principal -->
@@ -1456,20 +1593,20 @@
                                 <p id="guided-search-title" class="text-[11px] font-black uppercase tracking-[0.22em] text-emerald-700">Búsqueda guiada</p>
                                 <p id="guided-search-copy" class="text-sm text-slate-500 font-medium">Elige cómo quieres buscar sin perderte entre tantos botones.</p>
                             </div>
-                            <div class="flex items-center gap-2 flex-wrap">
-                                <div class="relative">
+                            <div class="flex items-center gap-2 flex-wrap overflow-visible">
+                                <div class="relative overflow-visible">
                                     <button type="button" id="detected-region-pill"
-                                        class="inline-flex items-center gap-2 rounded-full border border-emerald-200 bg-emerald-50 px-3 py-2 text-[11px] font-black uppercase tracking-[0.18em] text-emerald-800 shadow-sm">
+                                        class="inline-flex min-h-[42px] max-w-[min(78vw,220px)] items-center justify-center gap-2 whitespace-nowrap rounded-full border border-emerald-200 bg-emerald-50 px-3 py-2 text-[11px] font-black uppercase tracking-[0.12em] text-emerald-800 shadow-sm">
                                         🌎 Región automática
                                     </button>
-                                    <div id="region-selector-menu" class="hidden absolute right-0 top-full mt-2 min-w-[220px] rounded-2xl border border-emerald-100 bg-white shadow-xl p-2 z-30">
-                                        <button type="button" class="region-option-btn w-full text-left px-3 py-2 rounded-xl text-sm font-bold hover:bg-emerald-50" data-region="auto">🌐 Detectar automáticamente</button>
-                                        <button type="button" class="region-option-btn w-full text-left px-3 py-2 rounded-xl text-sm font-bold hover:bg-emerald-50" data-region="MX">🇲🇽 México</button>
-                                        <button type="button" class="region-option-btn w-full text-left px-3 py-2 rounded-xl text-sm font-bold hover:bg-emerald-50" data-region="CL">🇨🇱 Chile</button>
-                                        <button type="button" class="region-option-btn w-full text-left px-3 py-2 rounded-xl text-sm font-bold hover:bg-emerald-50" data-region="CO">🇨🇴 Colombia</button>
-                                        <button type="button" class="region-option-btn w-full text-left px-3 py-2 rounded-xl text-sm font-bold hover:bg-emerald-50" data-region="AR">🇦🇷 Argentina</button>
-                                        <button type="button" class="region-option-btn w-full text-left px-3 py-2 rounded-xl text-sm font-bold hover:bg-emerald-50" data-region="PE">🇵🇪 Perú</button>
-                                        <button type="button" class="region-option-btn w-full text-left px-3 py-2 rounded-xl text-sm font-bold hover:bg-emerald-50" data-region="US">🇺🇸 United States</button>
+                                    <div id="region-selector-menu" class="hidden absolute right-0 top-full mt-2 w-[min(82vw,260px)] max-w-[260px] max-h-[min(55vh,320px)] overflow-y-auto rounded-2xl border border-emerald-100 bg-white shadow-xl p-2 z-[140]">
+                                        <button type="button" class="region-option-btn w-full whitespace-nowrap text-left px-3 py-2 rounded-xl text-sm font-bold hover:bg-emerald-50" data-region="auto">🌐 Detectar automáticamente</button>
+                                        <button type="button" class="region-option-btn w-full whitespace-nowrap text-left px-3 py-2 rounded-xl text-sm font-bold hover:bg-emerald-50" data-region="MX">🇲🇽 México</button>
+                                        <button type="button" class="region-option-btn w-full whitespace-nowrap text-left px-3 py-2 rounded-xl text-sm font-bold hover:bg-emerald-50" data-region="CL">🇨🇱 Chile</button>
+                                        <button type="button" class="region-option-btn w-full whitespace-nowrap text-left px-3 py-2 rounded-xl text-sm font-bold hover:bg-emerald-50" data-region="CO">🇨🇴 Colombia</button>
+                                        <button type="button" class="region-option-btn w-full whitespace-nowrap text-left px-3 py-2 rounded-xl text-sm font-bold hover:bg-emerald-50" data-region="AR">🇦🇷 Argentina</button>
+                                        <button type="button" class="region-option-btn w-full whitespace-nowrap text-left px-3 py-2 rounded-xl text-sm font-bold hover:bg-emerald-50" data-region="PE">🇵🇪 Perú</button>
+                                        <button type="button" class="region-option-btn w-full whitespace-nowrap text-left px-3 py-2 rounded-xl text-sm font-bold hover:bg-emerald-50" data-region="US">🇺🇸 United States</button>
                                     </div>
                                 </div>
                                 <button type="button" id="btn-toggle-filters"
@@ -1482,7 +1619,8 @@
                             </div>
                         </div>
 
-                        <div id="filters-collapsible" class="filters-collapsible mt-4 max-sm:hidden sm:block">
+                        <div id="filters-mobile-overlay" class="filters-mobile-overlay"></div>
+                        <div id="filters-collapsible" class="filters-collapsible mt-4">
                             <div class="space-y-4">
                                 <div>
                                     <p id="filter-section-condition" class="filter-section-label mb-2 text-center">Condición</p>
@@ -1637,6 +1775,119 @@
                         class="text-[11px] font-bold text-slate-700 uppercase tracking-wide group-hover:text-emerald-800">Autos</span>
                 </button>
             </div>
+
+            <section id="browse-hub-section" class="w-full max-w-6xl mx-auto mb-14 fade-in px-4">
+                <div class="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between mb-5">
+                    <div>
+                        <p class="text-[11px] font-black uppercase tracking-[0.22em] text-emerald-700">Explora sin escribir</p>
+                        <h2 class="text-2xl md:text-3xl font-display font-black text-slate-900 tracking-tight">Categorías fáciles de navegar</h2>
+                        <p class="text-sm md:text-base text-slate-500 font-medium max-w-2xl">Empieza por una categoría, entra a una búsqueda más clara y luego afina con filtros, como en un comparador tradicional.</p>
+                    </div>
+                    <div class="flex flex-wrap items-center gap-2 text-[11px] font-black uppercase tracking-[0.18em] text-slate-500">
+                        <span class="active-filter-pill rounded-full px-3 py-1.5">Browse</span>
+                        <span class="active-filter-pill rounded-full px-3 py-1.5">Filtros</span>
+                        <span class="active-filter-pill rounded-full px-3 py-1.5">Compara</span>
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4 md:gap-5">
+                    <button type="button" class="browse-hub-card p-5 text-left group" data-browse-category="smartphones" data-browse-query="iPhone Samsung Xiaomi celulares 5g">
+                        <div class="flex items-start justify-between gap-4">
+                            <div>
+                                <div class="text-3xl mb-3">📱</div>
+                                <h3 class="text-lg font-black text-slate-900 group-hover:text-emerald-700 transition-colors">Smartphones</h3>
+                                <p class="text-sm text-slate-500 font-medium mt-2">iPhone, Galaxy, Xiaomi, Google Pixel y modelos con mejor relación calidad/precio.</p>
+                            </div>
+                            <span class="text-emerald-600 text-sm font-black">→</span>
+                        </div>
+                        <div class="mt-4 flex flex-wrap gap-2">
+                            <span class="browse-mini-chip px-3 py-1.5 text-[11px] font-bold">iPhone</span>
+                            <span class="browse-mini-chip px-3 py-1.5 text-[11px] font-bold">Samsung</span>
+                            <span class="browse-mini-chip px-3 py-1.5 text-[11px] font-bold">Xiaomi</span>
+                        </div>
+                    </button>
+
+                    <button type="button" class="browse-hub-card p-5 text-left group" data-browse-category="laptops" data-browse-query="laptops macbook lenovo hp asus trabajo estudio">
+                        <div class="flex items-start justify-between gap-4">
+                            <div>
+                                <div class="text-3xl mb-3">💻</div>
+                                <h3 class="text-lg font-black text-slate-900 group-hover:text-emerald-700 transition-colors">Laptops</h3>
+                                <p class="text-sm text-slate-500 font-medium mt-2">Trabajo, estudio, gaming y modelos equilibrados por RAM, SSD y procesador.</p>
+                            </div>
+                            <span class="text-emerald-600 text-sm font-black">→</span>
+                        </div>
+                        <div class="mt-4 flex flex-wrap gap-2">
+                            <span class="browse-mini-chip px-3 py-1.5 text-[11px] font-bold">MacBook</span>
+                            <span class="browse-mini-chip px-3 py-1.5 text-[11px] font-bold">Lenovo</span>
+                            <span class="browse-mini-chip px-3 py-1.5 text-[11px] font-bold">HP</span>
+                        </div>
+                    </button>
+
+                    <button type="button" class="browse-hub-card p-5 text-left group" data-browse-category="gaming" data-browse-query="PS5 Xbox Nintendo Switch consolas videojuegos">
+                        <div class="flex items-start justify-between gap-4">
+                            <div>
+                                <div class="text-3xl mb-3">🎮</div>
+                                <h3 class="text-lg font-black text-slate-900 group-hover:text-emerald-700 transition-colors">Gaming</h3>
+                                <p class="text-sm text-slate-500 font-medium mt-2">Consolas, accesorios y bundles populares para comprar sin perderte entre variantes.</p>
+                            </div>
+                            <span class="text-emerald-600 text-sm font-black">→</span>
+                        </div>
+                        <div class="mt-4 flex flex-wrap gap-2">
+                            <span class="browse-mini-chip px-3 py-1.5 text-[11px] font-bold">PS5</span>
+                            <span class="browse-mini-chip px-3 py-1.5 text-[11px] font-bold">Xbox</span>
+                            <span class="browse-mini-chip px-3 py-1.5 text-[11px] font-bold">Switch</span>
+                        </div>
+                    </button>
+
+                    <button type="button" class="browse-hub-card p-5 text-left group" data-browse-category="audio" data-browse-query="audifonos airpods sony jbl bocinas bluetooth">
+                        <div class="flex items-start justify-between gap-4">
+                            <div>
+                                <div class="text-3xl mb-3">🎧</div>
+                                <h3 class="text-lg font-black text-slate-900 group-hover:text-emerald-700 transition-colors">Audio</h3>
+                                <p class="text-sm text-slate-500 font-medium mt-2">Audífonos, bocinas y modelos con cancelación de ruido o mejor sonido por precio.</p>
+                            </div>
+                            <span class="text-emerald-600 text-sm font-black">→</span>
+                        </div>
+                        <div class="mt-4 flex flex-wrap gap-2">
+                            <span class="browse-mini-chip px-3 py-1.5 text-[11px] font-bold">AirPods</span>
+                            <span class="browse-mini-chip px-3 py-1.5 text-[11px] font-bold">Sony</span>
+                            <span class="browse-mini-chip px-3 py-1.5 text-[11px] font-bold">JBL</span>
+                        </div>
+                    </button>
+
+                    <button type="button" class="browse-hub-card p-5 text-left group" data-browse-category="tv" data-browse-query="smart tv 4k oled qled 55 pulgadas samsung lg hisense">
+                        <div class="flex items-start justify-between gap-4">
+                            <div>
+                                <div class="text-3xl mb-3">📺</div>
+                                <h3 class="text-lg font-black text-slate-900 group-hover:text-emerald-700 transition-colors">TVs</h3>
+                                <p class="text-sm text-slate-500 font-medium mt-2">Smart TVs 4K, OLED y QLED listas para comparar por tamaño, panel y tienda.</p>
+                            </div>
+                            <span class="text-emerald-600 text-sm font-black">→</span>
+                        </div>
+                        <div class="mt-4 flex flex-wrap gap-2">
+                            <span class="browse-mini-chip px-3 py-1.5 text-[11px] font-bold">55 pulgadas</span>
+                            <span class="browse-mini-chip px-3 py-1.5 text-[11px] font-bold">OLED</span>
+                            <span class="browse-mini-chip px-3 py-1.5 text-[11px] font-bold">QLED</span>
+                        </div>
+                    </button>
+
+                    <button type="button" class="browse-hub-card p-5 text-left group" data-browse-category="home" data-browse-query="hogar freidora aire aspiradora robot refrigerador lavadora">
+                        <div class="flex items-start justify-between gap-4">
+                            <div>
+                                <div class="text-3xl mb-3">🏠</div>
+                                <h3 class="text-lg font-black text-slate-900 group-hover:text-emerald-700 transition-colors">Hogar</h3>
+                                <p class="text-sm text-slate-500 font-medium mt-2">Electrodomésticos y productos prácticos para casa con foco en valor y tiendas confiables.</p>
+                            </div>
+                            <span class="text-emerald-600 text-sm font-black">→</span>
+                        </div>
+                        <div class="mt-4 flex flex-wrap gap-2">
+                            <span class="browse-mini-chip px-3 py-1.5 text-[11px] font-bold">Freidoras</span>
+                            <span class="browse-mini-chip px-3 py-1.5 text-[11px] font-bold">Aspiradoras</span>
+                            <span class="browse-mini-chip px-3 py-1.5 text-[11px] font-bold">Refrigeradores</span>
+                        </div>
+                    </button>
+                </div>
+            </section>
         </div>
 
         <!-- Ofertas Relámpago (Estilo Mercado Libre/Amazon) -->

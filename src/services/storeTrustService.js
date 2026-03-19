@@ -1,6 +1,7 @@
 const TIER_1_STORES = [
     'amazon',
     'walmart',
+    'target',
     'liverpool',
     'coppel',
     'best buy',
@@ -51,6 +52,15 @@ const TIER_1_STORES = [
     'oechsle',
     'promart',
     'hiraoka',
+    'nintendo',
+    'playstation',
+    'playstation direct',
+    'apple',
+    'samsung',
+    'motorola',
+    'xiaomi',
+    'nike',
+    'adidas',
     'local'
 ];
 
@@ -82,6 +92,7 @@ function canonicalizeStoreName(name = '', url = '') {
     if (/amazon\.|\bamazon\b/.test(source)) return 'amazon';
     if (/mercadolibre\.|mercado libre|\bmeli\b/.test(source)) return 'mercado libre';
     if (/walmart\.|\bwalmart\b/.test(source)) return 'walmart';
+    if (/target\.|\btarget\b/.test(source)) return 'target';
     if (/liverpool\.|\bliverpool\b/.test(source)) return 'liverpool';
     if (/coppel\.|\bcoppel\b/.test(source)) return 'coppel';
     if (/bestbuy\.|best buy/.test(source)) return 'best buy';
@@ -127,6 +138,15 @@ function canonicalizeStoreName(name = '', url = '') {
     if (/oechsle\.|\boechsle\b/.test(source)) return 'oechsle';
     if (/promart\.|\bpromart\b/.test(source)) return 'promart';
     if (/hiraoka\.|\bhiraoka\b/.test(source)) return 'hiraoka';
+    if (/nintendo\.|\bnintendo\b/.test(source)) return 'nintendo';
+    if (/direct\.playstation\.|playstation direct/.test(source)) return 'playstation direct';
+    if (/playstation\.|\bplaystation\b|\bsony\b/.test(source)) return 'playstation';
+    if (/apple\.|\bapple\b/.test(source)) return 'apple';
+    if (/samsung\.|\bsamsung\b/.test(source)) return 'samsung';
+    if (/motorola\.|\bmotorola\b/.test(source)) return 'motorola';
+    if (/xiaomi|mi\.com|xiaomi-store|xiaomiperu/.test(source)) return 'xiaomi';
+    if (/nike\.|\bnike\b/.test(source)) return 'nike';
+    if (/adidas\.|\badidas\b/.test(source)) return 'adidas';
     if (/linio\.|\blinio\b/.test(source)) return 'linio';
     if (/claroshop\.|claro shop/.test(source)) return 'claro shop';
     if (/aliexpress\./.test(source) || /\baliexpress\b/.test(source)) return 'aliexpress';

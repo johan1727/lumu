@@ -19,9 +19,11 @@ const REGION_CONFIGS = {
         searchSuffix: 'precio comprar',
         webSearchDomains: [
             'amazon.com.mx', 'mercadolibre.com.mx', 'walmart.com.mx', 'liverpool.com.mx', 'coppel.com', 'bestbuy.com.mx',
-            'elektra.com.mx', 'costco.com.mx', 'sams.com.mx', 'officedepot.com.mx',
-            'soriana.com', 'sears.com.mx', 'mx.shein.com', 'temu.com',
-            'bodegaaurrera.com.mx', 'linio.com.mx', 'claroshop.com', 'sanborns.com.mx'
+            'elektra.com.mx', 'costco.com.mx', 'sams.com.mx', 'officedepot.com.mx', 'homedepot.com.mx',
+            'soriana.com', 'sears.com.mx', 'suburbia.com.mx', 'elpalaciodehierro.com', 'doto.com.mx',
+            'cyberpuerta.mx', 'ddtech.mx', 'gameplanet.com', 'bodegaaurrera.com.mx', 'linio.com.mx',
+            'claroshop.com', 'sanborns.com.mx', 'officemax.com.mx', 'mx.shein.com', 'temu.com', 'aliexpress.com',
+            'apple.com', 'samsung.com', 'motorola.com.mx', 'mi.com', 'huawei.com', 'nike.com.mx', 'adidas.mx', 'innovasport.com'
         ],
         storeMap: {
             'amazon.com.mx': 'Amazon MX',
@@ -34,15 +36,32 @@ const REGION_CONFIGS = {
             'costco.com.mx': 'Costco MX',
             'sams.com.mx': "Sam's Club MX",
             'officedepot.com.mx': 'OfficeDepot MX',
+            'homedepot.com.mx': 'Home Depot MX',
             'soriana.com': 'Soriana',
             'sears.com.mx': 'Sears MX',
+            'suburbia.com.mx': 'Suburbia',
+            'elpalaciodehierro.com': 'Palacio de Hierro',
+            'doto.com.mx': 'Doto',
+            'cyberpuerta.mx': 'Cyberpuerta',
+            'ddtech.mx': 'DDTech',
+            'gameplanet.com': 'Game Planet',
             'mx.shein.com': 'Shein MX',
             'shein.com': 'Shein MX',
             'temu.com': 'Temu',
+            'aliexpress.com': 'AliExpress',
             'bodegaaurrera.com.mx': 'Bodega Aurrera',
             'linio.com.mx': 'Linio MX',
             'claroshop.com': 'Claro Shop',
-            'sanborns.com.mx': 'Sanborns'
+            'sanborns.com.mx': 'Sanborns',
+            'officemax.com.mx': 'OfficeMax MX',
+            'apple.com': 'Apple',
+            'samsung.com': 'Samsung',
+            'motorola.com.mx': 'Motorola',
+            'mi.com': 'Xiaomi',
+            'huawei.com': 'Huawei',
+            'nike.com.mx': 'Nike',
+            'adidas.mx': 'Adidas',
+            'innovasport.com': 'InnovaSport'
         },
         placesQuery: 'comprar',
         regionLabel: 'México'
@@ -57,21 +76,25 @@ const REGION_CONFIGS = {
         currencySymbol: '$',
         searchSuffix: 'precio comprar chile',
         webSearchDomains: [
-            'falabella.com', 'ripley.cl', 'paris.cl', 'lider.cl',
-            'pcfactory.cl', 'solotodo.cl', 'mercadolibre.cl',
+            'falabella.com', 'ripley.cl', 'paris.cl', 'lider.cl', 'jumbo.cl',
+            'pcfactory.cl', 'solotodo.cl', 'mercadolibre.cl', 'knasta.cl', 'maconline.com',
             'hites.com', 'abcdin.cl', 'lapolar.cl', 'easy.cl',
-            'sodimac.cl', 'microplay.cl', 'spdigital.cl',
+            'sodimac.cl', 'microplay.cl', 'spdigital.cl', 'weplay.cl',
             'wom.cl', 'entel.cl', 'movistar.cl',
-            'temu.com', 'aliexpress.com', 'amazon.com'
+            'temu.com', 'aliexpress.com', 'amazon.com',
+            'apple.com', 'samsung.com', 'mi.com', 'nike.cl', 'adidas.cl'
         ],
         storeMap: {
             'falabella.com': 'Falabella',
             'ripley.cl': 'Ripley',
             'paris.cl': 'Paris',
             'lider.cl': 'Lider',
+            'jumbo.cl': 'Jumbo CL',
             'pcfactory.cl': 'PC Factory',
             'solotodo.cl': 'SoloTodo',
             'mercadolibre.cl': 'Mercado Libre CL',
+            'knasta.cl': 'Knasta',
+            'maconline.com': 'MacOnline',
             'hites.com': 'Hites',
             'abcdin.cl': 'ABCDin',
             'lapolar.cl': 'La Polar',
@@ -79,12 +102,18 @@ const REGION_CONFIGS = {
             'sodimac.cl': 'Sodimac',
             'microplay.cl': 'Microplay',
             'spdigital.cl': 'SP Digital',
+            'weplay.cl': 'WePlay',
             'wom.cl': 'WOM',
             'entel.cl': 'Entel',
             'movistar.cl': 'Movistar',
             'temu.com': 'Temu',
             'aliexpress.com': 'AliExpress',
-            'amazon.com': 'Amazon US'
+            'amazon.com': 'Amazon US',
+            'apple.com': 'Apple',
+            'samsung.com': 'Samsung',
+            'mi.com': 'Xiaomi',
+            'nike.cl': 'Nike',
+            'adidas.cl': 'Adidas'
         },
         placesQuery: 'comprar',
         regionLabel: 'Chile'
@@ -101,8 +130,9 @@ const REGION_CONFIGS = {
         webSearchDomains: [
             'falabella.com.co', 'exito.com', 'mercadolibre.com.co',
             'alkosto.com', 'ktronix.com', 'homecenter.com.co',
-            'linio.com.co', 'olimpica.com', 'jumbo.com.co',
-            'panamericana.com.co', 'amazon.com', 'temu.com'
+            'linio.com.co', 'olimpica.com', 'jumbo.com.co', 'alkomprar.com', 'pepeganga.com',
+            'panamericana.com.co', 'mac-center.com', 'amazon.com', 'temu.com', 'aliexpress.com',
+            'apple.com', 'samsung.com', 'xiaomi-store.co', 'nike.com.co', 'adidas.co'
         ],
         storeMap: {
             'falabella.com.co': 'Falabella CO',
@@ -114,9 +144,18 @@ const REGION_CONFIGS = {
             'linio.com.co': 'Linio CO',
             'olimpica.com': 'Olímpica',
             'jumbo.com.co': 'Jumbo CO',
+            'alkomprar.com': 'Alkomprar',
+            'pepeganga.com': 'Pepe Ganga',
             'panamericana.com.co': 'Panamericana',
+            'mac-center.com': 'Mac Center',
             'amazon.com': 'Amazon US',
-            'temu.com': 'Temu'
+            'temu.com': 'Temu',
+            'aliexpress.com': 'AliExpress',
+            'apple.com': 'Apple',
+            'samsung.com': 'Samsung',
+            'xiaomi-store.co': 'Xiaomi',
+            'nike.com.co': 'Nike',
+            'adidas.co': 'Adidas'
         },
         placesQuery: 'comprar',
         regionLabel: 'Colombia'
@@ -133,9 +172,10 @@ const REGION_CONFIGS = {
         webSearchDomains: [
             'mercadolibre.com.ar', 'fravega.com', 'garbarino.com',
             'musimundo.com', 'megatone.net', 'cetrogar.com.ar',
-            'cotodigital.com.ar', 'carrefour.com.ar',
-            'falabella.com.ar', 'tiendamovistar.com.ar',
-            'amazon.com', 'temu.com'
+            'cotodigital.com.ar', 'carrefour.com.ar', 'oncity.com', 'venex.com.ar',
+            'falabella.com.ar', 'tiendamovistar.com.ar', 'compragamer.com',
+            'amazon.com', 'temu.com', 'aliexpress.com',
+            'apple.com', 'samsung.com', 'mi.com', 'nike.com.ar', 'adidas.com.ar'
         ],
         storeMap: {
             'mercadolibre.com.ar': 'Mercado Libre AR',
@@ -146,10 +186,19 @@ const REGION_CONFIGS = {
             'cetrogar.com.ar': 'Cetrogar',
             'cotodigital.com.ar': 'Coto Digital',
             'carrefour.com.ar': 'Carrefour AR',
+            'oncity.com': 'OnCity',
+            'venex.com.ar': 'Venex',
             'falabella.com.ar': 'Falabella AR',
             'tiendamovistar.com.ar': 'Movistar AR',
+            'compragamer.com': 'Compra Gamer',
             'amazon.com': 'Amazon US',
-            'temu.com': 'Temu'
+            'temu.com': 'Temu',
+            'aliexpress.com': 'AliExpress',
+            'apple.com': 'Apple',
+            'samsung.com': 'Samsung',
+            'mi.com': 'Xiaomi',
+            'nike.com.ar': 'Nike',
+            'adidas.com.ar': 'Adidas'
         },
         placesQuery: 'comprar',
         regionLabel: 'Argentina'
@@ -166,8 +215,10 @@ const REGION_CONFIGS = {
         webSearchDomains: [
             'falabella.com.pe', 'ripley.com.pe', 'plazavea.com.pe',
             'mercadolibre.com.pe', 'oechsle.pe', 'promart.pe',
-            'sodimac.com.pe', 'hiraoka.com.pe', 'linio.com.pe',
-            'amazon.com', 'temu.com'
+            'sodimac.com.pe', 'hiraoka.com.pe', 'linio.com.pe', 'wong.pe', 'tottus.com.pe',
+            'coolbox.pe', 'curacao.pe', 'impacto.com.pe',
+            'amazon.com', 'temu.com', 'aliexpress.com',
+            'apple.com', 'samsung.com', 'xiaomiperu.com', 'nike.com.pe', 'adidas.pe'
         ],
         storeMap: {
             'falabella.com.pe': 'Falabella PE',
@@ -179,8 +230,19 @@ const REGION_CONFIGS = {
             'sodimac.com.pe': 'Sodimac PE',
             'hiraoka.com.pe': 'Hiraoka',
             'linio.com.pe': 'Linio PE',
+            'wong.pe': 'Wong',
+            'tottus.com.pe': 'Tottus',
+            'coolbox.pe': 'Coolbox',
+            'curacao.pe': 'Curacao',
+            'impacto.com.pe': 'Impacto',
             'amazon.com': 'Amazon US',
-            'temu.com': 'Temu'
+            'temu.com': 'Temu',
+            'aliexpress.com': 'AliExpress',
+            'apple.com': 'Apple',
+            'samsung.com': 'Samsung',
+            'xiaomiperu.com': 'Xiaomi',
+            'nike.com.pe': 'Nike',
+            'adidas.pe': 'Adidas'
         },
         placesQuery: 'comprar',
         regionLabel: 'Perú'
@@ -198,7 +260,8 @@ const REGION_CONFIGS = {
             'amazon.com', 'walmart.com', 'bestbuy.com', 'target.com',
             'ebay.com', 'newegg.com', 'costco.com', 'homedepot.com',
             'lowes.com', 'bhphotovideo.com', 'adorama.com',
-            'temu.com', 'aliexpress.com'
+            'temu.com', 'aliexpress.com', 'nintendo.com', 'store.nintendo.com',
+            'playstation.com', 'direct.playstation.com', 'apple.com', 'samsung.com'
         ],
         storeMap: {
             'amazon.com': 'Amazon',
@@ -213,7 +276,13 @@ const REGION_CONFIGS = {
             'bhphotovideo.com': 'B&H Photo',
             'adorama.com': 'Adorama',
             'temu.com': 'Temu',
-            'aliexpress.com': 'AliExpress'
+            'aliexpress.com': 'AliExpress',
+            'nintendo.com': 'Nintendo',
+            'store.nintendo.com': 'Nintendo',
+            'playstation.com': 'PlayStation',
+            'direct.playstation.com': 'PlayStation Direct',
+            'apple.com': 'Apple',
+            'samsung.com': 'Samsung'
         },
         placesQuery: 'buy',
         regionLabel: 'United States'
@@ -317,17 +386,101 @@ function getRegionConfig(countryCode) {
     return REGION_CONFIGS[(countryCode || 'MX').toUpperCase()] || REGION_CONFIGS.MX;
 }
 
-function getPriorityWebDomains(countryCode, limit = 6) {
+function getPriorityWebDomains(countryCode, limit = 10) {
     const config = getRegionConfig(countryCode);
     return (config.webSearchDomains || []).slice(0, Math.max(1, limit));
 }
+
+function inferCategoryFromQuery(query = '') {
+    const normalized = String(query || '').toLowerCase();
+    if (/iphone|galaxy|pixel|xiaomi|motorola|smartphone|celular|telefono|teléfono/.test(normalized)) return 'smartphone';
+    if (/laptop|notebook|macbook|thinkpad|vivobook|ideapad|computadora/.test(normalized)) return 'laptop';
+    if (/airpods|aud[ií]fonos|headphones|earbuds|speaker|bocina|wh-1000|sony wh/i.test(normalized)) return 'audio';
+    if (/smart tv|televisor|tv |pantalla|qled|oled|55 inch|55 pulgadas/.test(normalized)) return 'tv';
+    if (/playstation|ps5|ps4|xbox|nintendo|switch|steam deck|gaming/.test(normalized)) return 'gaming';
+    if (/refrigerador|lavadora|microondas|aspiradora|freidora|cafetera|coffee maker|dryer|appliance/.test(normalized)) return 'appliance';
+    if (/tenis|playera|ropa|sudadera|zapatos|mochila|bolsa|adidas|nike|reebok/.test(normalized)) return 'fashion';
+    if (/mueble|sof[aá]|couch|desk|table|chair|storage|home|hogar/.test(normalized)) return 'home';
+    return '';
+}
+
+const OFFICIAL_DOMAIN_MAP = {
+    MX: {
+        smartphone: ['apple.com', 'samsung.com', 'motorola.com.mx', 'mi.com'],
+        laptop: ['apple.com', 'samsung.com', 'huawei.com'],
+        audio: ['apple.com', 'samsung.com', 'sony.com', 'bose.com'],
+        tv: ['samsung.com', 'lg.com', 'sony.com', 'hisense.com', 'tcl.com'],
+        gaming: ['nintendo.com', 'store.nintendo.com', 'playstation.com', 'direct.playstation.com', 'xbox.com'],
+        fashion: ['nike.com.mx', 'adidas.mx', 'puma.com'],
+        sports: ['nike.com.mx', 'adidas.mx', 'puma.com']
+    },
+    US: {
+        smartphone: ['apple.com', 'samsung.com', 'motorola.com', 'mi.com'],
+        laptop: ['apple.com', 'dell.com', 'lenovo.com', 'hp.com'],
+        audio: ['apple.com', 'sony.com', 'bose.com', 'jbl.com', 'samsung.com'],
+        tv: ['samsung.com', 'lg.com', 'sony.com', 'hisense.com', 'tcl.com'],
+        gaming: ['nintendo.com', 'store.nintendo.com', 'playstation.com', 'direct.playstation.com', 'xbox.com'],
+        fashion: ['nike.com', 'adidas.com', 'puma.com'],
+        sports: ['nike.com', 'adidas.com', 'puma.com']
+    },
+    CL: {
+        smartphone: ['apple.com', 'samsung.com', 'mi.com'],
+        audio: ['apple.com', 'sony.com', 'bose.com'],
+        gaming: ['nintendo.com', 'playstation.com', 'xbox.com'],
+        fashion: ['nike.cl', 'adidas.cl']
+    },
+    CO: {
+        smartphone: ['apple.com', 'samsung.com', 'xiaomi-store.co'],
+        gaming: ['nintendo.com', 'playstation.com', 'xbox.com'],
+        fashion: ['nike.com.co', 'adidas.co']
+    },
+    AR: {
+        smartphone: ['apple.com', 'samsung.com', 'mi.com'],
+        gaming: ['nintendo.com', 'playstation.com', 'xbox.com'],
+        fashion: ['nike.com.ar', 'adidas.com.ar']
+    },
+    PE: {
+        smartphone: ['apple.com', 'samsung.com', 'xiaomiperu.com'],
+        gaming: ['nintendo.com', 'playstation.com', 'xbox.com'],
+        fashion: ['nike.com.pe', 'adidas.pe']
+    }
+};
+
+const OFFICIAL_BRAND_DOMAIN_MAP = {
+    apple: ['apple.com'],
+    iphone: ['apple.com'],
+    ipad: ['apple.com'],
+    macbook: ['apple.com'],
+    airpods: ['apple.com'],
+    watch: ['apple.com'],
+    samsung: ['samsung.com'],
+    galaxy: ['samsung.com'],
+    motorola: ['motorola.com.mx', 'motorola.com'],
+    xiaomi: ['mi.com', 'xiaomiperu.com', 'xiaomi-store.co'],
+    sony: ['sony.com'],
+    bose: ['bose.com'],
+    jbl: ['jbl.com'],
+    lg: ['lg.com'],
+    hisense: ['hisense.com'],
+    tcl: ['tcl.com'],
+    nintendo: ['nintendo.com', 'store.nintendo.com'],
+    switch: ['nintendo.com', 'store.nintendo.com'],
+    playstation: ['playstation.com', 'direct.playstation.com'],
+    ps5: ['playstation.com', 'direct.playstation.com'],
+    xbox: ['xbox.com'],
+    nike: ['nike.com', 'nike.com.mx', 'nike.cl', 'nike.com.co', 'nike.com.ar', 'nike.com.pe'],
+    adidas: ['adidas.com', 'adidas.mx', 'adidas.cl', 'adidas.co', 'adidas.com.ar', 'adidas.pe'],
+    puma: ['puma.com']
+};
 
 /**
  * Build the Serper web search query with region-specific domains
  */
 function buildWebSearchQuery(query, countryCode) {
     const config = getRegionConfig(countryCode);
-    const siteFilters = getPriorityWebDomains(countryCode)
+    const inferredCategory = inferCategoryFromQuery(query);
+    const domains = inferredCategory ? getCategoryDomains(countryCode, inferredCategory) : getPriorityWebDomains(countryCode);
+    const siteFilters = domains
         .map(d => `site:${d}`)
         .join(' OR ');
     return `${query} ${config.searchSuffix} ${siteFilters}`;
@@ -362,15 +515,100 @@ function buildAdaptiveWebSearchQuery(query, countryCode, preferredStoreKeys = []
         if (domain) preferredDomains.push(domain);
     }
 
-    // Fill remaining slots from static list (up to 6 total)
+    // Fill remaining slots from static list (up to 10 total)
     const staticDomains = (config.webSearchDomains || []);
     const finalDomains = [...preferredDomains];
     for (const d of staticDomains) {
-        if (finalDomains.length >= 6) break;
+        if (finalDomains.length >= 10) break;
         if (!finalDomains.includes(d)) finalDomains.push(d);
     }
 
     const siteFilters = finalDomains.map(d => `site:${d}`).join(' OR ');
+    return `${query} ${config.searchSuffix} ${siteFilters}`;
+}
+
+function buildOfficialWebSearchQuery(query, countryCode) {
+    const config = getRegionConfig(countryCode);
+    const normalizedQuery = String(query || '').toLowerCase();
+    const inferredCategory = inferCategoryFromQuery(query);
+    const matchedBrandDomains = Object.entries(OFFICIAL_BRAND_DOMAIN_MAP)
+        .filter(([brand]) => normalizedQuery.includes(brand))
+        .flatMap(([, domains]) => domains);
+    const categoryDomains = OFFICIAL_DOMAIN_MAP[(countryCode || 'MX').toUpperCase()]?.[inferredCategory] || [];
+    const officialDomains = [...new Set([...matchedBrandDomains, ...categoryDomains])]
+        .filter(domain => (config.webSearchDomains || []).includes(domain) || /^(apple|samsung|sony|bose|jbl|lg|hisense|tcl|nintendo|playstation|direct\.playstation|xbox|nike|adidas|puma|motorola|xiaomi)/i.test(domain))
+        .slice(0, 8);
+    if (officialDomains.length === 0) return `${query} ${config.searchSuffix}`.trim();
+    const siteFilters = officialDomains.map(d => `site:${d}`).join(' OR ');
+    return `${query} ${siteFilters}`;
+}
+
+/**
+ * Dynamic domain prioritization by product category and region.
+ * Returns the most relevant domains for a given category, falling back to general list.
+ */
+const CATEGORY_DOMAIN_MAP = {
+    MX: {
+        smartphone: ['amazon.com.mx', 'mercadolibre.com.mx', 'doto.com.mx', 'cyberpuerta.mx', 'liverpool.com.mx', 'walmart.com.mx', 'coppel.com', 'apple.com', 'samsung.com'],
+        laptop: ['amazon.com.mx', 'cyberpuerta.mx', 'ddtech.mx', 'liverpool.com.mx', 'costco.com.mx', 'walmart.com.mx', 'bestbuy.com.mx', 'apple.com'],
+        gaming: ['amazon.com.mx', 'mercadolibre.com.mx', 'gameplanet.com', 'ddtech.mx', 'bestbuy.com.mx', 'walmart.com.mx', 'costco.com.mx'],
+        audio: ['amazon.com.mx', 'mercadolibre.com.mx', 'liverpool.com.mx', 'cyberpuerta.mx', 'walmart.com.mx', 'apple.com'],
+        tv: ['amazon.com.mx', 'liverpool.com.mx', 'walmart.com.mx', 'bestbuy.com.mx', 'costco.com.mx', 'sams.com.mx', 'elpalaciodehierro.com'],
+        fashion: ['mercadolibre.com.mx', 'liverpool.com.mx', 'suburbia.com.mx', 'mx.shein.com', 'coppel.com', 'nike.com.mx', 'adidas.mx', 'innovasport.com'],
+        home: ['walmart.com.mx', 'amazon.com.mx', 'homedepot.com.mx', 'liverpool.com.mx', 'bodegaaurrera.com.mx', 'costco.com.mx'],
+        appliance: ['walmart.com.mx', 'liverpool.com.mx', 'coppel.com', 'elektra.com.mx', 'homedepot.com.mx', 'amazon.com.mx', 'costco.com.mx'],
+        beauty: ['mercadolibre.com.mx', 'amazon.com.mx', 'liverpool.com.mx', 'mx.shein.com', 'walmart.com.mx'],
+        sports: ['amazon.com.mx', 'mercadolibre.com.mx', 'liverpool.com.mx', 'innovasport.com', 'nike.com.mx', 'adidas.mx'],
+        toys: ['amazon.com.mx', 'walmart.com.mx', 'liverpool.com.mx', 'mercadolibre.com.mx', 'coppel.com']
+    },
+    US: {
+        smartphone: ['amazon.com', 'bestbuy.com', 'walmart.com', 'target.com', 'apple.com', 'samsung.com'],
+        laptop: ['amazon.com', 'bestbuy.com', 'walmart.com', 'costco.com', 'newegg.com', 'apple.com'],
+        gaming: ['amazon.com', 'bestbuy.com', 'walmart.com', 'target.com', 'newegg.com'],
+        audio: ['amazon.com', 'bestbuy.com', 'target.com', 'apple.com'],
+        tv: ['amazon.com', 'bestbuy.com', 'walmart.com', 'costco.com', 'target.com'],
+        fashion: ['amazon.com', 'walmart.com', 'target.com', 'ebay.com'],
+        home: ['amazon.com', 'walmart.com', 'homedepot.com', 'lowes.com', 'costco.com', 'target.com'],
+        appliance: ['bestbuy.com', 'homedepot.com', 'lowes.com', 'walmart.com', 'amazon.com', 'costco.com']
+    },
+    CL: {
+        smartphone: ['falabella.com', 'ripley.cl', 'paris.cl', 'pcfactory.cl', 'mercadolibre.cl', 'knasta.cl', 'samsung.com'],
+        laptop: ['pcfactory.cl', 'falabella.com', 'ripley.cl', 'paris.cl', 'spdigital.cl', 'solotodo.cl', 'maconline.com'],
+        gaming: ['microplay.cl', 'weplay.cl', 'spdigital.cl', 'pcfactory.cl', 'falabella.com', 'ripley.cl'],
+        home: ['falabella.com', 'lider.cl', 'jumbo.cl', 'easy.cl', 'sodimac.cl', 'paris.cl'],
+        appliance: ['falabella.com', 'lider.cl', 'jumbo.cl', 'ripley.cl', 'paris.cl', 'hites.com']
+    },
+    CO: {
+        smartphone: ['falabella.com.co', 'mercadolibre.com.co', 'alkosto.com', 'ktronix.com', 'alkomprar.com', 'exito.com'],
+        laptop: ['alkosto.com', 'ktronix.com', 'alkomprar.com', 'falabella.com.co', 'mercadolibre.com.co', 'exito.com', 'mac-center.com'],
+        home: ['homecenter.com.co', 'falabella.com.co', 'exito.com', 'jumbo.com.co', 'mercadolibre.com.co']
+    },
+    AR: {
+        smartphone: ['mercadolibre.com.ar', 'fravega.com', 'garbarino.com', 'musimundo.com', 'oncity.com', 'samsung.com'],
+        laptop: ['mercadolibre.com.ar', 'fravega.com', 'garbarino.com', 'venex.com.ar', 'compragamer.com', 'megatone.net'],
+        home: ['mercadolibre.com.ar', 'fravega.com', 'cotodigital.com.ar', 'carrefour.com.ar', 'oncity.com']
+    },
+    PE: {
+        smartphone: ['falabella.com.pe', 'ripley.com.pe', 'mercadolibre.com.pe', 'oechsle.pe', 'hiraoka.com.pe', 'samsung.com'],
+        laptop: ['falabella.com.pe', 'ripley.com.pe', 'hiraoka.com.pe', 'impacto.com.pe', 'coolbox.pe', 'mercadolibre.com.pe'],
+        home: ['falabella.com.pe', 'sodimac.com.pe', 'promart.pe', 'plazavea.com.pe', 'wong.pe', 'tottus.com.pe']
+    }
+};
+
+function getCategoryDomains(countryCode, category, limit = 8) {
+    const cc = (countryCode || 'MX').toUpperCase();
+    const cat = (category || '').toLowerCase();
+    const categoryDomains = CATEGORY_DOMAIN_MAP[cc]?.[cat];
+    if (categoryDomains && categoryDomains.length > 0) {
+        return categoryDomains.slice(0, Math.max(1, limit));
+    }
+    return getPriorityWebDomains(cc, limit);
+}
+
+function buildCategoryWebSearchQuery(query, countryCode, category) {
+    const config = getRegionConfig(countryCode);
+    const domains = getCategoryDomains(countryCode, category);
+    const siteFilters = domains.map(d => `site:${d}`).join(' OR ');
     return `${query} ${config.searchSuffix} ${siteFilters}`;
 }
 
@@ -395,14 +633,14 @@ module.exports = {
     REGION_CONFIGS,
     TIMEZONE_COUNTRY_MAP,
     LANG_COUNTRY_MAP,
-    detectCountryFromHeaders,
-    detectCountryFromAcceptLanguage,
     resolveCountry,
     getRegionConfig,
-    getPriorityWebDomains,
     buildWebSearchQuery,
     buildBroadWebSearchQuery,
     buildAdaptiveWebSearchQuery,
+    buildOfficialWebSearchQuery,
+    buildCategoryWebSearchQuery,
+    getCategoryDomains,
     resolveStoreName,
     getSupportedCountries
 };

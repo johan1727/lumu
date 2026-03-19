@@ -155,16 +155,39 @@ exports.scrapeMercadoLibreDirect = async (query, signal) => {
         const $ = cheerio.load(response.data);
 
         const results = [];
-        $('.ui-search-result__wrapper, .poly-card').slice(0, 5).each((index, element) => {
-            const title = $(element).find('h2.ui-search-item__title, a.poly-component__title').text().trim();
-            const urlNode = $(element).find('a.ui-search-link, a.poly-component__title').attr('href');
-            let priceText = $(element).find('.andes-money-amount__fraction').first().text().replace(/,/g, '');
-            const imageNode = $(element).find('img.ui-search-result-image__image, img.poly-component__picture').attr('data-src') || $(element).find('img.ui-search-result-image__image, img.poly-component__picture').attr('src');
+        // Support both old (.ui-search-result__wrapper) and new poly-card layout
+        $('.ui-search-result__wrapper, .poly-card, [class*="poly-card"]').slice(0, 8).each((index, element) => {
+            const title = $(element).find(
+                'h2.ui-search-item__title, a.poly-component__title, [class*="poly-component__title"]'
+            ).first().text().trim();
 
-            if (title && priceText && urlNode) {
+            const urlNode = $(element).find(
+                'a.ui-search-link, a.poly-component__title, a[class*="title"]'
+            ).first().attr('href');
+
+            // Price: try multiple selectors for old and poly-card layouts
+            let priceText = $(element).find(
+                '.andes-money-amount__fraction, [class*="price__fraction"], [class*="money-amount__fraction"]'
+            ).first().text().replace(/[,.]/g, '').replace(/\D/g, '');
+
+            if (!priceText) {
+                priceText = $(element).find('[class*="price"]').first().text().replace(/[^0-9]/g, '');
+            }
+
+            // Image: try multiple lazy-load attributes
+            const imgEl = $(element).find(
+                'img.ui-search-result-image__image, img.poly-component__picture, [class*="image"] img'
+            ).first();
+            const imageNode = imgEl.attr('data-src') ||
+                              imgEl.attr('src') ||
+                              imgEl.attr('data-lazy-src') ||
+                              imgEl.attr('data-original') || '';
+
+            const parsedPrice = parseFloat(priceText);
+            if (title && urlNode && Number.isFinite(parsedPrice) && parsedPrice > 0) {
                 results.push({
-                    title: title,
-                    price: parseFloat(priceText),
+                    title,
+                    price: parsedPrice,
                     url: urlNode,
                     source: 'Mercado Libre MX',
                     image: imageNode || ''
@@ -295,18 +318,22 @@ exports.scrapeFalabellaRegional = async (query, countryCode = 'CL', signal) => {
     }
 };
 
-exports.scrapeAmazonDirect = async (query, signal) => {
+exports.scrapeAmazonDirect = async (query, countryCode = 'MX', signal) => {
     try {
         throwIfAborted(signal);
-        console.log(`[Direct Scraper] Iniciando búsqueda ultra-rápida en Amazon MX para: ${query} (Con Retry)`);
-        const url = `https://www.amazon.com.mx/s?k=${encodeURIComponent(query)}&i=popular`;
-        const response = await scrapeWithRetry(url, 2, 'MX', signal);
+        const normalizedCountry = String(countryCode || 'MX').toUpperCase();
+        const isUS = normalizedCountry === 'US';
+        const amazonDomain = isUS ? 'https://www.amazon.com' : 'https://www.amazon.com.mx';
+        const sourceLabel = isUS ? 'Amazon' : 'Amazon MX';
+        console.log(`[Direct Scraper] Iniciando búsqueda ultra-rápida en ${sourceLabel} para: ${query} (Con Retry)`);
+        const url = `${amazonDomain}/s?k=${encodeURIComponent(query)}&i=popular`;
+        const response = await scrapeWithRetry(url, 2, normalizedCountry, signal);
         const $ = cheerio.load(response.data);
 
         // Detect CAPTCHA/block
         const bodyText = $('body').text().toLowerCase();
         if (bodyText.includes('robot') || bodyText.includes('captcha') || bodyText.includes('sorry')) {
-            console.warn('[Direct Scraper] Amazon MX parece bloqueado (CAPTCHA detectado).');
+            console.warn(`[Direct Scraper] ${sourceLabel} parece bloqueado (CAPTCHA detectado).`);
             return [];
         }
 
@@ -323,18 +350,18 @@ exports.scrapeAmazonDirect = async (query, signal) => {
                 results.push({
                     title: title,
                     price: parseFloat(priceWhole),
-                    url: urlPath.startsWith('http') ? urlPath : `https://www.amazon.com.mx${urlPath}`,
-                    source: 'Amazon MX',
+                    url: urlPath.startsWith('http') ? urlPath : `${amazonDomain}${urlPath}`,
+                    source: sourceLabel,
                     image: imageNode || '',
                     rating: ratingText || null
                 });
             }
         });
 
-        console.log(`[Direct Scraper] Amazon MX encontró: ${results.length} resultados.`);
+        console.log(`[Direct Scraper] ${sourceLabel} encontró: ${results.length} resultados.`);
         return results;
     } catch (error) {
-        console.error('[Direct Scraper] Error crítico en Amazon MX tras reintentos:', error.message);
+        console.error('[Direct Scraper] Error crítico en Amazon tras reintentos:', error.message);
         return [];
     }
 };

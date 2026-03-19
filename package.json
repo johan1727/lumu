@@ -6,6 +6,8 @@
     "scripts": {
         "start": "node api/index.js",
         "dev": "nodemon api/index.js",
+        "test:llm-smoke": "node scripts/llm-smoke-test.js",
+        "test:search-smoke": "node scripts/search-endpoint-smoke-test.js",
         "build:css": "npx @tailwindcss/cli -i src/styles/input.css -o public/styles.css --minify",
         "build": "npm run build:css"
     },

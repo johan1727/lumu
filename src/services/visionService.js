@@ -12,7 +12,7 @@ exports.identifyProduct = async (imageBase64) => {
     const payload = {
         contents: [{
             parts: [
-                { text: "Identifica el producto comercial principal en esta imagen. Devuelve un objeto JSON con: 'productName' (nombre común del producto), 'brand' (marca, si es visible), y 'searchQuery' (una búsqueda perfecta para Google Shopping México para encontrar este producto exacto, en español). Sé preciso y específico." },
+                { text: "Identifica el producto comercial principal en esta imagen y prioriza el artículo que una persona realmente compraría, no accesorios secundarios ni el fondo. Devuelve un objeto JSON con: 'productName' (nombre comercial claro y específico), 'brand' (marca si es visible o altamente probable), y 'searchQuery' (una búsqueda de compra en español, muy precisa, orientada a Google Shopping). La searchQuery debe incluir marca, modelo, variante, capacidad, tamaño, color o edición solo si se ven claramente. Si no estás seguro de un atributo, no lo inventes. Evita términos genéricos como oferta, barato o mejor precio. Si la imagen parece mostrar un accesorio para otro producto, describe exactamente el accesorio. Si muestra el producto principal, evita confundirlo con funda, case, protector, cable u otros accesorios." },
                 {
                     inline_data: {
                         mime_type: "image/jpeg",

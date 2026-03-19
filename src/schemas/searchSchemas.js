@@ -56,14 +56,27 @@ const feedbackSchema = z.object({
 });
 
 const trackEventSchema = z.object({
-    event_type: z.enum(['click', 'ad_view', 'ad_skip', 'search', 'favorite', 'alert_create', 'zero_results', 'bounce', 'auth_modal_open', 'auth_modal_dismiss', 'signup_complete', 'signup_bonus'], {
-        errorMap: () => ({ message: 'event_type debe ser: click, ad_view, ad_skip, search, favorite, alert_create, zero_results, bounce, auth_modal_open, auth_modal_dismiss, signup_complete, signup_bonus' })
+    event_type: z.enum(['click', 'ad_view', 'ad_skip', 'search', 'favorite', 'favorite_remove', 'alert_create', 'compare', 'history_open', 'feedback_positive', 'feedback_negative', 'zero_results', 'bounce', 'auth_modal_open', 'auth_modal_dismiss', 'signup_complete', 'signup_bonus'], {
+        errorMap: () => ({ message: 'event_type inválido para tracking' })
     }),
     product_title: z.string().max(500).optional().default(''),
     store: z.string().max(200).optional().default(''),
     url: z.string().max(2000).optional().default(''),
     search_query: z.string().max(500).optional().default(''),
-    device: z.string().max(50).optional().default('unknown')
+    device: z.string().max(50).optional().default('unknown'),
+    canonical_key: z.string().max(160).optional(),
+    product_category: z.string().max(120).optional(),
+    position: z.number().int().min(0).max(500).optional(),
+    result_source: z.string().max(80).optional(),
+    store_tier: z.number().int().min(1).max(3).optional(),
+    best_buy_score: z.number().min(0).max(1).optional(),
+    session_id: z.string().max(120).optional(),
+    search_id: z.string().max(120).optional(),
+    engagement_ms: z.number().int().min(0).max(86400000).optional(),
+    action_context: z.string().max(80).optional(),
+    price: z.number().min(0).max(999999999).optional(),
+    feedback_label: z.string().max(120).optional(),
+    brand: z.string().max(120).optional()
 });
 
 module.exports = {

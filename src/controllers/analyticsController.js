@@ -2,13 +2,59 @@ const supabase = require('../config/supabase');
 const scraperMonitor = require('../services/scraperMonitor');
 const regionConfigService = require('../services/regionConfigService');
 
+function clampNumber(value, { min = 0, max = Number.MAX_SAFE_INTEGER } = {}) {
+    const parsed = Number(value);
+    if (!Number.isFinite(parsed)) return null;
+    return Math.max(min, Math.min(max, parsed));
+}
+
+function normalizeText(value, maxLen = 200) {
+    const normalized = String(value || '').trim();
+    return normalized ? normalized.slice(0, maxLen) : null;
+}
+
+function shouldStrengthenIntentMemory(eventType) {
+    return ['click', 'favorite', 'alert_create', 'compare', 'history_open', 'feedback_positive'].includes(String(eventType || '').toLowerCase());
+}
+
+function buildIntentMemoryWeights(eventType, engagementMs = 0) {
+    const normalizedEvent = String(eventType || '').toLowerCase();
+    const engagementBoost = engagementMs >= 20000 ? 0.45 : engagementMs >= 8000 ? 0.2 : 0;
+    if (normalizedEvent === 'favorite') return { clickDelta: 1, successDelta: 1.6 + engagementBoost };
+    if (normalizedEvent === 'alert_create') return { clickDelta: 1, successDelta: 2 + engagementBoost };
+    if (normalizedEvent === 'compare') return { clickDelta: 1, successDelta: 1.25 + engagementBoost };
+    if (normalizedEvent === 'history_open') return { clickDelta: 1, successDelta: 1.05 + engagementBoost };
+    if (normalizedEvent === 'feedback_positive') return { clickDelta: 1, successDelta: 1.8 + engagementBoost };
+    return { clickDelta: 1, successDelta: 1 + engagementBoost };
+}
+
 /**
  * POST /api/track — Log a conversion event (click, ad_view, etc.)
  * Lightweight, fire-and-forget from frontend.
  */
 async function trackEvent(req, res) {
     try {
-        const { event_type, product_title, store, url, search_query, device, canonical_key, product_category } = req.body;
+        const {
+            event_type,
+            product_title,
+            store,
+            url,
+            search_query,
+            device,
+            canonical_key,
+            product_category,
+            position,
+            result_source,
+            store_tier,
+            best_buy_score,
+            session_id,
+            search_id,
+            engagement_ms,
+            action_context,
+            price,
+            feedback_label,
+            brand
+        } = req.body;
 
         if (!event_type) {
             return res.status(400).json({ error: 'event_type requerido' });
@@ -47,7 +93,18 @@ async function trackEvent(req, res) {
             referrer: (req.headers.referer || '').slice(0, 500),
             country_code: regionConfigService.resolveCountry(req),
             canonical_key: (canonical_key || '').slice(0, 160) || null,
-            product_category: (product_category || '').slice(0, 120) || null
+            product_category: (product_category || '').slice(0, 120) || null,
+            position: clampNumber(position, { min: 0, max: 500 }),
+            result_source: normalizeText(result_source, 80),
+            store_tier: clampNumber(store_tier, { min: 1, max: 3 }),
+            best_buy_score: clampNumber(best_buy_score, { min: 0, max: 1 }),
+            session_id: normalizeText(session_id, 120),
+            search_id: normalizeText(search_id, 120),
+            engagement_ms: clampNumber(engagement_ms, { min: 0, max: 86400000 }),
+            action_context: normalizeText(action_context, 80),
+            price: clampNumber(price, { min: 0, max: 999999999 }),
+            feedback_label: normalizeText(feedback_label, 120),
+            brand: normalizeText(brand, 120)
         };
 
         if (supabase) {
@@ -56,13 +113,14 @@ async function trackEvent(req, res) {
                 if (error) console.error('[Analytics] Insert error:', error.message);
             });
 
-            // Auto-improve: upsert query_intent_memory on click events
-            if (event_type === 'click' && search_query && store) {
+            // Auto-improve: upsert query_intent_memory on strong interaction signals
+            if (shouldStrengthenIntentMemory(event_type) && search_query && store) {
                 const normalizedQuery = (search_query || '').toLowerCase().trim();
                 const storeKey = (store || '').toLowerCase().trim();
                 const catKey = (product_category || '').toLowerCase().trim();
                 const cKey = (canonical_key || '').slice(0, 160) || null;
                 const cc = event.country_code || 'MX';
+                const weights = buildIntentMemoryWeights(event_type, Number(event.engagement_ms || 0));
 
                 if (normalizedQuery && storeKey) {
                     supabase.rpc('upsert_query_intent_memory', {
@@ -84,8 +142,8 @@ async function trackEvent(req, res) {
                                 product_category_key: catKey,
                                 store_name: store,
                                 store_name_key: storeKey,
-                                clicked_count: 1,
-                                success_score: 1,
+                                clicked_count: weights.clickDelta,
+                                success_score: weights.successDelta,
                                 last_clicked_at: new Date().toISOString()
                             }, {
                                 onConflict: 'normalized_query,country_code,product_category_key,store_name_key'

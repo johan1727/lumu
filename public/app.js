@@ -189,6 +189,88 @@ function getVoiceRecognitionLocale(regionCode = 'MX') {
     return localeMap[normalized] || 'es-MX';
 }
 
+function localizeDynamicResultText(value, isUS = currentRegion === 'US') {
+    const text = String(value || '').trim();
+    if (!text) return '';
+
+    const replacements = isUS ? [
+        [/llega gratis mañana/gi, 'Arrives free tomorrow'],
+        [/llega mañana/gi, 'Arrives tomorrow'],
+        [/env[ií]o gratis/gi, 'Free shipping'],
+        [/ver precio en tienda/gi, 'Check in-store price'],
+        [/tienda verificada/gi, 'Verified store'],
+        [/oferta real/gi, 'Real deal'],
+        [/precio normal/gi, 'Normal price'],
+        [/descuento sospechoso/gi, 'Suspicious discount'],
+        [/sospechoso/gi, 'Suspicious'],
+        [/mejor precio/gi, 'Best price'],
+        [/historial de precio/gi, 'Price history'],
+        [/avisarme/gi, 'Alert me'],
+        [/margen/gi, 'Margin'],
+        [/expira en/gi, 'Ends in']
+    ] : [
+        [/arrives free tomorrow/gi, 'Llega gratis mañana'],
+        [/arrives tomorrow/gi, 'Llega mañana'],
+        [/free shipping/gi, 'Envío gratis'],
+        [/check in-store price/gi, 'Ver precio en tienda'],
+        [/verified store/gi, 'Tienda verificada'],
+        [/real deal/gi, 'Oferta real'],
+        [/normal price/gi, 'Precio normal'],
+        [/suspicious discount/gi, 'Descuento sospechoso'],
+        [/suspicious/gi, 'Sospechoso'],
+        [/best price/gi, 'Mejor precio'],
+        [/price history/gi, 'Historial de precio'],
+        [/alert me/gi, 'Avisarme'],
+        [/margin/gi, 'Margen'],
+        [/ends in/gi, 'Expira en']
+    ];
+
+    return replacements.reduce((acc, [pattern, replacement]) => acc.replace(pattern, replacement), text);
+}
+
+function normalizeResultTitle(rawTitle, storeName = '', isUS = currentRegion === 'US') {
+    const title = String(rawTitle || '').replace(/\s+/g, ' ').trim();
+    if (!title) return isUS ? 'Product listing' : 'Producto disponible';
+
+    let normalized = title
+        .replace(/\s*[-|]\s*(amazon|mercado libre|mercadolibre|walmart|target|costco|best buy|liverpool|coppel|sam'?s club)\b.*$/i, '')
+        .replace(/\b(check in-store price|ver precio en tienda)\b/gi, '')
+        .replace(/\s{2,}/g, ' ')
+        .trim();
+
+    if (storeName && normalized.toLowerCase() === String(storeName).toLowerCase()) {
+        normalized = isUS ? 'Product listing' : 'Producto disponible';
+    }
+
+    return normalized || (isUS ? 'Product listing' : 'Producto disponible');
+}
+
+function buildImageRenderState(product, isUS = currentRegion === 'US') {
+    const title = normalizeResultTitle(product?.titulo, product?.tienda, isUS);
+    const storeName = String(product?.tienda || product?.fuente || '').trim();
+    const fallbackImgUrl = buildFallbackProductImage(title || storeName || 'Lumu');
+    let imgUrl = typeof (product?.imgUrl || product?.imagen) === 'string' ? String(product.imgUrl || product.imagen).trim() : '';
+
+    const isMissingImage = !imgUrl || /^(null|undefined|about:blank)$/i.test(imgUrl) || /placeholder|no[\s_-]?image/i.test(imgUrl);
+    const isDataImage = imgUrl.startsWith('data:image/');
+    const isRemoteImage = /^https?:\/\//i.test(imgUrl);
+    const isLocalImage = imgUrl.startsWith('/') || imgUrl.startsWith('./') || imgUrl.startsWith('../');
+    const normalizedImgUrl = imgUrl.toLowerCase();
+    const looksLikeStoreLogo = /logo|brandmark|favicon|store-logo|icon|sprite|avatar|seller/i.test(normalizedImgUrl)
+        || (/(mercadolibre|costco|walmart|amazon|coppel|liverpool|sams|best[\s_-]?buy|elektra|target)/i.test(normalizedImgUrl)
+            && /(logo|icon|badge|avatar|seller)/i.test(normalizedImgUrl));
+    const looksLikeCatalogAsset = /product|products|prod|sku|image|images|item|catalog|catalogo|pdp|media|photo/i.test(normalizedImgUrl);
+    const isLikelyProductImage = !isMissingImage && (isDataImage || isRemoteImage || isLocalImage) && (!looksLikeStoreLogo || looksLikeCatalogAsset);
+    const finalImgUrl = isLikelyProductImage ? imgUrl : fallbackImgUrl;
+
+    return {
+        title,
+        finalImgUrl,
+        fallbackImgUrl,
+        hasProductImage: isLikelyProductImage
+    };
+}
+
 const REGION_UI_COPY = {
     MX: {
         nav: {
@@ -679,11 +761,65 @@ let _authModalWasOpened = false;
 let _authModalCompleted = false;
 let _isSearchInProgress = false;
 let _activeSearchAbortController = null;
+let _activeBrowseCategory = '';
+
+function setBrowseCategoryState(categoryKey = '') {
+    _activeBrowseCategory = categoryKey || '';
+    document.querySelectorAll('[data-header-category]').forEach((button) => {
+        button.classList.toggle('browse-nav-chip-active', button.getAttribute('data-header-category') === _activeBrowseCategory);
+    });
+}
+
+function revealLandingBrowseSections() {
+    const ids = ['header-browse-strip', 'browse-hub-section', 'category-icon-bar', 'flash-deals-section', 'tendencias-section', 'product-showcase', 'extra-sections'];
+    ids.forEach((id) => {
+        const element = document.getElementById(id);
+        if (element) element.classList.remove('hidden');
+    });
+}
+
+function hideLandingBrowseSections() {
+    const ids = ['browse-hub-section', 'category-icon-bar', 'flash-deals-section', 'tendencias-section', 'product-showcase', 'extra-sections'];
+    ids.forEach((id) => {
+        const element = document.getElementById(id);
+        if (element) element.classList.add('hidden');
+    });
+}
+
+function queueBrowseSearch(query, categoryKey = '') {
+    if (!query) return;
+    const input = document.getElementById('search-input');
+    const form = document.getElementById('search-form');
+    if (!input || !form) return;
+
+    setBrowseCategoryState(categoryKey);
+    input.value = query;
+    input.style.height = '56px';
+    input.style.height = `${input.scrollHeight}px`;
+    form.requestSubmit ? form.requestSubmit() : form.dispatchEvent(new Event('submit', { cancelable: true, bubbles: true }));
+}
 
 // --- Conversion Analytics ---
 const _detectDevice = () => /Mobi|Android/i.test(navigator.userAgent) ? (/iPad|Tablet/i.test(navigator.userAgent) ? 'tablet' : 'mobile') : 'desktop';
 let _conversionBounceTimer = null;
-window._lastSearchContext = { canonical_key: '', product_category: '' };
+const _ensureInteractionSessionId = () => {
+    if (!window._interactionSessionId) {
+        window._interactionSessionId = `sess_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
+    }
+    return window._interactionSessionId;
+};
+const _buildProductTrackingPayload = (product = {}, extra = {}) => ({
+    product_title: product.titulo || '',
+    store: product.tienda || '',
+    url: product.urlMonetizada || product.urlOriginal || '',
+    price: Number(product.precio || 0) || undefined,
+    result_source: product.resultSource || undefined,
+    store_tier: Number(product.storeTier || 0) || undefined,
+    best_buy_score: typeof product.bestBuyScore === 'number' ? product.bestBuyScore : undefined,
+    brand: product.storeCanonical || undefined,
+    ...extra
+});
+window._lastSearchContext = { canonical_key: '', product_category: '', search_id: '', search_query: '' };
 function _trackEvent(event_type, extra = {}) {
     try {
         const searchContext = window._lastSearchContext || {};
@@ -692,6 +828,9 @@ function _trackEvent(event_type, extra = {}) {
             device: _detectDevice(),
             canonical_key: searchContext.canonical_key || undefined,
             product_category: searchContext.product_category || undefined,
+            search_id: searchContext.search_id || undefined,
+            session_id: _ensureInteractionSessionId(),
+            search_query: searchContext.search_query || window._lastSearchQuery || undefined,
             ...extra
         };
         const headers = { 'Content-Type': 'application/json' };
@@ -955,7 +1094,7 @@ function applyRegionalCopy() {
 
     const regionPill = document.getElementById('detected-region-pill');
     if (regionPill) {
-        regionPill.textContent = `${regionFlag} ${config.activeRegion || 'Región automática'}`;
+        regionPill.innerHTML = `<span aria-hidden="true" class="shrink-0">${regionFlag}</span><span class="truncate">${config.activeRegion || 'Región automática'}</span>`;
     }
 
     const globalBtn = document.getElementById('filter-global');
@@ -1087,6 +1226,19 @@ function applyRegionalCopy() {
     setTextById('category-chip-beauty', ui.categoryBar.beauty);
     setTextById('category-chip-toys', ui.categoryBar.toys);
     setTextById('category-chip-cars', ui.categoryBar.cars);
+    const headerCategoryLabels = {
+        smartphones: currentRegion === 'US' ? 'Phones' : 'Smartphones',
+        laptops: ui.categoryBar.laptops,
+        gaming: currentRegion === 'US' ? 'Gaming' : 'Gaming',
+        audio: ui.categoryBar.audio,
+        tv: currentRegion === 'US' ? 'TVs' : 'TVs',
+        home: ui.categoryBar.home
+    };
+    document.querySelectorAll('[data-header-category]').forEach((button) => {
+        const key = button.getAttribute('data-header-category') || '';
+        if (headerCategoryLabels[key]) button.textContent = headerCategoryLabels[key];
+    });
+    setBrowseCategoryState(_activeBrowseCategory);
 
     setTextById('flash-deals-title', ui.home.flashDealsTitle);
     setTextById('flash-deals-view-all', ui.home.viewAll);
@@ -1474,27 +1626,28 @@ function updateSeasonTitle() {
 
 // SF V2: Smart Filter Suggestions with relevance scoring, toggle, persistence, expanded categories
 const _smartFilterActiveSet = new Set();
+let _smartFilterQueryKey = '';
 
 function _getSmartFilterStorageKey() {
     const q = String(document.getElementById('search-input')?.value || '').trim().toLowerCase().slice(0, 80);
     return q ? `lumu_sf:${q}` : '';
 }
 
-function _restoreSmartFilters() {
+function _syncSmartFiltersForQuery() {
     const key = _getSmartFilterStorageKey();
-    if (!key) return;
-    try {
-        const saved = JSON.parse(localStorage.getItem(key) || '[]');
-        if (Array.isArray(saved)) saved.forEach(k => _smartFilterActiveSet.add(k));
-    } catch { /* ignore */ }
+    if (key !== _smartFilterQueryKey) {
+        _smartFilterQueryKey = key;
+        _smartFilterActiveSet.clear();
+    }
 }
 
-function _persistSmartFilters() {
-    const key = _getSmartFilterStorageKey();
-    if (!key) return;
-    try {
-        localStorage.setItem(key, JSON.stringify([..._smartFilterActiveSet]));
-    } catch { /* quota exceeded — ignore */ }
+function resetSafeStoresToggle() {
+    const btnSafeStores = document.getElementById('btn-safe-stores');
+    if (!btnSafeStores) return;
+    btnSafeStores.setAttribute('data-safe', 'false');
+    btnSafeStores.classList.remove('border-emerald-500', 'bg-emerald-50', 'text-emerald-700');
+    btnSafeStores.classList.add('border-slate-200', 'bg-white', 'text-slate-600');
+    if (typeof renderActiveFiltersSummary === 'function') renderActiveFiltersSummary();
 }
 
 function renderSmartFilterSuggestions(products = []) {
@@ -1578,9 +1731,7 @@ function renderSmartFilterSuggestions(products = []) {
         return;
     }
 
-    // Restore saved active state for this query
-    _smartFilterActiveSet.clear();
-    _restoreSmartFilters();
+    _syncSmartFiltersForQuery();
 
     wrap.classList.remove('hidden');
     const label = document.createElement('span');
@@ -1608,15 +1759,9 @@ function renderSmartFilterSuggestions(products = []) {
                 _smartFilterActiveSet.add(item.key);
                 btn.className = 'sf-chip rounded-full border border-emerald-500 bg-emerald-600 text-white px-3 py-1.5 text-xs font-black shadow-sm hover:bg-emerald-700 transition-all';
             }
-            _persistSmartFilters();
             item.toggle();
         });
         wrap.appendChild(btn);
-
-        // Auto-activate if it was persisted as active
-        if (isActive) {
-            item.toggle();
-        }
     });
 }
 
@@ -1647,6 +1792,22 @@ function getResultLeadCopy(searchIntent = {}, totalResults = 0) {
         `Encontré ${totalResults} opciones para "${searchLabel}" en estado ${condition}. Te dejé primero los resultados más útiles y abajo un apoyo breve del shopper.`,
         `I found ${totalResults} options for "${searchLabel}" in ${condition} condition. I placed the most useful results first and a short shopper summary below.`
     );
+}
+
+function isBroadUiSearch(searchText = '') {
+    const normalized = String(searchText || '').toLowerCase().trim();
+    if (!normalized) return false;
+    if (/^(celulares?|smartphones?|telefonos?|tel[eé]fonos?|laptops?|notebooks?|computadoras?|aud[ií]fonos|headphones|earbuds|bocinas?|televisores?|pantallas?|tvs?|smart tv|hogar|electrodom[eé]sticos|aspiradoras?|freidoras?|cafeteras?)$/i.test(normalized)) {
+        return true;
+    }
+    const signals = [
+        /iphone|samsung|xiaomi|motorola|pixel/i,
+        /lenovo|hp|asus|dell|acer|macbook/i,
+        /tv|televisor|oled|qled|pantalla/i,
+        /aud[ií]fonos|gamer|bluetooth|speaker|bocina/i,
+        /robot aspiradora|aspiradora|hogar|oferta|barato/i
+    ].filter((pattern) => pattern.test(normalized)).length;
+    return signals >= 2 || normalized.split(/\s+/).length >= 4;
 }
 
 function syncLocationFilterLabels() {
@@ -2086,6 +2247,9 @@ async function initApp() {
         const btnDarkMode = document.getElementById('btn-dark-mode');
         iconMoon = document.getElementById('icon-moon');
         const categoryIconBar = document.getElementById('category-icon-bar');
+        const browseHubSection = document.getElementById('browse-hub-section');
+        const headerBrowseButtons = document.querySelectorAll('[data-header-category]');
+        const browseHubButtons = document.querySelectorAll('[data-browse-query]');
         const flashDealsSection = document.getElementById('flash-deals-section');
         const tendenciasSection = document.getElementById('tendencias-section');
         const productShowcase = document.getElementById('product-showcase');
@@ -2270,6 +2434,16 @@ async function initApp() {
                                     syncLocationFilterLabels();
                                 }, (err) => {
                                     console.warn('Geolocation denied or failed:', err);
+                                    if (typeof showGlobalFeedback === 'function') {
+                                        showGlobalFeedback(
+                                            currentRegion === 'US' 
+                                                ? 'Could not secure your location. Defaulting to Global search.' 
+                                                : 'No pudimos obtener tu ubicación. Buscando en "Todas partes".', 
+                                            'error'
+                                        );
+                                    }
+                                    // Reset buttons and force a fallback to global text
+                                    btn.textContent = currentRegion === 'US' ? '🌎 Global search' : '🌎 Todas partes';
                                     syncLocationFilterLabels();
                                 }, { timeout: 8000, maximumAge: 300000 });
                             }
@@ -2367,12 +2541,20 @@ async function initApp() {
 
         const btnToggleFilters = document.getElementById('btn-toggle-filters');
         const filtersCollapsible = document.getElementById('filters-collapsible');
+        const filtersMobileOverlay = document.getElementById('filters-mobile-overlay');
         const toggleFiltersLabel = document.getElementById('toggle-filters-label');
         const toggleFiltersIcon = document.getElementById('toggle-filters-icon');
 
         if (btnToggleFilters && filtersCollapsible) {
+            const isMobileFiltersViewport = () => window.innerWidth < 640;
             const syncFiltersPanel = (collapsed) => {
                 filtersCollapsible.classList.toggle('filters-collapsed', collapsed);
+                if (filtersMobileOverlay) {
+                    filtersMobileOverlay.classList.toggle('filters-open', !collapsed && isMobileFiltersViewport());
+                }
+                if (document.body) {
+                    document.body.classList.toggle('overflow-hidden', !collapsed && isMobileFiltersViewport());
+                }
                 if (toggleFiltersLabel) {
                     toggleFiltersLabel.textContent = collapsed ? getRegionUICopy().guidedSearch.toggleShow : getRegionUICopy().guidedSearch.toggleHide;
                 }
@@ -2382,13 +2564,26 @@ async function initApp() {
                 btnToggleFilters.setAttribute('aria-expanded', collapsed ? 'false' : 'true');
             };
 
-            const shouldCollapseInitially = window.innerWidth < 640;
-            syncFiltersPanel(shouldCollapseInitially);
+            const syncFiltersPanelForViewport = () => {
+                const shouldCollapse = window.innerWidth < 640;
+                syncFiltersPanel(shouldCollapse);
+            };
+
+            btnToggleFilters.setAttribute('aria-controls', 'filters-collapsible');
+            syncFiltersPanelForViewport();
 
             btnToggleFilters.addEventListener('click', () => {
                 const isCollapsed = filtersCollapsible.classList.contains('filters-collapsed');
                 syncFiltersPanel(!isCollapsed);
             });
+
+            if (filtersMobileOverlay) {
+                filtersMobileOverlay.addEventListener('click', () => {
+                    if (isMobileFiltersViewport()) syncFiltersPanel(true);
+                });
+            }
+
+            window.addEventListener('resize', syncFiltersPanelForViewport);
         }
 
         renderActiveFiltersSummary();
@@ -2398,6 +2593,8 @@ async function initApp() {
                 if (window.location.pathname === '/' || window.location.pathname.endsWith('/index.html')) {
                     e.preventDefault();
                     restoreHomeSections();
+                    revealLandingBrowseSections();
+                    setBrowseCategoryState('');
                     searchInput.value = '';
                     searchInput.style.height = '56px';
                     syncLocationFilterLabels();
@@ -2421,6 +2618,26 @@ async function initApp() {
                             }
                         }
                     }
+                });
+            });
+        }
+
+        if (headerBrowseButtons.length > 0) {
+            headerBrowseButtons.forEach((button) => {
+                button.addEventListener('click', () => {
+                    const query = button.getAttribute('data-browse-query');
+                    const categoryKey = button.getAttribute('data-header-category') || '';
+                    queueBrowseSearch(query, categoryKey);
+                });
+            });
+        }
+
+        if (browseHubButtons.length > 0) {
+            browseHubButtons.forEach((button) => {
+                button.addEventListener('click', () => {
+                    const query = button.getAttribute('data-browse-query');
+                    const categoryKey = button.getAttribute('data-browse-category') || '';
+                    queueBrowseSearch(query, categoryKey);
                 });
             });
         }
@@ -3125,23 +3342,23 @@ async function initApp() {
 
                 if (isRecent && suggestions.length > 0) {
                     const header = document.createElement('div');
-                    header.className = 'px-4 py-2.5 text-[10px] font-black text-slate-400 uppercase tracking-widest border-b border-slate-100 bg-slate-50';
-                    header.textContent = getLocalizedText('Búsquedas recientes', 'Recent searches');
+                    header.className = 'px-4 py-2 text-[11px] font-black uppercase tracking-widest text-slate-400';
+                    header.textContent = currentRegion === 'US' ? 'Recent searches' : 'Búsquedas recientes';
                     autocompleteDropdown.appendChild(header);
                 }
 
-                suggestions.forEach((sugg, i) => {
-                    const item = document.createElement('div');
-                    item.className = 'px-4 py-3.5 cursor-pointer hover:bg-emerald-50 flex items-center gap-3 transition-colors border-b border-slate-100 last:border-0 autocomplete-item bg-white';
+                suggestions.forEach((sugg) => {
+                    const safeSuggestion = typeof sugg === 'string' ? sugg : (sugg?.query || '');
+                    if (!safeSuggestion) return;
+                    const item = document.createElement('button');
+                    item.type = 'button';
+                    item.className = 'autocomplete-item w-full flex items-center gap-3 px-4 py-3 text-left hover:bg-slate-50 transition-colors';
                     const icon = isRecent
-                        ? '<svg class="w-4 h-4 text-slate-400 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>'
-                        : '<svg class="w-4 h-4 text-slate-400 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg>';
-                    item.innerHTML = `
-                        ${icon}
-                        <span class="text-sm font-medium text-slate-700 truncate">${sugg}</span>
-                    `;
+                        ? '<svg class="w-4 h-4 text-slate-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>'
+                        : '<svg class="w-4 h-4 text-emerald-500 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-4.35-4.35m1.85-5.15a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg>';
+                    item.innerHTML = `${icon}<span class="text-sm font-medium text-slate-700 truncate">${sanitize(safeSuggestion)}</span>`;
                     item.addEventListener('click', () => {
-                        searchInput.value = sugg;
+                        searchInput.value = safeSuggestion;
                         closeAutocomplete();
                         searchForm.dispatchEvent(new Event('submit', { cancelable: true, bubbles: true }));
                     });
@@ -3395,11 +3612,7 @@ async function initApp() {
                 resultsWrapper.classList.remove('hidden');
 
                 // Ocultar elementos de la landing page durante la búsqueda
-                if (categoryIconBar) categoryIconBar.classList.add('hidden');
-                if (flashDealsSection) flashDealsSection.classList.add('hidden');
-                if (tendenciasSection) tendenciasSection.classList.add('hidden');
-                if (productShowcase) productShowcase.classList.add('hidden');
-                if (extraSections) extraSections.classList.add('hidden');
+                hideLandingBrowseSections();
 
                 renderSkeletons(5);
                 if (!skipLLM) resultsWrapper.scrollIntoView({ behavior: 'smooth', block: 'start' });
@@ -3407,6 +3620,10 @@ async function initApp() {
                 const safeChatHistory = chatHistory.slice(-10);
 
                 const btnSafeStores = document.getElementById('btn-safe-stores');
+                if (_smartFilterActiveSet.has('safe')) {
+                    _smartFilterActiveSet.delete('safe');
+                    resetSafeStoresToggle();
+                }
                 const safeStoresOnly = btnSafeStores ? btnSafeStores.getAttribute('data-safe') === 'true' : false;
 
                 const searchBody = {
@@ -3440,10 +3657,11 @@ async function initApp() {
                 }
 
                 // Track search event for conversion analytics
-                _trackEvent('search', { search_query: finalQuery });
+                const searchId = `search_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
                 window._lastSearchQuery = finalQuery;
                 window._lastSearchHadClick = false;
-                window._lastSearchContext = { canonical_key: '', product_category: '' };
+                window._lastSearchContext = { canonical_key: '', product_category: '', search_id: searchId, search_query: finalQuery };
+                _trackEvent('search', { search_query: finalQuery, search_id: searchId, action_context: 'search_submit' });
                 if (_conversionBounceTimer) clearTimeout(_conversionBounceTimer);
 
                 const response = await fetch('/api/buscar', {
@@ -3545,7 +3763,9 @@ async function initApp() {
                     chatContainer.innerHTML = '';
                     window._lastSearchContext = {
                         canonical_key: data.search_metadata?.canonical_key || '',
-                        product_category: data.search_metadata?.product_category || ''
+                        product_category: data.search_metadata?.product_category || '',
+                        search_id: (window._lastSearchContext && window._lastSearchContext.search_id) || '',
+                        search_query: finalQuery
                     };
                     // Increment search count after successful result
                     let sgData = JSON.parse(localStorage.getItem('lumu_searches_data') || '{"count": 0, "date": ""}');
@@ -4335,7 +4555,7 @@ async function initApp() {
         });
 
         function applyFiltersAndSort() {
-            const sortVal = document.getElementById('sort-select')?.value || 'price-asc';
+            const sortVal = document.getElementById('sort-select')?.value || 'recommended';
             const storeVal = document.getElementById('store-filter')?.value || 'all';
             const freeShippingOnly = document.getElementById('free-shipping-filter')?.checked || false;
             const minVal = parseFloat(document.getElementById('price-min')?.value);
@@ -4441,12 +4661,33 @@ async function initApp() {
             resultsContainer.innerHTML = '';
             const onlyCouponsInput = document.getElementById('only-coupons');
             const onlyRealDealsInput = document.getElementById('only-real-deals');
+            const currentSearchText = document.getElementById('search-input')?.value || '';
+            const broadUiSearch = isBroadUiSearch(currentSearchText);
             const filteredProducts = (products || []).filter((product) => {
                 if (onlyCouponsInput?.value === 'true' && !product.cupon) {
                     return false;
                 }
                 if (onlyRealDealsInput?.value === 'true' && product.dealVerdict?.status !== 'real_deal') {
                     return false;
+                }
+                // Hide online products with no price — they would show 'Ver precio en tienda'
+                // which provides poor UX. Local store results are exempt since price-in-store is expected.
+                if (!product.isLocalStore) {
+                    const rawP = product.precio;
+                    const hasVerifiedSignal = Number(product.priceConfidence || 0) >= 0.45 || product.resultSource === 'shopping_api' || product.resultSource === 'official_web' || Number(product.storeTier || 0) === 1;
+                    if (rawP == null || rawP === '' || rawP === 'null' || rawP === 0 || rawP === '0') {
+                        if (hasVerifiedSignal && (broadUiSearch || Number(product.storeTier || 0) === 1) && (product.urlOriginal || product.urlMonetizada)) {
+                            return true;
+                        }
+                        return false;
+                    }
+                    const numP = typeof rawP === 'number' ? rawP : parseFloat(String(rawP).replace(/[^0-9.-]/g, ''));
+                    if (Number.isNaN(numP) || numP <= 0) {
+                        if (hasVerifiedSignal && (broadUiSearch || Number(product.storeTier || 0) === 1) && (product.urlOriginal || product.urlMonetizada)) {
+                            return true;
+                        }
+                        return false;
+                    }
                 }
                 return true;
             });
@@ -4565,6 +4806,10 @@ async function initApp() {
             const minPrice = validPrices.length > 0 ? Math.min(...validPrices) : null;
 
             products.forEach((product, index) => {
+                const imageState = buildImageRenderState(product, isUS);
+                const normalizedTitle = imageState.title;
+                const shippingSource = product.shippingText || product.shippingLabel || product.deliveryText || product.deliveryLabel || product.couponDetails || '';
+                const localizedShippingText = localizeDynamicResultText(shippingSource, isUS);
                 let rawPrice = product.precio || 0;
                 let precioNumerico = 0;
 
@@ -4600,52 +4845,15 @@ async function initApp() {
                 const isBestPrice = minPrice && precioNumerico === minPrice && precioNumerico > 0;
                 
                 const heartColor = isAlreadyFav ? 'text-red-500' : 'text-slate-300';
-                let sourceColor = 'text-slate-500';
-                // Botón primario usa color Emerald
-                let btnColor = 'bg-primary hover:bg-emerald-600 text-white';
-
                 const tiendaLower = (product.tienda || product.fuente || '').toLowerCase();
-                if (tiendaLower.includes('amazon')) {
-                    sourceColor = 'text-slate-800 font-extrabold';
-                    btnColor = 'bg-[#FF9900] hover:bg-orange-500 text-slate-900';
-                } else if (tiendaLower.includes('libre')) {
-                    sourceColor = 'text-blue-700 font-extrabold';
-                    btnColor = 'bg-[#ffe600] hover:bg-yellow-400 text-slate-900';
-                }
+                const preferredClickTarget = product.urlOriginal || product.urlMonetizada || '';
 
                 const card = document.createElement('div');
-                card.className = 'group product-card bg-white dark:bg-slate-800 rounded-[24px] hover:shadow-xl transition-all duration-200 overflow-hidden flex flex-col relative h-full fade-in border border-slate-200 dark:border-slate-700 shadow-sm';
-
-                // Store-specific fallback logos when no product image
-                const storeFallbacks = {
-                    'amazon': 'https://upload.wikimedia.org/wikipedia/commons/a/a9/Amazon_logo.svg',
-                    'mercado': 'https://http2.mlstatic.com/frontend-assets/ml-web-navigation/ui-navigation/6.6.73/mercadolibre/logo_large_25years@2x.png',
-                    'libre': 'https://http2.mlstatic.com/frontend-assets/ml-web-navigation/ui-navigation/6.6.73/mercadolibre/logo_large_25years@2x.png',
-                    'walmart': 'https://upload.wikimedia.org/wikipedia/commons/c/ca/Walmart_logo.svg',
-                    'liverpool': 'https://upload.wikimedia.org/wikipedia/commons/thumb/6/6f/Liverpool_%28store%29_logo.svg/320px-Liverpool_%28store%29_logo.svg.png',
-                    'coppel': 'https://upload.wikimedia.org/wikipedia/commons/thumb/1/18/Coppel_logo.svg/320px-Coppel_logo.svg.png',
-                    'best buy': 'https://upload.wikimedia.org/wikipedia/commons/f/f5/Best_Buy_Logo.svg',
-                    'elektra': 'https://upload.wikimedia.org/wikipedia/commons/thumb/9/90/Elektra_logo.svg/320px-Elektra_logo.svg.png',
-                    'costco': 'https://upload.wikimedia.org/wikipedia/commons/5/59/Costco_Wholesale_logo_2010-10-26.svg',
-                    'sam': 'https://upload.wikimedia.org/wikipedia/commons/9/9a/Sam%27s_Club.svg',
-                    'falabella': 'https://upload.wikimedia.org/wikipedia/commons/thumb/6/65/Falabella.svg/512px-Falabella.svg.png'
-                };
-                const defaultFallback = buildFallbackProductImage(product.tienda || product.titulo || 'Lumu');
-                const matchedStore = Object.entries(storeFallbacks).find(([key]) => tiendaLower.includes(key));
-                const fallbackImgUrl = defaultFallback;
-                let imgUrl = typeof (product.imgUrl || product.imagen) === 'string' ? String(product.imgUrl || product.imagen).trim() : '';
-                const isMissingImage = !imgUrl || /^(null|undefined|about:blank)$/i.test(imgUrl) || /placeholder|no[\s_-]?image/i.test(imgUrl);
-                const isDataImage = imgUrl.startsWith('data:image/');
-                const isRemoteImage = /^https?:\/\//i.test(imgUrl);
-                const isLocalImage = imgUrl.startsWith('/') || imgUrl.startsWith('./') || imgUrl.startsWith('../');
-                const looksLikeStoreLogo = /logo|mercadolibre|costco|walmart|amazon|coppel|liverpool|sams|best[\s_-]?buy|elektra/i.test(imgUrl);
-                if (isMissingImage) {
-                    imgUrl = matchedStore ? matchedStore[1] : fallbackImgUrl;
-                } else if (isDataImage || isRemoteImage || isLocalImage) {
-                    imgUrl = looksLikeStoreLogo ? (matchedStore ? matchedStore[1] : fallbackImgUrl) : imgUrl;
-                } else {
-                    imgUrl = matchedStore ? matchedStore[1] : fallbackImgUrl;
-                }
+                card.className = 'group product-card bg-white dark:bg-slate-800 rounded-[20px] md:rounded-[24px] hover:shadow-xl transition-all duration-200 overflow-hidden flex flex-col relative h-full fade-in border border-slate-200 dark:border-slate-700 shadow-sm cursor-pointer';
+                card.setAttribute('role', 'link');
+                card.setAttribute('tabindex', '0');
+                card.setAttribute('data-target-url', preferredClickTarget);
+                card.setAttribute('aria-label', `${isUS ? 'Open offer for' : 'Abrir oferta de'} ${normalizedTitle}`);
 
                 // Local store: price can be null
                 const isLocal = product.isLocalStore;
@@ -4860,13 +5068,15 @@ async function initApp() {
                 const c2cBadgeHtml = product.isC2C
                     ? '<span class="text-[9px] font-bold text-rose-700 bg-rose-50 px-2 py-0.5 rounded-full ring-1 ring-rose-200">C2C</span>'
                     : '';
-
-                const productAlt = sanitize(product.titulo || (isUS ? 'Product' : 'Producto')) + ' - ' + sanitize(product.tienda || (isUS ? 'Store' : 'Tienda'));
+                const shippingBadgeHtml = localizedShippingText && !/coupon available|cup[oó]n disponible/i.test(localizedShippingText)
+                    ? `<div class="text-[11px] text-emerald-600 font-bold bg-emerald-50 w-fit px-2 py-0.5 rounded-md mt-2 tracking-wide">${sanitize(localizedShippingText)}</div>`
+                    : '';
+                const productAlt = sanitize(normalizedTitle || (isUS ? 'Product' : 'Producto')) + ' - ' + sanitize(product.tienda || (isUS ? 'Store' : 'Tienda'));
                 card.innerHTML = `
                 ${priceDropBadge}
-                <!-- Image Section -->
-                <div class="w-full bg-slate-50 border-b border-slate-100 flex-shrink-0 h-40 md:h-48 flex items-center justify-center p-3 md:p-4 relative overflow-hidden group-hover:bg-emerald-50/30 transition-colors">
-                    <img src="${imgUrl}" alt="${productAlt}" loading="lazy" referrerpolicy="no-referrer" data-fallback-src="${fallbackImgUrl}" class="w-full h-full object-contain group-hover:scale-105 transition-transform duration-500 ease-out" onerror="this.onerror=null; this.src=this.dataset.fallbackSrc;">
+                <div class="w-full bg-gradient-to-b from-slate-50 to-white border-b border-slate-100 flex-shrink-0 h-36 sm:h-40 md:h-52 flex items-center justify-center p-3 md:p-4 relative overflow-hidden group-hover:bg-emerald-50/20 transition-colors">
+                    <img src="${imageState.finalImgUrl}" alt="${productAlt}" loading="lazy" referrerpolicy="no-referrer" data-fallback-src="${imageState.fallbackImgUrl}" class="w-full h-full object-contain group-hover:scale-105 transition-transform duration-500 ease-out ${imageState.hasProductImage ? '' : 'opacity-95'}" onerror="this.onerror=null; this.src=this.dataset.fallbackSrc;">
+                    ${imageState.hasProductImage ? '' : `<div class="absolute left-3 bottom-3 inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-white/90 border border-slate-200 text-[10px] font-bold text-slate-500 shadow-sm">${sanitize(product.tienda || (isUS ? 'Store' : 'Tienda'))}</div>`}
                     <button class="btn-favorite absolute top-2 right-2 p-2 bg-white/80 dark:bg-slate-800/80 backdrop-blur rounded-full ${heartColor} hover:text-red-500 hover:bg-white dark:hover:bg-slate-800 shadow-sm transition-all z-20 hover:scale-110">
                         <svg class="w-5 h-5 drop-shadow-sm" fill="currentColor" viewBox="0 0 24 24"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/></svg>
                     </button>
@@ -4877,13 +5087,13 @@ async function initApp() {
                 </div>
 
                 <!-- Info Section -->
-                <div class="flex-grow flex flex-col p-3.5 md:p-4 w-full">
-                    <div class="flex items-start justify-between mb-2 gap-2">
-                        <div class="flex items-center gap-1.5">
-                            <span class="text-[10px] font-black text-slate-500 uppercase tracking-widest bg-slate-100 px-2 py-1 rounded-full max-w-[70%] truncate">${sanitize(product.tienda)}</span>
+                <div class="flex-grow flex flex-col p-3 md:p-4 w-full">
+                    <div class="flex flex-col sm:flex-row sm:items-start sm:justify-between mb-2 gap-2">
+                        <div class="flex items-center gap-1.5 min-w-0">
+                            <span class="text-[10px] font-black text-slate-500 uppercase tracking-widest bg-slate-100 px-2 py-1 rounded-full max-w-full sm:max-w-[70%] truncate">${sanitize(product.tienda)}</span>
                             ${(tiendaLower.includes('amazon') || tiendaLower.includes('walmart') || tiendaLower.includes('liverpool') || tiendaLower.includes('mercado') || tiendaLower.includes('bodega aurrera') || tiendaLower.includes('linio') || tiendaLower.includes('claro shop') || tiendaLower.includes('sanborns') || tiendaLower.includes('costco') || tiendaLower.includes('best buy')) ? `<span class="text-emerald-600" title="${isUS ? 'Verified store' : 'Tienda verificada'}">✓</span>` : ''}
                         </div>
-                        <div class="flex items-center gap-1">
+                        <div class="flex flex-wrap items-center gap-1">
                             ${isBestPrice ? `<span class="text-[9px] font-bold text-white bg-gradient-to-r from-emerald-500 to-teal-500 px-2 py-0.5 rounded-full ring-2 ring-emerald-200 shadow-sm animate-pulse">💰 ${isUS ? 'BEST PRICE' : 'MEJOR PRECIO'}</span>` : ''}
                             ${product.isLocalStore ? `<span class="text-[9px] font-bold text-emerald-700 bg-emerald-100 px-2 py-0.5 rounded-full ring-1 ring-emerald-200">📍 ${isUS ? 'LOCAL' : 'LOCAL'}</span>` : ''}
                             ${trustBadgeHtml}
@@ -4893,13 +5103,14 @@ async function initApp() {
                         </div>
                     </div>
                     
-                    <h3 class="text-[13px] md:text-sm font-extrabold text-slate-900 dark:text-slate-100 leading-snug line-clamp-2 min-h-[2.6rem] mb-2.5 group-hover:text-emerald-700 dark:group-hover:text-emerald-400 transition-colors" title="${sanitize(product.titulo)}">
-                        ${sanitize(product.titulo)}
+                    <h3 class="text-sm md:text-[15px] font-extrabold text-slate-900 dark:text-slate-100 leading-snug line-clamp-3 min-h-[3.1rem] md:min-h-[3.5rem] mb-2 group-hover:text-emerald-700 dark:group-hover:text-emerald-400 transition-colors" title="${sanitize(normalizedTitle)}">
+                        ${sanitize(normalizedTitle)}
                     </h3>
+                    ${shippingBadgeHtml}
                     ${localDetailHtml}
 
                     <div class="mt-auto flex flex-col w-full">
-                        <div class="flex items-baseline gap-0.5 mb-1.5 flex-wrap">
+                        <div class="flex items-baseline gap-0.5 mb-1 flex-wrap">
                             ${priceDisplay}
                         </div>
                         ${trendHtml}
@@ -4909,16 +5120,16 @@ async function initApp() {
                         ${couponHtml}
                         
                         <div class="flex flex-col gap-2 mt-3 w-full">
-                            <button class="btn-open-offer w-full bg-primary hover:bg-emerald-600 text-white text-sm font-bold py-3 rounded-xl shadow-lg shadow-emerald-500/20 hover:shadow-xl hover:shadow-emerald-500/25 transition-all transform active:scale-95 flex items-center justify-center gap-2"
-                                    data-target-url="${product.urlMonetizada || product.urlOriginal}">
+                            <button class="btn-open-offer w-full bg-primary hover:bg-emerald-600 text-white text-sm font-bold py-3 rounded-xl shadow-lg shadow-emerald-500/20 hover:shadow-xl hover:shadow-emerald-500/25 transition-all transform active:scale-95 flex items-center justify-center gap-2 min-h-[44px]"
+                                    data-target-url="${preferredClickTarget}">
                                 ${isLocal ? ((product.urlOriginal && product.urlOriginal.includes('maps')) ? (isUS ? 'View in Maps' : 'Ver en Maps') : (isUS ? 'Go to Store' : 'Ir a Tienda')) : (isUS ? 'View Offer' : 'Ver Oferta')}
                                 <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M14 5l7 7m0 0l-7 7m7-7H3"/></svg>
                             </button>
                             
                             <!-- Acciones secundarias en botones Outline abajo -->
                             ${(!isLocal && precioNumerico > 0) ? `
-                            <div class="grid grid-cols-2 sm:grid-cols-3 gap-2 w-full mt-1">
-                                <button class="btn-quick-alert flex-1 py-1.5 flex justify-center items-center gap-1.5 bg-white text-slate-600 hover:text-amber-600 hover:bg-amber-50 rounded-xl border border-slate-200 hover:border-amber-300 transition-all text-xs font-bold shadow-sm" title="${isUS ? 'Price alert' : 'Alerta de precio'}"
+                            <div class="grid grid-cols-2 gap-2 w-full mt-1">
+                                <button class="btn-quick-alert flex-1 min-h-[42px] py-2 flex justify-center items-center gap-1.5 bg-white text-slate-600 hover:text-amber-600 hover:bg-amber-50 rounded-xl border border-slate-200 hover:border-amber-300 transition-all text-xs font-bold shadow-sm" title="${isUS ? 'Price alert' : 'Alerta de precio'}"
                                         data-alert-name="${sanitize(product.titulo)}"
                                         data-alert-price="${precioNumerico}"
                                         data-alert-url="${product.urlMonetizada || product.urlOriginal}"
@@ -4926,13 +5137,13 @@ async function initApp() {
                                     <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"/></svg>
                                     ${isUS ? 'Alert me' : 'Avisarme'}
                                 </button>
-                                <button class="btn-margin-calc flex-1 py-1.5 flex justify-center items-center gap-1.5 bg-white text-slate-600 hover:text-blue-600 hover:bg-blue-50 rounded-xl border border-slate-200 hover:border-blue-300 transition-all text-xs font-bold shadow-sm" title="${isUS ? 'Dropshipping calculator' : 'Calculadora Dropshipping'}"
+                                <button class="btn-margin-calc flex-1 min-h-[42px] py-2 flex justify-center items-center gap-1.5 bg-white text-slate-600 hover:text-blue-600 hover:bg-blue-50 rounded-xl border border-slate-200 hover:border-blue-300 transition-all text-xs font-bold shadow-sm" title="${isUS ? 'Dropshipping calculator' : 'Calculadora Dropshipping'}"
                                         data-cost-price="${precioNumerico}"
                                         data-product-name="${sanitize(product.titulo)}">
                                     <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M9 7h6m0 10v-3m-3 3h.01M9 17h.01M9 14h.01M12 14h.01M15 11h.01M12 11h.01M9 11h.01M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z"/></svg>
                                     <span>${isUS ? 'Margin' : 'Margen'}</span>
                                 </button>
-                                <button class="btn-view-history flex-1 py-1.5 flex justify-center items-center gap-1.5 bg-white text-slate-600 hover:text-emerald-700 hover:bg-emerald-50 rounded-xl border border-slate-200 hover:border-emerald-300 transition-all text-xs font-bold shadow-sm" title="${isUS ? 'Price history' : 'Historial de precio'}">
+                                <button class="btn-view-history col-span-2 sm:col-span-1 flex-1 min-h-[42px] py-2 flex justify-center items-center gap-1.5 bg-white text-slate-600 hover:text-emerald-700 hover:bg-emerald-50 rounded-xl border border-slate-200 hover:border-emerald-300 transition-all text-xs font-bold shadow-sm" title="${isUS ? 'Price history' : 'Historial de precio'}">
                                     <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M3 3v18h18M7 14l3-3 3 2 4-5"></path></svg>
                                     <span>${isUS ? 'History' : 'Historial'}</span>
                                 </button>
@@ -4949,7 +5160,7 @@ async function initApp() {
                         "@context": "https://schema.org/",
                         "@type": "Product",
                         "name": product.titulo,
-                        "image": [imgUrl],
+                        "image": [imageState.finalImgUrl],
                         "brand": {
                             "@type": "Brand",
                             "name": product.tienda || (isUS ? "Online Store" : "Tienda Online")
@@ -4985,34 +5196,65 @@ async function initApp() {
                 const btnOpenOffer = card.querySelector('.btn-open-offer');
                 const btnCompare = card.querySelector('.btn-compare');
                 const btnViewHistory = card.querySelector('.btn-view-history');
+                const trackingBase = _buildProductTrackingPayload(product, {
+                    position: index,
+                    action_context: 'result_card'
+                });
+                const openProductTarget = (target) => {
+                    window._lastSearchHadClick = true;
+                    if (_conversionBounceTimer) {
+                        clearTimeout(_conversionBounceTimer);
+                        _conversionBounceTimer = null;
+                    }
+
+                    _trackEvent('click', {
+                        ...trackingBase,
+                        url: target || product.urlMonetizada || product.urlOriginal || '',
+                        action_context: 'open_offer'
+                    });
+
+                    if (typeof trackProductClick === 'function') {
+                        trackProductClick(product.titulo, product.tienda, precioNumerico);
+                    }
+
+                    if (target && target !== 'undefined' && target !== 'null') {
+                        window.open(target, '_blank');
+                    } else {
+                        console.warn(isUS ? 'Offer URL not found for this product' : 'URL de oferta no encontrada para este producto');
+                    }
+                };
                 
                 if (btnOpenOffer) {
                     btnOpenOffer.addEventListener('click', (e) => {
                         e.preventDefault();
-                        const target = btnOpenOffer.getAttribute('data-target-url');
-                        window._lastSearchHadClick = true;
-                        if (_conversionBounceTimer) {
-                            clearTimeout(_conversionBounceTimer);
-                            _conversionBounceTimer = null;
-                        }
-                        
-                        // Track product click in Google Analytics
-                        if (typeof trackProductClick === 'function') {
-                            trackProductClick(product.titulo, product.tienda, precioNumerico);
-                        }
-                        
-                        if (target && target !== 'undefined' && target !== 'null') {
-                            window.open(target, '_blank');
-                        } else {
-                            console.warn(isUS ? 'Offer URL not found for this product' : 'URL de oferta no encontrada para este producto');
-                        }
+                        e.stopPropagation();
+                        openProductTarget(btnOpenOffer.getAttribute('data-target-url'));
                     });
                 }
+                card.addEventListener('click', (e) => {
+                    if (e.target.closest('button, a, input, textarea, select, label')) {
+                        return;
+                    }
+                    openProductTarget(card.getAttribute('data-target-url'));
+                });
+                card.addEventListener('keydown', (e) => {
+                    if (e.target !== card) {
+                        return;
+                    }
+                    if (e.key === 'Enter' || e.key === ' ') {
+                        e.preventDefault();
+                        openProductTarget(card.getAttribute('data-target-url'));
+                    }
+                });
                 // Compare toggle
                 if (btnCompare) {
                     btnCompare.addEventListener('click', (e) => {
                         e.stopPropagation();
                         toggleCompare(product, precioNumerico, formattedPrice);
+                        _trackEvent('compare', {
+                            ...trackingBase,
+                            action_context: 'compare_toggle'
+                        });
                         btnCompare.animate([
                             { transform: 'scale(1)' },
                             { transform: 'scale(1.25)' },
@@ -5024,6 +5266,10 @@ async function initApp() {
                     btnViewHistory.addEventListener('click', (e) => {
                         e.preventDefault();
                         e.stopPropagation();
+                        _trackEvent('history_open', {
+                            ...trackingBase,
+                            action_context: 'price_history_modal'
+                        });
                         openProductHistoryModal(product);
                     });
                 }
@@ -5040,6 +5286,10 @@ async function initApp() {
                             await window.supabaseClient.from('favorites').delete().eq('user_id', window.currentUser.id).eq('product_url', product.urlMonetizada || product.urlOriginal);
                             btnFav.classList.remove('text-red-500');
                             btnFav.classList.add('text-slate-300');
+                            _trackEvent('favorite_remove', {
+                                ...trackingBase,
+                                action_context: 'favorite_remove'
+                            });
                         } else {
                             // Add
                             await window.supabaseClient.from('favorites').insert([{
@@ -5052,6 +5302,10 @@ async function initApp() {
                             }]);
                             btnFav.classList.add('text-red-500');
                             btnFav.classList.remove('text-slate-300');
+                            _trackEvent('favorite', {
+                                ...trackingBase,
+                                action_context: 'favorite_add'
+                            });
 
                             // Micro-animation
                             btnFav.animate([
@@ -5074,6 +5328,14 @@ async function initApp() {
                         const price = parseFloat(btnQuickAlert.getAttribute('data-alert-price'));
                         const url = btnQuickAlert.getAttribute('data-alert-url');
                         const store = btnQuickAlert.getAttribute('data-alert-store');
+                        _trackEvent('alert_create', {
+                            ...trackingBase,
+                            product_title: name || product.titulo,
+                            price: Number(price || 0) || undefined,
+                            url: url || product.urlMonetizada || product.urlOriginal || '',
+                            store: store || product.tienda,
+                            action_context: 'quick_alert'
+                        });
                         window.createQuickAlert(name, price, url, store);
                     });
                 }

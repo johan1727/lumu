@@ -45,16 +45,78 @@ const REGION_PROMPT_CONTEXT = {
 const llmResponseSchema = z.object({
     action: z.enum(['ask', 'search', 'search_service']),
     intent_type: z.enum(['producto', 'servicio_local', 'mayoreo', 'mayoreo_perecedero', 'ocio', 'otro']).optional(),
+    queryType: z.enum(['generic', 'brand_model', 'conversational', 'speculative', 'comparison', 'url_like', 'cross_locale', 'need_based', 'coupon_deal']).optional().default('generic'),
     question: z.string().max(1000).nullable().optional(),
     sugerencias: z.array(z.string().max(300)).max(10).optional(),
     cupon: z.string().max(100).nullable().optional(),
     searchQuery: z.string().max(500).optional().default(''),
-    alternativeQueries: z.array(z.string().max(500)).max(5).optional(),
+    normalizedQuery: z.string().max(500).optional(),
+    alternativeQueries: z.array(z.string().max(500)).max(6).optional(),
+    brandOfficialQuery: z.string().max(300).nullable().optional(),
     condition: z.enum(['new', 'used']).optional().default('new'),
     canonicalKey: z.string().max(160).optional(),
     priceVolatility: z.enum(['high', 'medium', 'low']).optional().default('medium'),
-    productCategory: z.string().max(80).optional()
+    productCategory: z.string().max(80).optional(),
+    maxBudget: z.number().positive().max(100000000).optional(),
+    aiSummary: z.string().max(600).nullable().optional(),
+    isComparison: z.boolean().optional().default(false),
+    comparisonProducts: z.array(z.string().max(200)).max(4).optional(),
+    isSpeculative: z.boolean().optional().default(false),
+    needsDisambiguation: z.boolean().optional().default(false),
+    disambiguationOptions: z.array(z.string().max(200)).max(4).optional(),
+    commercialReadiness: z.number().min(0).max(1).optional().default(0.8),
+    searchLanguage: z.enum(['es', 'en', 'auto']).optional().default('auto'),
+    excludeTerms: z.array(z.string().max(60)).max(8).optional(),
+    reasoning: z.string().max(400).nullable().optional()
 });
+
+// --- PRE-PROCESSING: LatAm slang/abbreviation expansion ---
+const SLANG_EXPANSIONS = {
+    // MX slang
+    'cel': 'celular', 'compu': 'computadora', 'lap': 'laptop', 'refri': 'refrigerador',
+    'micro': 'microondas', 'lavadora': 'lavadora', 'tele': 'televisión', 'bici': 'bicicleta',
+    'moto': 'motocicleta', 'depa': 'departamento', 'chamba': 'trabajo', 'jale': 'trabajo',
+    'lana': 'dinero', 'neta': 'verdad', 'chido': 'bueno', 'padre': 'bueno',
+    // AR slang
+    'celu': 'celular', 'compu': 'computadora', 'birra': 'cerveza', 'facu': 'facultad',
+    'laburo': 'trabajo', 'guita': 'dinero', 'pila': 'batería',
+    // CL slang
+    'celu': 'celular', 'note': 'notebook', 'pega': 'trabajo',
+    // Tech abbreviations
+    'tb': 'terabyte', 'ssd': 'ssd', 'hdd': 'disco duro', 'ram': 'ram',
+    'gpu': 'tarjeta gráfica', 'cpu': 'procesador', 'fps': 'fps',
+    'bt': 'bluetooth', 'wifi': 'wifi', 'usb': 'usb', 'hdmi': 'hdmi',
+    'oled': 'oled', 'qled': 'qled', 'uhd': '4k uhd', '4k': '4k',
+    // Common misspellings
+    'iphome': 'iphone', 'ipone': 'iphone', 'samung': 'samsung', 'samsun': 'samsung',
+    'huawey': 'huawei', 'huaway': 'huawei', 'xaomi': 'xiaomi', 'xiomi': 'xiaomi',
+    'lapto': 'laptop', 'lapton': 'laptop', 'audifo': 'audífonos', 'audifono': 'audífonos',
+    'plastation': 'playstation', 'pleisteishon': 'playstation', 'nintengo': 'nintendo',
+    'mackbook': 'macbook', 'macbok': 'macbook', 'airpod': 'airpods',
+    'imac': 'imac', 'ipad': 'ipad', 'aipod': 'airpods', 'airpot': 'airpods'
+};
+
+function preExpandSlang(text) {
+    if (!text || typeof text !== 'string') return text;
+    const words = text.split(/\s+/);
+    const expanded = words.map(word => {
+        const lower = word.toLowerCase().replace(/[^a-záéíóúñü0-9]/gi, '');
+        return SLANG_EXPANSIONS[lower] || word;
+    });
+    return expanded.join(' ');
+}
+
+function detectQueryLanguage(text) {
+    if (!text) return 'auto';
+    const lower = text.toLowerCase();
+    const esIndicators = /\b(busco|quiero|necesito|comprar|precio|barato|bueno|mejor|donde|cual|cuál|para|con|sin|menos|más|oferta|descuento|tienda)\b/;
+    const enIndicators = /\b(buy|price|cheap|best|where|which|for|with|without|under|deal|discount|store|looking|want|need)\b/;
+    const esScore = (lower.match(esIndicators) || []).length;
+    const enScore = (lower.match(enIndicators) || []).length;
+    if (esScore > enScore) return 'es';
+    if (enScore > esScore) return 'en';
+    return 'auto';
+}
 
 // SECURITY FIX #7: Sanitize user input to prevent prompt injection
 function sanitizeUserInput(text) {
@@ -73,6 +135,560 @@ function sanitizeUserInput(text) {
         .slice(0, 500);  // Hard limit
 }
 
+function slugifyCanonicalKey(text) {
+    return String(text || '')
+        .toLowerCase()
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .replace(/[^a-z0-9]+/g, '_')
+        .replace(/^_+|_+$/g, '')
+        .slice(0, 160);
+}
+
+function detectCondition(text) {
+    const normalized = String(text || '').toLowerCase();
+    return /\b(usado|seminuevo|segunda mano|preowned|pre-owned|refurbished|reacondicionado|renewed|open box)\b/.test(normalized)
+        ? 'used'
+        : 'new';
+}
+
+function extractMaxBudget(text) {
+    const normalized = String(text || '').toLowerCase();
+    const budgetMatch = normalized.match(/(?:menos de|under|max(?:imo)?|hasta|budget|presupuesto de?)\s*\$?\s*([\d.,]+)/i);
+    if (!budgetMatch) return undefined;
+    const parsed = Number(String(budgetMatch[1]).replace(/,/g, ''));
+    return Number.isFinite(parsed) && parsed > 0 ? parsed : undefined;
+}
+
+function isUrlLikeQuery(text) {
+    return /\[filtered url\]|https?:\/\/|www\.|\b[a-z0-9-]+\.(com|mx|cl|co|ar|pe|net|org)\b/i.test(String(text || ''));
+}
+
+function isWeakCommerceQuery(text) {
+    const normalized = String(text || '').toLowerCase().trim();
+    if (!normalized) return true;
+    if (isUrlLikeQuery(normalized)) return true;
+    if (/^(pero|ok|hola|hello|hi|gracias|thanks)$/i.test(normalized)) return true;
+    if (/\b(ignore|forget|override|prompt|divine comedy|recite|recithe)\b/i.test(normalized)) return true;
+    if (/^(i want the cheapest option available|comp[aá]rame precios y dime cu[aá]l conviene m[aá]s)$/i.test(normalized)) return true;
+    return false;
+}
+
+function isBrowseIntent(text) {
+    const normalized = String(text || '').toLowerCase().trim();
+    if (!normalized) return false;
+    if (/\b(tecnolog[ií]a|hogar|moda|electrodom[eé]sticos|juguetes|gaming)\b/.test(normalized) && normalized.split(/\s+/).length <= 6) {
+        return true;
+    }
+    if (/^(celulares?|smartphones?|telefonos?|tel[eé]fonos?|laptops?|notebooks?|computadoras?|aud[ií]fonos|headphones|earbuds|bocinas?|televisores?|pantallas?|tvs?|smart tv|hogar|electrodom[eé]sticos|aspiradoras?|freidoras?|cafeteras?)$/i.test(normalized)) {
+        return true;
+    }
+    const broadMatches = [
+        /freidora|aspiradora|refrigerador|hogar/i,
+        /ps5|xbox|nintendo|gaming/i,
+        /celulares|laptops|aud[ií]fonos|gadgets/i,
+        /juguetes|juegos de mesa|consolas|ni[nñ]os/i
+    ].filter(pattern => pattern.test(normalized)).length;
+    return broadMatches >= 2;
+}
+
+function inferFallbackQueryType(text) {
+    const normalized = String(text || '').toLowerCase();
+    if (isUrlLikeQuery(normalized)) return 'url_like';
+    if (isWeakCommerceQuery(normalized)) return 'conversational';
+    if (/\b(vs|versus|comparar|compare|cu[aá]l es mejor)\b/.test(normalized)) return 'comparison';
+    if (/\b(cup[oó]n|cupon|oferta|descuento|deal|promo)\b/.test(normalized)) return 'coupon_deal';
+    if (/\b(ps6|playstation 6|iphone 17|iphone 18|s26|s27|switch 2|gta 6)\b/.test(normalized) || /\b(fecha de salida|release date|rumor|rumores|filtraci[oó]n|pr[oó]ximo)\b/.test(normalized)) return 'speculative';
+    if (/^(hola|buenas|hello|hi|gracias|thanks)\b/.test(normalized)) return 'conversational';
+    if (isBrowseIntent(normalized)) return 'need_based';
+    if (/\b(necesito|quiero|algo para|regalo para|busco algo)\b/.test(normalized)) return 'need_based';
+    if (/\b(iphone|macbook|airpods|playstation|ps5|xbox|galaxy|s24|s25|ipad|apple watch)\b/.test(normalized) && /\b(\d{2,4}gb|m1|m2|m3|pro|max|ultra|\d{1,2})\b/.test(normalized)) return 'brand_model';
+    return 'generic';
+}
+
+function inferDisambiguation(text) {
+    const normalized = String(text || '').toLowerCase().trim();
+    if (/\bapple\b/.test(normalized) && !/\b(iphone|ipad|macbook|watch|airpods|imac)\b/.test(normalized)) {
+        return {
+            needsDisambiguation: true,
+            disambiguationOptions: ['Apple iPhone', 'Apple MacBook', 'Apple Watch', 'Apple iPad']
+        };
+    }
+    if (/^(apple|samsung|xiaomi|motorola|sony|lg|nike|adidas)$/i.test(normalized)) {
+        return {
+            needsDisambiguation: true,
+            disambiguationOptions: ['celulares', 'laptops', 'audífonos', 'tienda oficial']
+        };
+    }
+    if (/\b(quiero|necesito|busco)\b/.test(normalized) && /\b(estudiar|trabajo|oficina|gaming|regalo|viaje|escuela)\b/.test(normalized) && !inferProductCategory(normalized)) {
+        return {
+            needsDisambiguation: true,
+            disambiguationOptions: ['laptop', 'tablet', 'audífonos', 'mochila']
+        };
+    }
+
+    return {
+        needsDisambiguation: false,
+        disambiguationOptions: []
+    };
+}
+
+function inferSpeculativeMetadata(text) {
+    const normalized = String(text || '').toLowerCase();
+    const isSpeculative = inferFallbackQueryType(normalized) === 'speculative';
+    if (!isSpeculative) {
+        return {
+            isSpeculative: false,
+            commercialReadiness: isBrowseIntent(normalized) ? 0.62 : (isWeakCommerceQuery(normalized) ? 0.2 : 0.5)
+        };
+    }
+
+    return {
+        isSpeculative: true,
+        commercialReadiness: 0.15
+    };
+}
+
+function inferProductCategory(text) {
+    const normalized = String(text || '').toLowerCase();
+    if (/iphone|galaxy|pixel|xiaomi|motorola|smartphone|celular|telefono|teléfono/.test(normalized)) return 'smartphone';
+    if (/laptop|notebook|macbook|thinkpad|vivobook|ideapad|computadora/.test(normalized)) return 'laptop';
+    if (/airpods|aud[ií]fonos|headphones|earbuds|bocina|speaker/.test(normalized)) return 'audio';
+    if (/smart tv|televisor|tv |pantalla|qled|oled/.test(normalized)) return 'tv';
+    if (/playstation|ps5|ps4|xbox|nintendo|switch|steam deck|gaming/.test(normalized)) return 'gaming';
+    if (/refri|refrigerador|lavadora|microondas|aspiradora|freidora|cafetera|licuadora/.test(normalized)) return 'appliance';
+    if (/tenis|playera|ropa|sudadera|zapatos|mochila|bolsa/.test(normalized)) return 'fashion';
+    if (/colch[oó]n|silla|escritorio|sof[aá]|mueble|hogar|home/.test(normalized)) return 'home';
+    return '';
+}
+
+function inferUniversalQueryDomain(text) {
+    const normalized = String(text || '').toLowerCase().trim();
+    const productCategory = inferProductCategory(normalized);
+    const serviceLocal = /plomero|dentista|doctor|mec[aá]nico|taller|restaurante|hotel|cerrajero|electricista|uber|taxi|dealer|concesionario|abogado|veterinario/i.test(normalized);
+    const commercialInfo = /conviene|vale la pena|recomiendas|mejor para|cu[aá]l me recomiendas|qu[eé] celular|qu[eé] laptop|qu[eé] tv|cu[aá]l comprar|cu[aá]l elegir/i.test(normalized);
+    const generalInfo = /clima|capital de|historia de|qu[ií]mica|matem[aá]ticas|programaci[oó]n|receta|traduce|traducir|resumen de|explica|qu[eé] significa|definici[oó]n de/i.test(normalized);
+    const outOfScope = /hazme una tarea|escribe un ensayo|resolver examen|predice loter[ií]a|hackea|piratea/i.test(normalized);
+
+    if (outOfScope) return 'out_of_scope';
+    if (serviceLocal) return 'service_local';
+    if (productCategory || isBrowseIntent(normalized) || /precio|oferta|cup[oó]n|descuento|comprar|tienda|barato|caro|env[ií]o/i.test(normalized)) {
+        return commercialInfo ? 'commercial_info' : 'shopping';
+    }
+    if (commercialInfo) return 'commercial_info';
+    if (generalInfo || isWeakCommerceQuery(normalized)) return 'general_info';
+    return 'shopping';
+}
+
+function buildUniversalAssistantReply(text, domain, productCategory = '') {
+    const query = String(text || '').trim();
+    if (domain === 'service_local') {
+        return {
+            message: 'Puedo ayudarte a encontrar servicios locales si me dices la ciudad o permites usar ubicación. También puedes agregar qué tipo de servicio necesitas.',
+            suggestions: ['plomero cerca de mí', 'dentista en CDMX', 'taller mecánico en Guadalajara', 'hotel en Cancún']
+        };
+    }
+    if (domain === 'commercial_info') {
+        return {
+            message: `Puedo orientarte sobre ${productCategory || 'esa compra'} y luego buscar opciones reales si quieres. Si prefieres, dime presupuesto, uso o marcas para afinar mejor.`,
+            suggestions: ['dame opciones baratas', 'solo nuevo', 'menos de 10000 pesos', 'compara marcas']
+        };
+    }
+    if (domain === 'general_info') {
+        return {
+            message: 'Esa consulta no parece una búsqueda de compra directa. Puedo ayudarte mejor si la conviertes en algo comprable, por ejemplo un producto, servicio, tienda, presupuesto o comparación.',
+            suggestions: ['mejor celular por 5000', 'laptop para estudiar', 'audífonos con mejor precio', 'plomero cerca de mí']
+        };
+    }
+    if (domain === 'out_of_scope') {
+        return {
+            message: 'Esa consulta está fuera del enfoque principal de Lumu. Estoy optimizado para ayudarte a comprar productos, comparar precios, encontrar tiendas y buscar algunos servicios locales.',
+            suggestions: ['buscar celular barato', 'comparar laptops', 'ofertas de smart tv', 'servicios locales']
+        };
+    }
+    return {
+        message: `Puedo buscar opciones reales para "${query}" o ayudarte a refinar la búsqueda si me dices marca, presupuesto o uso.`,
+        suggestions: ['más barato', 'mejor calidad-precio', 'solo tiendas oficiales', 'comparar opciones']
+    };
+}
+
+function inferExcludeTerms(text, category = '') {
+    const normalized = String(text || '').toLowerCase();
+    const commonAccessoryTerms = ['funda', 'case', 'protector', 'mica', 'cable', 'cargador'];
+    if (['smartphone', 'audio', 'gaming', 'laptop', 'tv'].includes(category) || /iphone|galaxy|airpods|ps5|xbox|switch|macbook|laptop|tv/.test(normalized)) {
+        return commonAccessoryTerms;
+    }
+    return [];
+}
+
+function inferOfficialQuery(searchQuery, category = '') {
+    const base = String(searchQuery || '').trim();
+    if (!base) return null;
+    if (isUrlLikeQuery(base) || isWeakCommerceQuery(base) || isBrowseIntent(base)) return null;
+    if (/apple|iphone|ipad|macbook|airpods|watch/i.test(base)) return `${base} Apple Store`;
+    if (/samsung|galaxy/i.test(base)) return `${base} Samsung oficial`;
+    if (/playstation|ps5|ps4/i.test(base)) return `${base} PlayStation`;
+    if (/xbox/i.test(base)) return `${base} Microsoft Store`;
+    if (/nintendo|switch/i.test(base)) return `${base} Nintendo`;
+    if (/nike|adidas|puma/i.test(base)) return `${base} tienda oficial`;
+    if (category === 'smartphone') return `${base} tienda oficial`;
+    return null;
+}
+
+function buildExploratoryAlternativeQueries(base = '', searchLanguage = 'auto') {
+    const normalized = String(base || '').trim().toLowerCase();
+    if (!normalized) return [];
+
+    const pushUnique = (bucket, values = []) => {
+        values.forEach((value) => {
+            const clean = String(value || '').replace(/\s+/g, ' ').trim();
+            if (clean && !bucket.includes(clean)) {
+                bucket.push(clean);
+            }
+        });
+    };
+
+    const queries = [];
+    const brandMatches = [...new Set((normalized.match(/iphone|apple|samsung|galaxy|xiaomi|motorola|google|pixel|lenovo|hp|asus|acer|dell|sony|lg|nintendo|playstation|xbox|jbl|bose|anker|nike|adidas/gi) || []).map(term => term.toLowerCase()))];
+    const normalizedWithoutBrands = normalized
+        .replace(/\b(iphone|apple|samsung|galaxy|xiaomi|motorola|google|pixel|lenovo|hp|asus|acer|dell|sony|lg|nintendo|playstation|xbox|jbl|bose|anker|nike|adidas)\b/gi, ' ')
+        .replace(/\s+/g, ' ')
+        .trim();
+
+    const pushBrandVariants = (values = []) => {
+        if (brandMatches.length === 0) return;
+        values.forEach((value) => {
+            brandMatches.slice(0, 4).forEach((brand) => {
+                pushUnique(queries, [`${value} ${brand}`]);
+            });
+        });
+    };
+
+    if (/robot aspiradora|aspiradora robot|roomba|vacuum robot/i.test(normalized)) {
+        pushUnique(queries, [
+            'robot aspiradora',
+            'robot aspiradora ofertas',
+            'roomba robot aspiradora',
+            'robot aspiradora mapeo',
+            'robot aspiradora autovaciado'
+        ]);
+        pushBrandVariants(['robot aspiradora', 'aspiradora robot']);
+    }
+
+    if (/laptop|macbook|lenovo|hp|asus|acer|dell|notebook/i.test(normalized)) {
+        pushUnique(queries, [
+            'laptop',
+            'laptop trabajo estudio',
+            'laptop ofertas',
+            'laptop 16gb 512gb ssd',
+            'laptop ryzen 5 16gb',
+            'laptop intel core i5 16gb'
+        ]);
+        pushBrandVariants(['laptop', 'notebook']);
+    }
+
+    if (/iphone|galaxy|pixel|xiaomi|motorola|smartphone|celular/i.test(normalized)) {
+        pushUnique(queries, [
+            'celular',
+            'smartphone',
+            'celular desbloqueado',
+            'smartphone ofertas',
+            'celular 256gb',
+            'smartphone gama media',
+            'smartphone buena camara'
+        ]);
+        pushBrandVariants(['celular', 'smartphone']);
+    }
+
+    if (/aud[ií]fonos|airpods|earbuds|headphones|bocina|speaker/i.test(normalized)) {
+        pushUnique(queries, [
+            'audifonos gamer',
+            'audifonos bluetooth',
+            'audifonos noise cancelling',
+            'audifonos ofertas',
+            'bocina bluetooth potente'
+        ]);
+        pushBrandVariants(['audifonos bluetooth', 'audifonos gamer']);
+    }
+
+    if (/tv|televisor|pantalla|oled|qled/i.test(normalized)) {
+        pushUnique(queries, [
+            'televisor',
+            'smart tv 4k',
+            'televisor ofertas',
+            'smart tv oled',
+            'smart tv qled'
+        ]);
+        pushBrandVariants(['smart tv', 'televisor oled', 'smart tv oled']);
+    }
+
+    if (/belleza|cosm[eé]ticos|maquillaje|perfume|fragancia|skincare|cuidado personal/i.test(normalized)) {
+        pushUnique(queries, [
+            'perfumes mujer',
+            'perfumes hombre',
+            'maquillaje ofertas',
+            'skincare coreano',
+            'cosmeticos originales',
+            'cuidado personal ofertas'
+        ]);
+        pushBrandVariants(['perfume', 'maquillaje', 'skincare']);
+    }
+
+    if (/hogar|cocina|electrodom[eé]sticos|muebles|decoraci[oó]n/i.test(normalized)) {
+        pushUnique(queries, [
+            'electrodomesticos ofertas',
+            'articulos para cocina',
+            'cafetera',
+            'freidora de aire',
+            'aspiradora',
+            'muebles para hogar'
+        ]);
+    }
+
+    if (/moda|ropa|tenis|zapatos|calzado|playera|sudadera/i.test(normalized)) {
+        pushUnique(queries, [
+            'tenis nike',
+            'tenis adidas',
+            'ropa deportiva',
+            'sudadera hombre',
+            'ropa mujer ofertas',
+            'zapatos casuales'
+        ]);
+        pushBrandVariants(['tenis', 'ropa deportiva', 'zapatos']);
+    }
+
+    if (/^(celulares?|smartphones?|telefonos?|tel[eé]fonos?)$/i.test(normalized)) {
+        pushUnique(queries, [
+            'celular desbloqueado',
+            'smartphone 5g',
+            'celular samsung',
+            'celular xiaomi',
+            'celular motorola',
+            'iphone ofertas'
+        ]);
+    }
+
+    if (/^(laptops?|notebooks?|computadoras?)$/i.test(normalized)) {
+        pushUnique(queries, [
+            'laptop lenovo',
+            'laptop hp',
+            'laptop asus',
+            'laptop dell',
+            'laptop ryzen 5',
+            'laptop intel core i5'
+        ]);
+    }
+
+    if (/^(aud[ií]fonos|headphones|earbuds|bocinas?)$/i.test(normalized)) {
+        pushUnique(queries, [
+            'audifonos bluetooth',
+            'audifonos gamer',
+            'audifonos sony',
+            'audifonos jbl',
+            'audifonos bose'
+        ]);
+    }
+
+    if (/^(televisores?|pantallas?|tvs?|smart tv)$/i.test(normalized)) {
+        pushUnique(queries, [
+            'smart tv samsung',
+            'smart tv lg',
+            'smart tv sony',
+            'smart tv 4k',
+            'televisor oled'
+        ]);
+    }
+
+    if (/^(belleza|cosm[eé]ticos|maquillaje|perfumes?|fragancias?)$/i.test(normalized)) {
+        pushUnique(queries, [
+            'perfume calvin klein',
+            'perfume versace',
+            'labial maybelline',
+            'base maquillaje loreal',
+            'skincare cerave',
+            'protector solar facial'
+        ]);
+    }
+
+    if (/^(hogar|electrodom[eé]sticos|cocina)$/i.test(normalized)) {
+        pushUnique(queries, [
+            'freidora de aire',
+            'cafetera nespresso',
+            'licuadora oster',
+            'aspiradora robot',
+            'microondas',
+            'refrigerador'
+        ]);
+    }
+
+    if (/^(moda|ropa|tenis|zapatos|calzado)$/i.test(normalized)) {
+        pushUnique(queries, [
+            'tenis running nike',
+            'tenis casual adidas',
+            'ropa deportiva hombre',
+            'ropa deportiva mujer',
+            'zapatos casuales hombre',
+            'sudadera nike'
+        ]);
+    }
+
+    if (brandMatches.length >= 2) {
+        brandMatches.slice(0, 4).forEach((brand) => {
+            if (/apple|iphone/.test(brand)) pushUnique(queries, ['iphone 15 128gb', 'iphone 15 ofertas']);
+            if (/samsung|galaxy/.test(brand)) pushUnique(queries, ['samsung galaxy a55', 'samsung galaxy s24']);
+            if (/xiaomi/.test(brand)) pushUnique(queries, ['xiaomi redmi note 13', 'xiaomi 13t']);
+            if (/motorola/.test(brand)) pushUnique(queries, ['motorola edge 50', 'motorola g84']);
+            if (/lenovo/.test(brand)) pushUnique(queries, ['laptop lenovo ideapad', 'laptop lenovo thinkpad']);
+            if (/hp/.test(brand)) pushUnique(queries, ['laptop hp pavilion', 'laptop hp victus']);
+            if (/asus/.test(brand)) pushUnique(queries, ['laptop asus vivobook', 'laptop asus tuf']);
+            if (/dell/.test(brand)) pushUnique(queries, ['laptop dell inspiron', 'laptop dell xps']);
+        });
+    }
+
+    if (queries.length === 0) {
+        pushUnique(queries, [
+            `${base} ofertas`,
+            `${base} mejor precio`,
+            `${base} tienda online`,
+            searchLanguage === 'en' ? `${base} deal` : `${base} descuento`
+        ]);
+    }
+
+    if (normalizedWithoutBrands && queries.length < 6) {
+        pushUnique(queries, [
+            normalizedWithoutBrands,
+            `${normalizedWithoutBrands} ofertas`,
+            `${normalizedWithoutBrands} mejor precio`
+        ]);
+    }
+
+    return queries.slice(0, 12);
+}
+
+function buildAlternativeQueries(searchQuery, originalQuery, category = '', searchLanguage = 'auto') {
+    const base = String(searchQuery || originalQuery || '').trim();
+    if (!base) return [];
+    if (isUrlLikeQuery(base) || isWeakCommerceQuery(base)) return [];
+    if (isBrowseIntent(base)) {
+        return [...new Set(buildExploratoryAlternativeQueries(base, searchLanguage)
+            .map(q => q.replace(/\s+/g, ' ').trim())
+            .filter(Boolean))].slice(0, 12);
+    }
+
+    const queries = [
+        base,
+        `${base} oferta`,
+        `${base} precio`,
+        `${base} descuento`
+    ];
+
+    if (category === 'smartphone' || category === 'laptop' || category === 'gaming') {
+        queries.push(`${base} nuevo`);
+    }
+
+    if (searchLanguage === 'en') {
+        queries.push(`${base} deal`);
+    }
+
+    if (category === 'laptop' || category === 'smartphone' || category === 'audio' || category === 'gaming' || category === 'tv') {
+        queries.push(...buildExploratoryAlternativeQueries(base, searchLanguage).slice(0, 4));
+    }
+
+    return [...new Set(queries.map(q => q.replace(/\s+/g, ' ').trim()).filter(Boolean))]
+        .filter(q => q.toLowerCase() !== String(originalQuery || '').trim().toLowerCase() || q.toLowerCase() === base.toLowerCase())
+        .slice(0, 12);
+}
+
+function repairAnalysis(rawAnalysis, originalText) {
+    const analysis = { ...(rawAnalysis || {}) };
+    const fallbackText = String(originalText || analysis.searchQuery || '').trim();
+    const normalizedQuery = String(analysis.normalizedQuery || analysis.searchQuery || fallbackText).trim() || fallbackText;
+    const searchQuery = String(analysis.searchQuery || normalizedQuery || fallbackText).trim() || fallbackText;
+    const productCategory = analysis.productCategory || inferProductCategory(`${searchQuery} ${normalizedQuery}`);
+    const disambiguation = inferDisambiguation(searchQuery);
+    const searchLanguage = analysis.searchLanguage || detectQueryLanguage(searchQuery);
+    const excludeTerms = Array.isArray(analysis.excludeTerms) && analysis.excludeTerms.length > 0
+        ? analysis.excludeTerms.slice(0, 8)
+        : inferExcludeTerms(`${searchQuery} ${normalizedQuery}`, productCategory);
+    const alternativeQueries = Array.isArray(analysis.alternativeQueries) && analysis.alternativeQueries.length > 0
+        ? [...new Set(analysis.alternativeQueries.map(q => String(q || '').trim()).filter(Boolean))].slice(0, 12)
+        : buildAlternativeQueries(searchQuery, fallbackText, productCategory, searchLanguage);
+    const brandOfficialQuery = analysis.brandOfficialQuery || inferOfficialQuery(searchQuery, productCategory);
+    const universalQueryDomain = analysis.universalQueryDomain || inferUniversalQueryDomain(searchQuery);
+
+    return {
+        ...analysis,
+        searchQuery,
+        normalizedQuery,
+        canonicalKey: analysis.canonicalKey || slugifyCanonicalKey(normalizedQuery || searchQuery),
+        productCategory,
+        searchLanguage,
+        needsDisambiguation: Boolean(analysis.needsDisambiguation || disambiguation.needsDisambiguation),
+        disambiguationOptions: Array.isArray(analysis.disambiguationOptions) && analysis.disambiguationOptions.length > 0
+            ? analysis.disambiguationOptions.slice(0, 4)
+            : disambiguation.disambiguationOptions,
+        excludeTerms,
+        alternativeQueries,
+        brandOfficialQuery,
+        universalQueryDomain,
+        reasoning: analysis.reasoning || 'LLM response repaired with deterministic query enrichment'
+    };
+}
+
+function buildFallbackResponse(fallbackQuery) {
+    const queryType = inferFallbackQueryType(fallbackQuery);
+    const { needsDisambiguation, disambiguationOptions } = inferDisambiguation(fallbackQuery);
+    const { isSpeculative, commercialReadiness } = inferSpeculativeMetadata(fallbackQuery);
+    const condition = detectCondition(fallbackQuery);
+    const maxBudget = extractMaxBudget(fallbackQuery);
+    const searchLanguage = detectQueryLanguage(fallbackQuery);
+    const productCategory = inferProductCategory(fallbackQuery);
+    const searchQuery = String(fallbackQuery || '').trim();
+    const weakCommerce = isWeakCommerceQuery(fallbackQuery);
+    const browseIntent = isBrowseIntent(fallbackQuery);
+    const isUrlLike = isUrlLikeQuery(fallbackQuery);
+    const universalQueryDomain = inferUniversalQueryDomain(fallbackQuery);
+    const universalReply = buildUniversalAssistantReply(searchQuery, universalQueryDomain, productCategory);
+    const exploratoryCandidates = buildExploratoryAlternativeQueries(searchQuery, searchLanguage);
+    const hasExploratoryCoverage = exploratoryCandidates.length >= 3 || Boolean(productCategory);
+    const shouldAsk = universalQueryDomain === 'service_local' || universalQueryDomain === 'commercial_info' || universalQueryDomain === 'general_info' || universalQueryDomain === 'out_of_scope' || isUrlLike || queryType === 'conversational' || weakCommerce || needsDisambiguation || (browseIntent && (!hasExploratoryCoverage || !productCategory));
+    const fallbackSuggestions = browseIntent
+        ? ['Smartphones', 'Laptops', 'Audífonos', 'Hogar']
+        : ['iPhone', 'Laptop', 'Audífonos', 'Smart TV'];
+
+    return {
+        action: universalQueryDomain === 'shopping' ? (shouldAsk ? 'ask' : 'search') : 'ask',
+        intent_type: universalQueryDomain === 'service_local' ? 'servicio_local' : 'producto',
+        queryType,
+        question: shouldAsk
+            ? (isUrlLike
+                ? 'Puedo ayudarte con ese enlace, pero necesito saber qué quieres hacer: comparar precio, ver alternativas o revisar la tienda.'
+                : universalReply.message)
+            : null,
+        sugerencias: shouldAsk ? (universalReply.suggestions || fallbackSuggestions) : [],
+        searchQuery,
+        normalizedQuery: searchQuery,
+        alternativeQueries: buildAlternativeQueries(searchQuery, fallbackQuery, productCategory, searchLanguage),
+        brandOfficialQuery: inferOfficialQuery(searchQuery, productCategory),
+        condition,
+        canonicalKey: slugifyCanonicalKey(searchQuery),
+        priceVolatility: 'medium',
+        productCategory,
+        maxBudget,
+        aiSummary: null,
+        isComparison: queryType === 'comparison',
+        comparisonProducts: [],
+        isSpeculative,
+        needsDisambiguation: needsDisambiguation || browseIntent || isUrlLike,
+        disambiguationOptions: disambiguationOptions && disambiguationOptions.length > 0 ? disambiguationOptions : (shouldAsk ? (universalReply.suggestions || fallbackSuggestions) : []),
+        commercialReadiness,
+        searchLanguage,
+        excludeTerms: shouldAsk ? [] : inferExcludeTerms(searchQuery, productCategory),
+        universalQueryDomain,
+        reasoning: 'Fallback: LLM response was invalid or empty'
+    };
+}
+
 exports.analyzeMessage = async (userText, chatHistory = [], context = {}) => {
     const apiKey = process.env.GEMINI_API_KEY;
     if (!apiKey) {
@@ -84,6 +700,10 @@ exports.analyzeMessage = async (userText, chatHistory = [], context = {}) => {
 
     // SECURITY: Sanitize user input before sending to LLM
     const sanitizedText = sanitizeUserInput(userText);
+
+    // PRE-PROCESSING: Expand slang/abbreviations and detect language
+    const preExpandedText = preExpandSlang(sanitizedText);
+    const detectedLang = detectQueryLanguage(sanitizedText);
 
     // Limit chat history to prevent context window overrun and save tokens
     const recentHistory = chatHistory.slice(-6);
@@ -178,44 +798,93 @@ exports.analyzeMessage = async (userText, chatHistory = [], context = {}) => {
     const systemPrompt = `Eres Lumu, el Personal Shopper AI de ${regionContext.label}.
 Región activa: ${regionContext.label} (${regionCode})
 Idioma preferido de búsqueda: ${regionContext.language}
+Idioma detectado del usuario: ${detectedLang}
 Moneda principal: ${regionContext.currency}
 Tiendas de referencia: ${regionContext.storeHints}
 FECHA ACTUAL: ${currentDateStr}
+Texto pre-expandido (slang resuelto): "${preExpandedText}"
 ${extraContext}`;
 
     const userPrompt = `
-    HISTORIAL DE RECIENTE:
+    HISTORIAL RECIENTE:
     ${historyText}
     
     MENSAJE ACTUAL:
     "${sanitizedText}"
 
-    TUS OBJETIVOS Y REGLAS CLAVE:
-    1. ESTRATEGIA DE BÚSQUEDA LONG-TAIL INTELIGENTE: Expande búsquedas vagas (ej. "laptop i7" -> "laptop intel core i7 16gb ram ssd 512gb"). Incluye marca, modelo, capacidad, color o variante cuando sea obvio. Prioriza frases reales de catálogo y compra.
-    2. ACCIÓN INMEDIATA: Usa "search" si menciona cualquier producto/servicio. Usa "search_service" para oficios locales, restaurantes, taquerías, comida, dentistas, médicos, talleres, veterinarias u otros negocios físicos cercanos. Usa "ask" SOLO si falta información crítica para encontrar algo útil.
-    3. CONDICIÓN: "new" (nuevo) por defecto, salvo que diga usado/seminuevo.
-    4. CLASIFICACIÓN intent_type: producto, servicio_local, mayoreo, mayoreo_perecedero, ocio, otro.
-    5. ANTI-ACCESORIOS: Si busca algo principal caro (TV, celular, consola), añade "-funda -case -protector -cable".
-    6. alternativeQueries: genera de 2 a 4 variaciones de altísima calidad, pensando en cómo lo listan ${regionContext.storeHints}. NO USES "site:".
-    7. MEXICANISMOS: Traduce "refiri"->refrigerador, "cel"->celular, "compu"->computadora.
-    8. CONVERSACIÓN Y SALUDOS: Si el usuario te saluda ("hola", "buenos días") sin pedir un producto, DEBES usar action="ask" y responder amablemente sugiriendo 3 categorías populares para buscar.
-    9. TYPOS: Corrige errores ortográficos evidentes y palabras truncadas en el searchQuery ("iphome" -> "iphone", "perr" -> "perro").
-    10. COMPARACIONES: Si el usuario compara 2 productos, usa action="search" con el PRIMER producto mencionado, pero en alternativeQueries incluye el otro como variante.
-    11. FOLLOW-UP INTELIGENTE: Si el usuario pide algo demasiado ambiguo ("quiero una laptop", "busco audífonos"), primero intenta resolver con una búsqueda genérica útil y usa action="ask" solo si de verdad no puedes formar un query de compra razonable.
-    12. RESULTADOS ÚTILES: Prefiere queries que ayuden a traer productos completos, no páginas genéricas, refacciones o accesorios sueltos.
-    13. COBERTURA: Si detectas un producto comprable pero faltan detalles finos, NO bloquees la búsqueda. Genera un searchQuery amplio pero comercial y usa alternativeQueries para marca, variante, tamaño, color o edición.
-    14. OFERTAS: En alternativeQueries incluye al menos una variante orientada a descuento/oferta/cupón cuando aplique naturalmente al producto.
-    15. IDIOMA Y REGIÓN: Si la región activa es ${regionCode}, redacta el searchQuery y alternativeQueries en el idioma que más probablemente traiga resultados en esa región. Para US, normalmente usa inglés aunque el usuario escriba en español. Para LatAm, usa español salvo que el producto se liste normalmente en inglés.
-    16. MARCAS Y QUERIES GENÉRICAS: Si el usuario escribe solo una marca o una categoría demasiado amplia ("Bitvae", "TV", "laptop everyday use"), expándela a un producto/categoría comercial razonable y añade variantes útiles en alternativeQueries.
-    17. CONVERSACIONAL SIN PRODUCTO: Si el usuario pide "compárame precios", "dime cuál conviene más" o frases similares SIN decir claramente el producto, usa action="ask" y pide el producto concreto.
-    18. MÚLTIPLES CATEGORÍAS: Si la consulta mezcla demasiadas categorías ("ropa calzado moda accesorios tenis playeras", "Tecnología celulares laptops audífonos gadgets"), DEBES elegir UNA SOLA categoría específica y comprable para searchQuery (ej: "audífonos bluetooth") y usar las demás como alternativeQueries. NUNCA copies toda la lista como searchQuery porque genera resultados basura. El searchQuery debe tener máximo 6-8 palabras enfocadas en UN producto.
-    24. NO-COMPRABLES ONLINE: Si detectas vehículos (carros, motos), inmuebles (casas, departamentos en venta/renta), o servicios profesionales, usa intent_type="servicio_local" o "otro" en vez de "producto". Estos no se venden en tiendas online.
-    19. DISPONIBILIDAD ACTUAL: Considera la FECHA ACTUAL. Si el producto parece muy nuevo, rumor, preventa o incierto, NO afirmes que no existe. Intenta buscarlo tal cual si es plausible a fecha de hoy. Si sospechas disponibilidad limitada, mantén ese producto en searchQuery y usa alternativeQueries con variantes cercanas o generación/modelo relacionado.
-    20. SERVICIOS VS PRODUCTOS: Lugares para comer, restaurantes, taquerías y tiendas físicas deben priorizar intención de servicio/local, no shopping de e-commerce.
-    21. canonicalKey: genera una key canónica corta y estable para cachear el producto, usando formato tipo "marca_modelo_variant" en minúsculas y sin caracteres especiales.
-    22. priceVolatility: responde "high" para productos con precios muy cambiantes (ofertas flash, electrónica popular, gaming), "low" para categorías estables, y "medium" para lo demás.
-    23. productCategory: resume la categoría principal del producto en una sola etiqueta corta como "smartphone", "laptop", "audio", "fashion", "home", "gaming", "appliance", "local_service".
-  
+    === REGLAS DE CLASIFICACIÓN Y BÚSQUEDA ===
+
+    PASO 1 — CLASIFICAR queryType (OBLIGATORIO):
+    Analiza el mensaje y clasifícalo en exactamente UNO de estos tipos:
+    - "brand_model": Marca+modelo específico ("iPhone 15 Pro Max", "Samsung S24 Ultra 256gb")
+    - "generic": Categoría sin modelo ("laptop para gaming", "audífonos buenos")
+    - "need_based": Necesidad sin producto claro ("algo para correr", "regalo para mamá")
+    - "conversational": Saludo, charla, o pregunta sin intención de compra ("hola", "gracias", "qué tal")
+    - "speculative": Producto no lanzado, rumor, futuro ("iPhone 17", "PS6", "Galaxy S26")
+    - "comparison": Comparando 2+ productos ("A vs B", "cuál es mejor A o B")
+    - "coupon_deal": Busca ofertas/cupones/descuentos ("ofertas buen fin", "cupón Amazon")
+    - "url_like": Parece una URL o dominio
+    - "cross_locale": Producto que suele buscarse en otro idioma al de la región
+
+    PASO 2 — GENERAR searchQuery (OBLIGATORIO si action=search):
+    - Estrategia LONG-TAIL: Expande queries vagas → frases de catálogo reales.
+      Ej: "laptop i7" → "laptop intel core i7 13va gen 16gb ram 512gb ssd"
+      Ej: "cel samsung" → "Samsung Galaxy A55 5G 128GB"
+      Ej: "tele 55" → "smart tv 55 pulgadas 4k"
+    - Máximo 6-8 palabras enfocadas en UN producto comprable.
+    - NUNCA copies listas de categorías como searchQuery.
+
+    PASO 3 — CAMPOS NUEVOS OBLIGATORIOS:
+    - normalizedQuery: versión limpia/corregida del query original sin typos, sin slang, con marca/modelo correctos
+    - queryType: clasificación del PASO 1
+    - searchLanguage: "es" para LatAm, "en" para US, o "auto" si el producto se busca mejor en inglés (ej: "AirPods" en MX → "en")
+    - commercialReadiness: 0.0 a 1.0 — qué tan listo está para comprarse. 1.0=producto específico claro, 0.5=genérico, 0.1=rumor/especulativo
+    - reasoning: 1 frase corta explicando tu decisión de búsqueda (máx 50 palabras)
+    - excludeTerms: array de palabras a excluir para evitar accesorios/basura (ej: ["funda","case","protector","cable"] para búsqueda de celular)
+    - brandOfficialQuery: si el producto tiene tienda oficial (Apple, Samsung, Nike, etc), genera un query optimizado para esa tienda. null si no aplica.
+
+    PASO 4 — DETECCIÓN ESPECIAL:
+    A) ESPECULATIVO (isSpeculative=true):
+       Si el producto NO existe aún o es rumor (fecha futura, modelo no anunciado): isSpeculative=true, commercialReadiness=0.1-0.3.
+       Busca el modelo actual más cercano como searchQuery y el especulativo en alternativeQueries.
+    B) AMBIGUO (needsDisambiguation=true):
+       Si hay múltiples interpretaciones posibles: needsDisambiguation=true.
+       Llena disambiguationOptions con las opciones (ej: "apple" → ["Apple iPhone","Apple MacBook","Apple Watch","Apple iPad"]).
+       Aún así genera un searchQuery con la interpretación más probable.
+    C) COMPARACIÓN (isComparison=true):
+       searchQuery = el producto más específico/comprable. Todos los demás en alternativeQueries + comparisonProducts.
+
+    === REGLAS GENERALES ===
+    1. ACCIÓN: "search" si hay producto/compra, "search_service" para servicios locales (plomero, dentista, restaurante), "ask" SOLO si realmente no puedes buscar.
+    2. intent_type: producto, servicio_local, mayoreo, mayoreo_perecedero, ocio, otro.
+    3. condition: "new" por defecto, "used" solo si dice usado/seminuevo/refurbished.
+    4. alternativeQueries: 3-5 variaciones de alta calidad pensando en catálogos de ${regionContext.storeHints}. INCLUYE al menos una variante de oferta/descuento. NO uses "site:".
+    5. IDIOMA: Región ${regionCode}. Para US usa inglés. Para LatAm usa español excepto nombres de producto que se buscan mejor en inglés (ej: "AirPods Pro" no se traduce).
+    6. SLANG: El sistema ya pre-expandió slang → revisa el campo "Texto pre-expandido" en el system prompt.
+    7. TYPOS: Corrige en normalizedQuery y searchQuery ("iphome"→"iphone", "samung"→"samsung").
+    8. MULTI-CATEGORÍA: Elige UNA categoría para searchQuery, las demás van a alternativeQueries.
+    9. PRESUPUESTO: Extrae maxBudget en ${regionContext.currency} si el usuario lo menciona.
+    10. NO-COMPRABLES: Vehículos, inmuebles → intent_type="otro". Restaurantes/servicios → "servicio_local".
+    11. canonicalKey: "marca_modelo_variante" en minúsculas sin caracteres especiales.
+    12. priceVolatility: "high" (electrónica, gaming, flash sales), "low" (muebles, ropa básica), "medium" (resto).
+    13. productCategory: etiqueta corta: smartphone, laptop, audio, tv, fashion, home, gaming, appliance, beauty, sports, toys, local_service.
+    14. aiSummary: 1-2 frases de guía de compra concreta y útil. null si no aporta.
+    15. CONVERSACIÓN: Saludos sin producto → action="ask", sugiere 3 categorías populares.
+    16. CUPONES: Si conoces códigos de descuento activos para la marca/tienda, ponlos en cupon.
+
+    === EJEMPLOS (FEW-SHOT) ===
+    Input: "busco unos airpods"
+    → queryType:"brand_model", searchQuery:"Apple AirPods Pro 2da generación", normalizedQuery:"apple airpods", brandOfficialQuery:"AirPods Pro Apple Store", commercialReadiness:0.9, excludeTerms:["funda","case","protector"]
+
+    Input: "algo bueno para correr"
+    → queryType:"need_based", searchQuery:"tenis para correr hombre Nike", normalizedQuery:"calzado running", needsDisambiguation:true, disambiguationOptions:["tenis running hombre","tenis running mujer","smartwatch running","audífonos deportivos"], commercialReadiness:0.5
+
+    Input: "iphone 17 pro"
+    → queryType:"speculative", searchQuery:"iPhone 16 Pro Max 256GB", normalizedQuery:"iphone 17 pro", isSpeculative:true, commercialReadiness:0.1, alternativeQueries:["iPhone 16 Pro 256GB","iPhone 15 Pro Max"]
+
+    Input: "hola qué tal"
+    → queryType:"conversational", action:"ask", question:"¡Hola! Soy Lumu, tu asistente de compras. ¿Qué te gustaría buscar hoy?", sugerencias:["Smartphones","Laptops","Audífonos"]
+
     Devuelve ESTRICTAMENTE un JSON validado.
   `;
 
@@ -229,17 +898,31 @@ ${extraContext}`;
                 properties: {
                     action: { type: "STRING", enum: ["ask", "search", "search_service"] },
                     intent_type: { type: "STRING", enum: ["producto", "servicio_local", "mayoreo", "mayoreo_perecedero", "ocio", "otro"] },
+                    queryType: { type: "STRING", enum: ["generic", "brand_model", "conversational", "speculative", "comparison", "url_like", "cross_locale", "need_based", "coupon_deal"], description: "Classification of the user query type" },
                     question: { type: "STRING" },
                     sugerencias: { type: "ARRAY", items: { type: "STRING" } },
-                    cupon: { type: "STRING", description: "If you know universal or active promo codes for the brand/store, include them here (e.g., 'SAVE20')" },
-                    searchQuery: { type: "STRING", description: "Format: Brand + Exact Model + Modifiers (products) OR Service Name + City (services)" },
-                    alternativeQueries: { type: "ARRAY", items: { type: "STRING" }, description: "2 to 3 alternative highly specific queries to maximize shopping results coverage" },
+                    cupon: { type: "STRING", description: "Active promo codes for the brand/store (e.g., 'SAVE20')" },
+                    searchQuery: { type: "STRING", description: "Long-tail optimized query: Brand + Model + Key Specs" },
+                    normalizedQuery: { type: "STRING", description: "Clean version of user input: typos fixed, slang resolved, brand/model corrected" },
+                    alternativeQueries: { type: "ARRAY", items: { type: "STRING" }, description: "3-5 alternative high-quality queries including at least one deal/offer variant" },
+                    brandOfficialQuery: { type: "STRING", description: "Query optimized for official brand store search (Apple Store, Samsung, Nike). null if N/A" },
                     condition: { type: "STRING", enum: ["new", "used"] },
                     canonicalKey: { type: "STRING" },
                     priceVolatility: { type: "STRING", enum: ["high", "medium", "low"] },
-                    productCategory: { type: "STRING" }
+                    productCategory: { type: "STRING", description: "Short category label: smartphone, laptop, audio, tv, fashion, home, gaming, appliance, beauty, sports, toys, local_service" },
+                    maxBudget: { type: "NUMBER", description: "Max budget in active region currency" },
+                    aiSummary: { type: "STRING", description: "1-2 sentence expert shopping guidance" },
+                    isComparison: { type: "BOOLEAN", description: "True if user is comparing 2+ products" },
+                    comparisonProducts: { type: "ARRAY", items: { type: "STRING" }, description: "Normalized product names being compared" },
+                    isSpeculative: { type: "BOOLEAN", description: "True if product is unreleased, rumored, or future" },
+                    needsDisambiguation: { type: "BOOLEAN", description: "True if query has multiple valid interpretations" },
+                    disambiguationOptions: { type: "ARRAY", items: { type: "STRING" }, description: "Possible interpretations when ambiguous" },
+                    commercialReadiness: { type: "NUMBER", description: "0.0-1.0 score: 1.0=specific buyable product, 0.5=generic, 0.1=speculative" },
+                    searchLanguage: { type: "STRING", enum: ["es", "en", "auto"], description: "Best language for search results in this region" },
+                    excludeTerms: { type: "ARRAY", items: { type: "STRING" }, description: "Terms to exclude to avoid accessories/junk results" },
+                    reasoning: { type: "STRING", description: "Brief explanation of search strategy decision (max 50 words)" }
                 },
-                required: ["action", "searchQuery"]
+                required: ["action", "searchQuery", "queryType"]
             }
         }
     };
@@ -288,47 +971,26 @@ ${extraContext}`;
             // Validar que searchQuery no esté vacío
             if (!parsed.searchQuery || parsed.searchQuery.trim().length === 0) {
                 console.warn('[LLM] searchQuery vacío, usando fallback con query original');
-                return {
-                    action: 'search',
-                    question: null,
-                    searchQuery: sanitizedText || userText,
-                    condition: 'new',
-                    canonicalKey: '',
-                    priceVolatility: 'medium',
-                    productCategory: ''
-                };
+                return buildFallbackResponse(sanitizedText || userText);
             }
 
             // SECURITY FIX #8: Validate LLM output with Zod
             const validated = llmResponseSchema.safeParse(parsed);
             if (!validated.success) {
                 console.warn('[LLM] Response validation failed:', validated.error.issues.map(i => i.message).join(', '));
-                // Fall back to a safe search action using the original query
-                return {
-                    action: 'search',
-                    question: null,
-                    searchQuery: sanitizedText || userText,
-                    condition: 'new',
-                    canonicalKey: '',
-                    priceVolatility: 'medium',
-                    productCategory: ''
-                };
+                return buildFallbackResponse(sanitizedText || userText);
             }
 
-            return validated.data;
+            // Structured logging for analytics and improvement
+            const repaired = repairAnalysis(validated.data, sanitizedText || userText);
+            console.log(`[LLM Decision] queryType=${repaired.queryType} | readiness=${repaired.commercialReadiness} | speculative=${repaired.isSpeculative} | disambig=${repaired.needsDisambiguation} | lang=${repaired.searchLanguage} | q="${repaired.searchQuery}"`);
+
+            return repaired;
 
         } catch (error) {
             if (retries >= maxRetries) {
                 console.error('Error en LLM Assistant tras reintentos:', error.message);
-                return {
-                    action: "search",
-                    question: null,
-                    searchQuery: sanitizedText || userText,
-                    condition: "new",
-                    canonicalKey: '',
-                    priceVolatility: 'medium',
-                    productCategory: ''
-                };
+                return buildFallbackResponse(sanitizedText || userText);
             }
             retries++;
             await new Promise(resolve => setTimeout(resolve, retries * 1000));
