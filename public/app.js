@@ -1074,7 +1074,7 @@ function applyRegionalCopy() {
     currentRegion = detectRegion();
     const config = getRegionConfig();
     const ui = getRegionUICopy();
-    const regionFlag = REGION_FLAGS[currentRegion] || '🌎';
+    const regionBadge = currentRegion === 'auto' ? 'AUTO' : currentRegion;
     const savedOverride = localStorage.getItem(REGION_OVERRIDE_KEY) || 'auto';
 
     const searchInputEl = document.getElementById('search-input');
@@ -1094,7 +1094,7 @@ function applyRegionalCopy() {
 
     const regionPill = document.getElementById('detected-region-pill');
     if (regionPill) {
-        regionPill.innerHTML = `<span aria-hidden="true" class="shrink-0">${regionFlag}</span><span class="truncate">${config.activeRegion || 'Región automática'}</span>`;
+        regionPill.innerHTML = `<span aria-hidden="true" class="inline-flex h-6 min-w-[2.25rem] items-center justify-center rounded-full bg-white px-2 text-[10px] font-black uppercase tracking-[0.16em] text-emerald-700 shadow-sm">${regionBadge}</span><span class="min-w-0 truncate">${config.activeRegion || 'Región automática'}</span>`;
     }
 
     const globalBtn = document.getElementById('filter-global');
