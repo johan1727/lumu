@@ -1,5 +1,6 @@
 const axios = require('axios');
 const cheerio = require('cheerio');
+const crypto = require('crypto');
 
 // Pool de User-Agents reales para rotación — reduce bloqueos en producción
 const USER_AGENTS = [
@@ -67,6 +68,123 @@ const getAxiosConfig = (countryCode = 'MX') => {
     }
     return config;
 };
+
+const MARKETPLACE_CACHE_TTL_MS = 90 * 60 * 1000;
+const marketplaceApiCache = new Map();
+
+function getMarketplaceCache(key) {
+    const entry = marketplaceApiCache.get(key);
+    if (!entry) return null;
+    if ((Date.now() - entry.ts) > MARKETPLACE_CACHE_TTL_MS) {
+        marketplaceApiCache.delete(key);
+        return null;
+    }
+    return entry.data;
+}
+
+function setMarketplaceCache(key, data) {
+    marketplaceApiCache.set(key, {
+        ts: Date.now(),
+        data
+    });
+    if (marketplaceApiCache.size > 200) {
+        const oldestKey = marketplaceApiCache.keys().next().value;
+        if (oldestKey) marketplaceApiCache.delete(oldestKey);
+    }
+}
+
+function simplifyMarketplaceQuery(query = '') {
+    return String(query || '')
+        .replace(/\b\d+(gb|tb|mb|ram|ssd|hdd|mah|mp|hz|w)\b/gi, '')
+        .replace(/\b(ultra|pro|max|plus|mini|gen\s*\d+|\d+th gen)\b/gi, '')
+        .replace(/\s+/g, ' ')
+        .trim();
+}
+
+function sha256Hex(value) {
+    return crypto.createHash('sha256').update(value).digest('hex');
+}
+
+function hmac(key, value, encoding) {
+    return crypto.createHmac('sha256', key).update(value).digest(encoding);
+}
+
+function getAmazonPaapiConfig(countryCode = 'MX') {
+    const normalizedCountry = String(countryCode || 'MX').toUpperCase();
+    const host = process.env.AMAZON_PAAPI_HOST || (normalizedCountry === 'US' ? 'webservices.amazon.com' : 'webservices.amazon.com.mx');
+    const region = process.env.AMAZON_PAAPI_REGION || 'us-east-1';
+    const marketplace = process.env.AMAZON_PAAPI_MARKETPLACE || (normalizedCountry === 'US' ? 'www.amazon.com' : 'www.amazon.com.mx');
+    return { host, region, marketplace };
+}
+
+async function searchAmazonPaapi(query, countryCode = 'MX', signal) {
+    const accessKey = process.env.AMAZON_PAAPI_ACCESS_KEY;
+    const secretKey = process.env.AMAZON_PAAPI_SECRET_KEY;
+    const partnerTag = process.env.AMAZON_PAAPI_PARTNER_TAG;
+    if (!accessKey || !secretKey || !partnerTag) return null;
+
+    const { host, region, marketplace } = getAmazonPaapiConfig(countryCode);
+    const service = 'ProductAdvertisingAPI';
+    const target = 'com.amazon.paapi5.v1.ProductAdvertisingAPIv1.SearchItems';
+    const payload = JSON.stringify({
+        Keywords: query,
+        SearchIndex: 'All',
+        ItemCount: 10,
+        PartnerTag: partnerTag,
+        PartnerType: 'Associates',
+        Marketplace: marketplace,
+        Resources: [
+            'Images.Primary.Medium',
+            'ItemInfo.Title',
+            'ItemInfo.ByLineInfo',
+            'Offers.Listings.Price',
+            'Offers.Summaries.LowestPrice'
+        ]
+    });
+
+    const now = new Date();
+    const amzDate = now.toISOString().replace(/[:-]|\.\d{3}/g, '');
+    const dateStamp = amzDate.slice(0, 8);
+    const canonicalHeaders = `content-encoding:amz-1.0\ncontent-type:application/json; charset=utf-8\nhost:${host}\nx-amz-date:${amzDate}\nx-amz-target:${target}\n`;
+    const signedHeaders = 'content-encoding;content-type;host;x-amz-date;x-amz-target';
+    const canonicalRequest = `POST\n/paapi5/searchitems\n\n${canonicalHeaders}\n${signedHeaders}\n${sha256Hex(payload)}`;
+    const credentialScope = `${dateStamp}/${region}/${service}/aws4_request`;
+    const stringToSign = `AWS4-HMAC-SHA256\n${amzDate}\n${credentialScope}\n${sha256Hex(canonicalRequest)}`;
+    const kDate = hmac(`AWS4${secretKey}`, dateStamp);
+    const kRegion = hmac(kDate, region);
+    const kService = hmac(kRegion, service);
+    const kSigning = hmac(kService, 'aws4_request');
+    const signature = hmac(kSigning, stringToSign, 'hex');
+    const authorization = `AWS4-HMAC-SHA256 Credential=${accessKey}/${credentialScope}, SignedHeaders=${signedHeaders}, Signature=${signature}`;
+
+    const response = await axios.post(`https://${host}/paapi5/searchitems`, payload, {
+        timeout: 4500,
+        signal,
+        headers: {
+            'Content-Encoding': 'amz-1.0',
+            'Content-Type': 'application/json; charset=utf-8',
+            'X-Amz-Date': amzDate,
+            'X-Amz-Target': target,
+            'Authorization': authorization,
+            'Host': host
+        }
+    });
+
+    const items = Array.isArray(response.data?.SearchResult?.Items) ? response.data.SearchResult.Items : [];
+    return items.map((item) => {
+        const price = Number(item?.Offers?.Listings?.[0]?.Price?.Amount || item?.Offers?.Summaries?.[0]?.LowestPrice?.Amount || 0);
+        const url = item?.DetailPageURL || '';
+        if (!item?.ItemInfo?.Title?.DisplayValue || !url || !Number.isFinite(price) || price <= 0) return null;
+        return {
+            title: item.ItemInfo.Title.DisplayValue,
+            price,
+            url,
+            source: String(countryCode || 'MX').toUpperCase() === 'US' ? 'Amazon' : 'Amazon MX',
+            image: item?.Images?.Primary?.Medium?.URL || '',
+            rating: null
+        };
+    }).filter(Boolean);
+}
 
 const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 
@@ -146,6 +264,30 @@ const scrapeWithRetry = async (url, maxRetries = 2, countryCode = 'MX', signal) 
     throw lastError;
 };
 
+function mapMercadoLibreApiResults(data, sourceLabel) {
+    return Array.isArray(data?.results)
+        ? data.results.map((item) => {
+            const price = Number(item.price);
+            const permalink = item.permalink || item.url || '';
+            if (!item.title || !Number.isFinite(price) || !permalink) return null;
+            return {
+                title: item.title,
+                price,
+                url: permalink,
+                source: sourceLabel,
+                image: item.thumbnail || item.secure_thumbnail || item.pictures?.[0]?.url || ''
+            };
+        }).filter(Boolean)
+        : [];
+}
+
+function buildMercadoLibreConditionParam(conditionMode = '') {
+    const normalized = String(conditionMode || '').toLowerCase();
+    if (normalized === 'new') return '&condition=new';
+    if (normalized === 'used') return '&condition=used';
+    return '';
+}
+
 exports.scrapeMercadoLibreDirect = async (query, signal) => {
     try {
         throwIfAborted(signal);
@@ -204,7 +346,7 @@ exports.scrapeMercadoLibreDirect = async (query, signal) => {
     }
 };
 
-exports.scrapeMercadoLibreAPI = async (query, countryCode = 'MX', signal) => {
+exports.scrapeMercadoLibreAPI = async (query, countryCode = 'MX', signal, conditionMode = '') => {
     try {
         throwIfAborted(signal);
         const normalizedCountry = String(countryCode || 'MX').toUpperCase();
@@ -212,34 +354,26 @@ exports.scrapeMercadoLibreAPI = async (query, countryCode = 'MX', signal) => {
         const sourceLabel = MERCADO_LIBRE_SOURCE_MAP[normalizedCountry] || 'Mercado Libre';
         const encodedQuery = encodeURIComponent(query);
         const apiOpts = { timeout: 5000, signal, headers: { 'User-Agent': getRandomUA(), 'Accept': 'application/json' } };
+        const conditionParam = buildMercadoLibreConditionParam(conditionMode);
+        const cacheKey = `ml_api:${normalizedCountry}:${String(conditionMode || 'any').toLowerCase()}:${query.toLowerCase().trim()}`;
+        const cacheHit = getMarketplaceCache(cacheKey);
+        if (cacheHit) {
+            console.log(`[ML API Cache Hit] ${sourceLabel} -> ${query}`);
+            return cacheHit;
+        }
 
         // PERF: Two parallel queries — cheapest + most relevant (ML default is "recommended", not cheapest)
-        const priceUrl = `https://api.mercadolibre.com/sites/${siteId}/search?q=${encodedQuery}&sort=price_asc&limit=50`;
-        const relevanceUrl = `https://api.mercadolibre.com/sites/${siteId}/search?q=${encodedQuery}&limit=50`;
-        console.log(`[ML API] Buscando en ${siteId} para ${normalizedCountry}: ${query} (precio + relevancia en paralelo)`);
+        const priceUrl = `https://api.mercadolibre.com/sites/${siteId}/search?q=${encodedQuery}${conditionParam}&sort=price_asc&limit=50`;
+        const relevanceUrl = `https://api.mercadolibre.com/sites/${siteId}/search?q=${encodedQuery}${conditionParam}&limit=50`;
+        console.log(`[ML API] Buscando en ${siteId} para ${normalizedCountry}: ${query} (precio + relevancia en paralelo, condition=${conditionMode || 'any'})`);
 
         const [priceRes, relevanceRes] = await Promise.all([
             axios.get(priceUrl, apiOpts).catch(err => { console.warn('[ML API] Price query failed:', err.message); return null; }),
             axios.get(relevanceUrl, apiOpts).catch(err => { console.warn('[ML API] Relevance query failed:', err.message); return null; })
         ]);
 
-        const mapResults = (data) => Array.isArray(data?.results)
-            ? data.results.map((item) => {
-                const price = Number(item.price);
-                const permalink = item.permalink || item.url || '';
-                if (!item.title || !Number.isFinite(price) || !permalink) return null;
-                return {
-                    title: item.title,
-                    price,
-                    url: permalink,
-                    source: sourceLabel,
-                    image: item.thumbnail || item.secure_thumbnail || item.pictures?.[0]?.url || ''
-                };
-            }).filter(Boolean)
-            : [];
-
-        const priceResults = mapResults(priceRes?.data);
-        const relevanceResults = mapResults(relevanceRes?.data);
+        const priceResults = mapMercadoLibreApiResults(priceRes?.data, sourceLabel);
+        const relevanceResults = mapMercadoLibreApiResults(relevanceRes?.data, sourceLabel);
 
         // Deduplicate by URL
         const seenUrls = new Set();
@@ -254,12 +388,12 @@ exports.scrapeMercadoLibreAPI = async (query, countryCode = 'MX', signal) => {
 
         // If zero results, retry with simplified query (strip specs like "256gb", model numbers)
         if (combined.length === 0 && query.split(/\s+/).length > 2) {
-            const simplified = query.replace(/\b\d+(gb|tb|mb|ram|ssd|hdd|mah|mp|hz|w)\b/gi, '').replace(/\s+/g, ' ').trim();
+            const simplified = simplifyMarketplaceQuery(query);
             if (simplified !== query && simplified.length > 2) {
                 console.log(`[ML API] Retry con query simplificada: "${simplified}"`);
-                const retryUrl = `https://api.mercadolibre.com/sites/${siteId}/search?q=${encodeURIComponent(simplified)}&limit=30`;
+                const retryUrl = `https://api.mercadolibre.com/sites/${siteId}/search?q=${encodeURIComponent(simplified)}${conditionParam}&limit=30`;
                 const retryRes = await axios.get(retryUrl, apiOpts).catch(() => null);
-                combined.push(...mapResults(retryRes?.data).filter(item => {
+                combined.push(...mapMercadoLibreApiResults(retryRes?.data, sourceLabel).filter(item => {
                     const key = item.url.split('?')[0].toLowerCase();
                     if (seenUrls.has(key)) return false;
                     seenUrls.add(key);
@@ -268,6 +402,7 @@ exports.scrapeMercadoLibreAPI = async (query, countryCode = 'MX', signal) => {
             }
         }
 
+        setMarketplaceCache(cacheKey, combined);
         console.log(`[ML API] ${sourceLabel} encontró: ${combined.length} resultados (precio: ${priceResults.length}, relevancia: ${relevanceResults.length}).`);
         return combined;
     } catch (error) {
@@ -353,6 +488,14 @@ exports.scrapeAmazonDirect = async (query, countryCode = 'MX', signal) => {
         const isUS = normalizedCountry === 'US';
         const amazonDomain = isUS ? 'https://www.amazon.com' : 'https://www.amazon.com.mx';
         const sourceLabel = isUS ? 'Amazon' : 'Amazon MX';
+        const paApiResults = await searchAmazonPaapi(query, normalizedCountry, signal).catch((error) => {
+            console.warn(`[Amazon PAAPI] Fallback al scraper HTML: ${error.message}`);
+            return null;
+        });
+        if (Array.isArray(paApiResults) && paApiResults.length > 0) {
+            console.log(`[Amazon PAAPI] ${sourceLabel} encontró: ${paApiResults.length} resultados.`);
+            return paApiResults;
+        }
         console.log(`[Direct Scraper] Iniciando búsqueda ultra-rápida en ${sourceLabel} para: ${query} (Con Retry)`);
         const url = `${amazonDomain}/s?k=${encodeURIComponent(query)}`;
         const response = await scrapeWithRetry(url, 2, normalizedCountry, signal);

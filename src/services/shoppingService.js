@@ -786,8 +786,8 @@ exports.searchGoogleShopping = async (query, radius, lat, lng, intentType, abort
         console.log(`Ejecutando scrapers directos rápidos para ${countryCode}: ${cleanQuery} ...`);
 
         const scraperFunctions = [
-            () => monitor.wrap(() => directScraper.scrapeMercadoLibreAPI(cleanQuery, countryCode, abortSignal), 'ml_api_direct'),
-            () => monitor.wrap(directScraper.scrapeAliExpress, 'aliexpress_direct', cleanQuery, abortSignal)
+            () => monitor.wrap(() => directScraper.scrapeMercadoLibreAPI(cleanQuery, countryCode, abortSignal, conditionMode), 'ml_api_direct'),
+            () => monitor.wrap(() => directScraper.scrapeMercadoLibreDirect(cleanQuery, abortSignal), 'ml_web_direct'),
         ];
 
         if (countryCode === 'MX') {
