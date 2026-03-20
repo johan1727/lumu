@@ -1587,19 +1587,19 @@
                 </div>
 
                 <div class="mt-5 max-w-4xl mx-auto px-2">
-                    <div class="filters-shell rounded-[2rem] p-3 md:p-4">
-                        <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                    <div class="filters-shell relative isolate rounded-[2rem] p-3 md:p-4">
+                        <div class="relative z-[180] flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
                             <div>
                                 <p id="guided-search-title" class="text-[11px] font-black uppercase tracking-[0.22em] text-emerald-700">Búsqueda guiada</p>
                                 <p id="guided-search-copy" class="text-sm text-slate-500 font-medium">Elige cómo quieres buscar sin perderte entre tantos botones.</p>
                             </div>
                             <div class="flex items-center gap-2 flex-wrap overflow-visible">
-                                <div class="relative w-full sm:w-auto overflow-visible">
+                                <div class="relative z-[190] w-full sm:w-auto overflow-visible">
                                     <button type="button" id="detected-region-pill"
                                         class="inline-flex min-h-[42px] w-full sm:w-auto min-w-[132px] max-w-full sm:max-w-[220px] items-center justify-center gap-2 rounded-full border border-emerald-200 bg-emerald-50 px-3 py-2 text-[11px] font-black uppercase tracking-[0.12em] text-emerald-800 shadow-sm">
                                         🌎 Región automática
                                     </button>
-                                    <div id="region-selector-menu" class="hidden absolute left-0 sm:left-auto sm:right-0 top-full mt-2 w-[min(88vw,280px)] min-w-[220px] max-w-[280px] max-h-[min(55vh,320px)] overflow-y-auto rounded-2xl border border-emerald-100 bg-white shadow-xl p-2 z-[140]">
+                                    <div id="region-selector-menu" class="hidden absolute left-0 sm:left-auto sm:right-0 top-full mt-2 w-[min(88vw,280px)] min-w-[220px] max-w-[280px] max-h-[min(55vh,320px)] overflow-y-auto rounded-2xl border border-emerald-100 bg-white shadow-xl p-2 z-[220]">
                                         <button type="button" class="region-option-btn flex w-full items-center gap-3 text-left px-3 py-2 rounded-xl text-sm font-bold hover:bg-emerald-50" data-region="auto"><span aria-hidden="true" class="inline-flex h-6 min-w-[2.25rem] items-center justify-center rounded-full bg-emerald-100 px-2 text-[10px] font-black uppercase tracking-[0.16em] text-emerald-700">Auto</span><span class="min-w-0 truncate">Detectar automáticamente</span></button>
                                         <button type="button" class="region-option-btn flex w-full items-center gap-3 text-left px-3 py-2 rounded-xl text-sm font-bold hover:bg-emerald-50" data-region="MX"><span aria-hidden="true" class="inline-flex h-6 min-w-[2.25rem] items-center justify-center rounded-full bg-slate-100 px-2 text-[10px] font-black uppercase tracking-[0.16em] text-slate-700">MX</span><span class="min-w-0 truncate">México</span></button>
                                         <button type="button" class="region-option-btn flex w-full items-center gap-3 text-left px-3 py-2 rounded-xl text-sm font-bold hover:bg-emerald-50" data-region="CL"><span aria-hidden="true" class="inline-flex h-6 min-w-[2.25rem] items-center justify-center rounded-full bg-slate-100 px-2 text-[10px] font-black uppercase tracking-[0.16em] text-slate-700">CL</span><span class="min-w-0 truncate">Chile</span></button>
@@ -1620,7 +1620,7 @@
                         </div>
 
                         <div id="filters-mobile-overlay" class="filters-mobile-overlay"></div>
-                        <div id="filters-collapsible" class="filters-collapsible mt-4">
+                        <div id="filters-collapsible" class="filters-collapsible relative z-[10] mt-4">
                             <div class="space-y-4">
                                 <div>
                                     <p id="filter-section-condition" class="filter-section-label mb-2 text-center">Condición</p>

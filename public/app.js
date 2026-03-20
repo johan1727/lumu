@@ -2383,19 +2383,59 @@ async function initApp() {
         const regionSelectorMenu = document.getElementById('region-selector-menu');
         const regionOptionButtons = document.querySelectorAll('.region-option-btn');
         if (regionPillButton && regionSelectorMenu) {
+            const positionRegionSelectorMenu = () => {
+                const rect = regionPillButton.getBoundingClientRect();
+                const viewportWidth = window.innerWidth || document.documentElement.clientWidth || 0;
+                const preferredWidth = Math.min(280, Math.max(220, viewportWidth - 24));
+                const left = Math.max(12, Math.min(rect.left, viewportWidth - preferredWidth - 12));
+                const top = Math.min(rect.bottom + 8, (window.innerHeight || document.documentElement.clientHeight || 0) - 24);
+                regionSelectorMenu.style.position = 'fixed';
+                regionSelectorMenu.style.left = `${left}px`;
+                regionSelectorMenu.style.top = `${top}px`;
+                regionSelectorMenu.style.right = 'auto';
+                regionSelectorMenu.style.width = `${preferredWidth}px`;
+                regionSelectorMenu.style.maxWidth = `${preferredWidth}px`;
+                regionSelectorMenu.style.zIndex = '9999';
+            };
+            const hideRegionSelectorMenu = () => {
+                regionSelectorMenu.classList.add('hidden');
+                regionSelectorMenu.style.position = '';
+                regionSelectorMenu.style.left = '';
+                regionSelectorMenu.style.top = '';
+                regionSelectorMenu.style.right = '';
+                regionSelectorMenu.style.width = '';
+                regionSelectorMenu.style.maxWidth = '';
+                regionSelectorMenu.style.zIndex = '';
+            };
             regionPillButton.addEventListener('click', (event) => {
                 event.stopPropagation();
-                regionSelectorMenu.classList.toggle('hidden');
+                const willOpen = regionSelectorMenu.classList.contains('hidden');
+                if (!willOpen) {
+                    hideRegionSelectorMenu();
+                    return;
+                }
+                regionSelectorMenu.classList.remove('hidden');
+                positionRegionSelectorMenu();
                 applyRegionalCopy();
             });
-            document.addEventListener('click', () => regionSelectorMenu.classList.add('hidden'));
+            document.addEventListener('click', hideRegionSelectorMenu);
             regionSelectorMenu.addEventListener('click', (event) => event.stopPropagation());
+            window.addEventListener('resize', () => {
+                if (!regionSelectorMenu.classList.contains('hidden')) {
+                    positionRegionSelectorMenu();
+                }
+            });
+            window.addEventListener('scroll', () => {
+                if (!regionSelectorMenu.classList.contains('hidden')) {
+                    positionRegionSelectorMenu();
+                }
+            }, true);
             regionOptionButtons.forEach((btn) => {
                 btn.addEventListener('click', () => {
                     const selectedRegion = btn.getAttribute('data-region') || 'auto';
                     localStorage.setItem(REGION_OVERRIDE_KEY, selectedRegion);
                     currentRegion = selectedRegion === 'auto' ? detectRegion() : selectedRegion;
-                    regionSelectorMenu.classList.add('hidden');
+                    hideRegionSelectorMenu();
                     applyRegionalCopy();
                     renderActiveFiltersSummary();
                 });
