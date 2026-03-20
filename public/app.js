@@ -5074,7 +5074,7 @@ async function initApp() {
                 const productAlt = sanitize(normalizedTitle || (isUS ? 'Product' : 'Producto')) + ' - ' + sanitize(product.tienda || (isUS ? 'Store' : 'Tienda'));
                 card.innerHTML = `
                 ${priceDropBadge}
-                <div class="w-full bg-gradient-to-b from-slate-50 to-white border-b border-slate-100 flex-shrink-0 h-36 sm:h-40 md:h-52 flex items-center justify-center p-3 md:p-4 relative overflow-hidden group-hover:bg-emerald-50/20 transition-colors">
+                <div class="card-open-area w-full bg-gradient-to-b from-slate-50 to-white border-b border-slate-100 flex-shrink-0 h-36 sm:h-40 md:h-52 flex items-center justify-center p-3 md:p-4 relative overflow-hidden group-hover:bg-emerald-50/20 transition-colors cursor-pointer" data-target-url="${preferredClickTarget}">
                     <img src="${imageState.finalImgUrl}" alt="${productAlt}" loading="lazy" referrerpolicy="no-referrer" data-fallback-src="${imageState.fallbackImgUrl}" class="w-full h-full object-contain group-hover:scale-105 transition-transform duration-500 ease-out ${imageState.hasProductImage ? '' : 'opacity-95'}" onerror="this.onerror=null; this.src=this.dataset.fallbackSrc;">
                     ${imageState.hasProductImage ? '' : `<div class="absolute left-3 bottom-3 inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-white/90 border border-slate-200 text-[10px] font-bold text-slate-500 shadow-sm">${sanitize(product.tienda || (isUS ? 'Store' : 'Tienda'))}</div>`}
                     <button class="btn-favorite absolute top-2 right-2 p-2 bg-white/80 dark:bg-slate-800/80 backdrop-blur rounded-full ${heartColor} hover:text-red-500 hover:bg-white dark:hover:bg-slate-800 shadow-sm transition-all z-20 hover:scale-110">
@@ -5196,6 +5196,7 @@ async function initApp() {
                 const btnOpenOffer = card.querySelector('.btn-open-offer');
                 const btnCompare = card.querySelector('.btn-compare');
                 const btnViewHistory = card.querySelector('.btn-view-history');
+                const cardOpenArea = card.querySelector('.card-open-area');
                 const trackingBase = _buildProductTrackingPayload(product, {
                     position: index,
                     action_context: 'result_card'
@@ -5229,6 +5230,14 @@ async function initApp() {
                         e.preventDefault();
                         e.stopPropagation();
                         openProductTarget(btnOpenOffer.getAttribute('data-target-url'));
+                    });
+                }
+                if (cardOpenArea) {
+                    cardOpenArea.addEventListener('click', (e) => {
+                        if (e.target.closest('button, a, input, textarea, select, label')) {
+                            return;
+                        }
+                        openProductTarget(cardOpenArea.getAttribute('data-target-url'));
                     });
                 }
                 card.addEventListener('click', (e) => {

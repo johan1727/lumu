@@ -1103,22 +1103,25 @@ exports.searchProduct = async (req, res) => {
 
         const isLocalFastMode = process.env.NODE_ENV !== 'production';
         const preSearchTimeoutMs = isLocalFastMode ? 1200 : 4000;
+        const shouldUseCache = llmAnalysis.intent_type !== 'servicio_local';
 
         // NUEVO: Verificamos en Caché
-        const cachedResults = await resolveWithSoftTimeout(
-            'cacheService.getCachedResults',
-            () => cacheService.getCachedResults(
-                searchQuery,
-                radius,
-                lat,
-                lng,
-                countryCode,
-                llmAnalysis.canonicalKey,
-                llmAnalysis.priceVolatility
-            ),
-            null,
-            preSearchTimeoutMs
-        );
+        const cachedResults = shouldUseCache
+            ? await resolveWithSoftTimeout(
+                'cacheService.getCachedResults',
+                () => cacheService.getCachedResults(
+                    searchQuery,
+                    radius,
+                    lat,
+                    lng,
+                    countryCode,
+                    llmAnalysis.canonicalKey,
+                    llmAnalysis.priceVolatility
+                ),
+                null,
+                preSearchTimeoutMs
+            )
+            : null;
         if (cachedResults) {
             costMetrics.cacheHit = true;
             logSearchCostMetrics('search.cache_hit', costMetrics, {

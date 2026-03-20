@@ -265,7 +265,7 @@ function inferProductCategory(text) {
 function inferUniversalQueryDomain(text) {
     const normalized = String(text || '').toLowerCase().trim();
     const productCategory = inferProductCategory(normalized);
-    const serviceLocal = /plomero|dentista|doctor|mec[aá]nico|taller|restaurante|hotel|cerrajero|electricista|uber|taxi|dealer|concesionario|abogado|veterinario/i.test(normalized);
+    const serviceLocal = /plomero|dentista|doctor|mec[aá]nico|taller|restaurantes?|taquer[ií]as?|cafeter[ií]as?|pizzer[ií]as?|barber[ií]as?|peluquer[ií]as?|spa|gimnasio|hotel|cerrajero|electricista|uber|taxi|dealer|concesionario|abogado|veterinario|farmacia|lavander[ií]a|ferreter[ií]a/i.test(normalized);
     const commercialInfo = /conviene|vale la pena|recomiendas|mejor para|cu[aá]l me recomiendas|qu[eé] celular|qu[eé] laptop|qu[eé] tv|cu[aá]l comprar|cu[aá]l elegir/i.test(normalized);
     const generalInfo = /clima|capital de|historia de|qu[ií]mica|matem[aá]ticas|programaci[oó]n|receta|traduce|traducir|resumen de|explica|qu[eé] significa|definici[oó]n de/i.test(normalized);
     const outOfScope = /hazme una tarea|escribe un ensayo|resolver examen|predice loter[ií]a|hackea|piratea/i.test(normalized);

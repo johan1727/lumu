@@ -322,13 +322,17 @@ exports.searchGoogleShopping = async (query, radius, lat, lng, intentType, abort
         serperResults = await supermarketScraper.searchSupermarkets(query);
     } else if (isService) {
         // O.1: Para servicios locales (plomero, dentista), saltamos Google Shopping de Productos
-        if (apiKey && lat && lng && radius !== 'global' && radius !== '999999') {
+        if (apiKey) {
             try {
+                const localPayload = { q: query, gl: regionCfg.gl, hl: regionCfg.hl };
+                if (lat && lng && radius !== 'global' && radius !== '999999') {
+                    localPayload.ll = `@${lat},${lng},14z`;
+                }
                 const localConfig = {
                     method: 'post',
                     url: 'https://google.serper.dev/places',
                     headers: { 'X-API-KEY': apiKey, 'Content-Type': 'application/json' },
-                    data: JSON.stringify({ q: query, ll: `@${lat},${lng},14z`, gl: regionCfg.gl, hl: regionCfg.hl }),
+                    data: JSON.stringify(localPayload),
                     timeout: SERPER_TIMEOUT,
                     signal: abortSignal
                 };
