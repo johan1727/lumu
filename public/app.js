@@ -2383,6 +2383,8 @@ async function initApp() {
         const regionSelectorMenu = document.getElementById('region-selector-menu');
         const regionOptionButtons = document.querySelectorAll('.region-option-btn');
         if (regionPillButton && regionSelectorMenu) {
+            const regionSelectorOriginalParent = regionSelectorMenu.parentElement;
+            const regionSelectorOriginalNextSibling = regionSelectorMenu.nextElementSibling;
             const positionRegionSelectorMenu = () => {
                 const rect = regionPillButton.getBoundingClientRect();
                 const viewportWidth = window.innerWidth || document.documentElement.clientWidth || 0;
@@ -2399,6 +2401,13 @@ async function initApp() {
             };
             const hideRegionSelectorMenu = () => {
                 regionSelectorMenu.classList.add('hidden');
+                if (regionSelectorOriginalParent && regionSelectorMenu.parentElement !== regionSelectorOriginalParent) {
+                    if (regionSelectorOriginalNextSibling && regionSelectorOriginalNextSibling.parentElement === regionSelectorOriginalParent) {
+                        regionSelectorOriginalParent.insertBefore(regionSelectorMenu, regionSelectorOriginalNextSibling);
+                    } else {
+                        regionSelectorOriginalParent.appendChild(regionSelectorMenu);
+                    }
+                }
                 regionSelectorMenu.style.position = '';
                 regionSelectorMenu.style.left = '';
                 regionSelectorMenu.style.top = '';
@@ -2413,6 +2422,9 @@ async function initApp() {
                 if (!willOpen) {
                     hideRegionSelectorMenu();
                     return;
+                }
+                if (regionSelectorMenu.parentElement !== document.body) {
+                    document.body.appendChild(regionSelectorMenu);
                 }
                 regionSelectorMenu.classList.remove('hidden');
                 positionRegionSelectorMenu();
