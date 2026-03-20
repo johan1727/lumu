@@ -38,7 +38,7 @@ const getAxiosConfig = (countryCode = 'MX') => {
             'Accept-Encoding': 'gzip, deflate, br',
             'Cache-Control': 'no-cache',
         },
-        timeout: 10000,
+        timeout: 5000,
     };
 
     // Smart Proxy Rotation (Sprint 3)
@@ -210,26 +210,24 @@ exports.scrapeMercadoLibreAPI = async (query, countryCode = 'MX', signal) => {
         const normalizedCountry = String(countryCode || 'MX').toUpperCase();
         const siteId = MERCADO_LIBRE_SITE_MAP[normalizedCountry] || 'MLM';
         const sourceLabel = MERCADO_LIBRE_SOURCE_MAP[normalizedCountry] || 'Mercado Libre';
-        const apiUrl = `https://api.mercadolibre.com/sites/${siteId}/search?q=${encodeURIComponent(query)}&limit=10`;
-        console.log(`[ML API] Buscando en ${siteId} para ${normalizedCountry}: ${query}`);
+        const encodedQuery = encodeURIComponent(query);
+        const apiOpts = { timeout: 5000, signal, headers: { 'User-Agent': getRandomUA(), 'Accept': 'application/json' } };
 
-        const response = await axios.get(apiUrl, {
-            timeout: 8000,
-            signal,
-            headers: {
-                'User-Agent': getRandomUA(),
-                'Accept': 'application/json'
-            }
-        });
+        // PERF: Two parallel queries — cheapest + most relevant (ML default is "recommended", not cheapest)
+        const priceUrl = `https://api.mercadolibre.com/sites/${siteId}/search?q=${encodedQuery}&sort=price_asc&limit=50`;
+        const relevanceUrl = `https://api.mercadolibre.com/sites/${siteId}/search?q=${encodedQuery}&limit=50`;
+        console.log(`[ML API] Buscando en ${siteId} para ${normalizedCountry}: ${query} (precio + relevancia en paralelo)`);
 
-        const results = Array.isArray(response.data?.results)
-            ? response.data.results.map((item) => {
+        const [priceRes, relevanceRes] = await Promise.all([
+            axios.get(priceUrl, apiOpts).catch(err => { console.warn('[ML API] Price query failed:', err.message); return null; }),
+            axios.get(relevanceUrl, apiOpts).catch(err => { console.warn('[ML API] Relevance query failed:', err.message); return null; })
+        ]);
+
+        const mapResults = (data) => Array.isArray(data?.results)
+            ? data.results.map((item) => {
                 const price = Number(item.price);
                 const permalink = item.permalink || item.url || '';
-                if (!item.title || !Number.isFinite(price) || !permalink) {
-                    return null;
-                }
-
+                if (!item.title || !Number.isFinite(price) || !permalink) return null;
                 return {
                     title: item.title,
                     price,
@@ -240,8 +238,38 @@ exports.scrapeMercadoLibreAPI = async (query, countryCode = 'MX', signal) => {
             }).filter(Boolean)
             : [];
 
-        console.log(`[ML API] ${sourceLabel} encontró: ${results.length} resultados.`);
-        return results;
+        const priceResults = mapResults(priceRes?.data);
+        const relevanceResults = mapResults(relevanceRes?.data);
+
+        // Deduplicate by URL
+        const seenUrls = new Set();
+        const combined = [];
+        for (const item of [...priceResults, ...relevanceResults]) {
+            const key = item.url.split('?')[0].toLowerCase();
+            if (!seenUrls.has(key)) {
+                seenUrls.add(key);
+                combined.push(item);
+            }
+        }
+
+        // If zero results, retry with simplified query (strip specs like "256gb", model numbers)
+        if (combined.length === 0 && query.split(/\s+/).length > 2) {
+            const simplified = query.replace(/\b\d+(gb|tb|mb|ram|ssd|hdd|mah|mp|hz|w)\b/gi, '').replace(/\s+/g, ' ').trim();
+            if (simplified !== query && simplified.length > 2) {
+                console.log(`[ML API] Retry con query simplificada: "${simplified}"`);
+                const retryUrl = `https://api.mercadolibre.com/sites/${siteId}/search?q=${encodeURIComponent(simplified)}&limit=30`;
+                const retryRes = await axios.get(retryUrl, apiOpts).catch(() => null);
+                combined.push(...mapResults(retryRes?.data).filter(item => {
+                    const key = item.url.split('?')[0].toLowerCase();
+                    if (seenUrls.has(key)) return false;
+                    seenUrls.add(key);
+                    return true;
+                }));
+            }
+        }
+
+        console.log(`[ML API] ${sourceLabel} encontró: ${combined.length} resultados (precio: ${priceResults.length}, relevancia: ${relevanceResults.length}).`);
+        return combined;
     } catch (error) {
         console.error('[ML API] Error consultando MercadoLibre API:', error.message);
         return [];
@@ -326,7 +354,7 @@ exports.scrapeAmazonDirect = async (query, countryCode = 'MX', signal) => {
         const amazonDomain = isUS ? 'https://www.amazon.com' : 'https://www.amazon.com.mx';
         const sourceLabel = isUS ? 'Amazon' : 'Amazon MX';
         console.log(`[Direct Scraper] Iniciando búsqueda ultra-rápida en ${sourceLabel} para: ${query} (Con Retry)`);
-        const url = `${amazonDomain}/s?k=${encodeURIComponent(query)}&i=popular`;
+        const url = `${amazonDomain}/s?k=${encodeURIComponent(query)}`;
         const response = await scrapeWithRetry(url, 2, normalizedCountry, signal);
         const $ = cheerio.load(response.data);
 
@@ -338,7 +366,7 @@ exports.scrapeAmazonDirect = async (query, countryCode = 'MX', signal) => {
         }
 
         const results = [];
-        $('.s-result-item[data-component-type="s-search-result"]').slice(0, 8).each((index, element) => {
+        $('.s-result-item[data-component-type="s-search-result"]').slice(0, 15).each((index, element) => {
             const title = $(element).find('h2 span').text().trim();
             const urlPath = $(element).find('h2').parent('a').attr('href') || $(element).find('h2 a').attr('href');
             const priceWhole = $(element).find('.a-price-whole').first().text().replace(/,/g, '');
@@ -378,7 +406,7 @@ exports.scrapeWalmartMX = async (query, signal) => {
         const $ = cheerio.load(response.data);
 
         const results = [];
-        $('[data-testid="product-card"], .product-card, [class*="ProductCard"]').slice(0, 5).each((i, el) => {
+        $('[data-testid="product-card"], .product-card, [class*="ProductCard"]').slice(0, 8).each((i, el) => {
             const title = $(el).find('[class*="title"], h3, h4, [data-testid="product-title"]').first().text().trim();
             const link = $(el).find('a[href*="/ip/"], a[href*="/productos/"]').first().attr('href');
             const priceText = $(el).find('[class*="price"], [data-testid="product-price"]').first().text().replace(/[^0-9.]/g, '');
@@ -420,7 +448,7 @@ exports.scrapeLiverpoolMX = async (query, signal) => {
             try {
                 const json = JSON.parse($(el).html());
                 if (json['@type'] === 'ItemList' && json.itemListElement) {
-                    json.itemListElement.slice(0, 5).forEach(item => {
+                    json.itemListElement.slice(0, 8).forEach(item => {
                         const product = item.item || item;
                         if (product.name && product.offers) {
                             const offer = Array.isArray(product.offers) ? product.offers[0] : product.offers;
@@ -439,7 +467,7 @@ exports.scrapeLiverpoolMX = async (query, signal) => {
 
         // Fallback: parse HTML product cards
         if (results.length === 0) {
-            $('[class*="product-card"], [class*="plp-card"], .card-product, a[class*="product"]').slice(0, 5).each((i, el) => {
+            $('[class*="product-card"], [class*="plp-card"], .card-product, a[class*="product"]').slice(0, 8).each((i, el) => {
                 const title = $(el).find('[class*="title"], [class*="name"], h3, h4').first().text().trim();
                 const link = $(el).is('a') ? $(el).attr('href') : $(el).find('a').first().attr('href');
                 const priceText = $(el).find('[class*="price"], [class*="Price"]').first().text().replace(/[^0-9.]/g, '');
@@ -478,7 +506,7 @@ exports.scrapeCoppelMX = async (query, signal) => {
 
         const results = [];
         // Coppel product cards
-        $('[class*="product-card"], .productCard, [class*="ProductCard"], [data-product]').slice(0, 5).each((i, el) => {
+        $('[class*="product-card"], .productCard, [class*="ProductCard"], [data-product]').slice(0, 8).each((i, el) => {
             const title = $(el).find('[class*="title"], [class*="name"], [class*="Title"], h3, h4').first().text().trim();
             const link = $(el).find('a[href*="/producto/"], a[href*="/p/"]').first().attr('href') || $(el).find('a').first().attr('href');
             const priceText = $(el).find('[class*="price"], [class*="Price"], [class*="precio"]').first().text().replace(/[^0-9.]/g, '');
@@ -501,7 +529,7 @@ exports.scrapeCoppelMX = async (query, signal) => {
                 try {
                     const json = JSON.parse($(el).html());
                     const items = json['@type'] === 'ItemList' ? (json.itemListElement || []) : (json['@type'] === 'Product' ? [json] : []);
-                    items.slice(0, 5).forEach(item => {
+                    items.slice(0, 8).forEach(item => {
                         const product = item.item || item;
                         if (product.name && product.offers) {
                             const offer = Array.isArray(product.offers) ? product.offers[0] : product.offers;

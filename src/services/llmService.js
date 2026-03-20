@@ -769,7 +769,7 @@ exports.analyzeMessage = async (userText, chatHistory = [], context = {}) => {
                     .eq('event_type', 'click')
                     .not('search_query', 'is', null)
                     .order('created_at', { ascending: false })
-                    .limit(200);
+                    .limit(50);
 
                 if (!clickError && Array.isArray(clickRows) && clickRows.length > 0) {
                     const relevantClicks = clickRows

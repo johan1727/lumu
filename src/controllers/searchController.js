@@ -1105,9 +1105,9 @@ exports.searchProduct = async (req, res) => {
         const preSearchTimeoutMs = isLocalFastMode ? 1200 : 4000;
         const shouldUseCache = llmAnalysis.intent_type !== 'servicio_local';
 
-        // NUEVO: Verificamos en Caché
-        const cachedResults = shouldUseCache
-            ? await resolveWithSoftTimeout(
+        // PERF: Run cache lookup + intent memory lookup IN PARALLEL (saves 1-4s)
+        const cachePromise = shouldUseCache
+            ? resolveWithSoftTimeout(
                 'cacheService.getCachedResults',
                 () => cacheService.getCachedResults(
                     searchQuery,
@@ -1121,7 +1121,56 @@ exports.searchProduct = async (req, res) => {
                 null,
                 preSearchTimeoutMs
             )
-            : null;
+            : Promise.resolve(null);
+
+        const intentPromise = supabase
+            ? resolveWithSoftTimeout(
+                'query_intent_memory lookup',
+                async () => {
+                    const normalizedQ = (llmAnalysis.searchQuery || query).toLowerCase().trim();
+                    const canonicalK = llmAnalysis.canonicalKey || '';
+                    let intentQuery = supabase.from('query_intent_memory')
+                        .select('store_name_key, clicked_count, success_score')
+                        .eq('country_code', countryCode)
+                        .order('clicked_count', { ascending: false })
+                        .limit(20);
+
+                    if (canonicalK) {
+                        intentQuery = intentQuery.or(`normalized_query.eq.${normalizedQ},canonical_key.eq.${canonicalK}`);
+                    } else {
+                        intentQuery = intentQuery.eq('normalized_query', normalizedQ);
+                    }
+
+                    const { data: intentData, error: intentErr } = await intentQuery;
+                    const nextBoostMap = {};
+                    const nextSignalMetaMap = {};
+                    if (!intentErr && intentData && intentData.length > 0) {
+                        const maxClicks = Math.max(...intentData.map(r => Number(r.clicked_count || 0)), 1);
+                        const maxSuccessScore = Math.max(...intentData.map(r => Number(r.success_score || 0)), 1);
+                        intentData.forEach(row => {
+                            const key = row.store_name_key;
+                            if (key) {
+                                nextBoostMap[key] = buildIntentMemoryBoost(row, maxClicks, maxSuccessScore);
+                                nextSignalMetaMap[key] = {
+                                    clickedCount: Number(row.clicked_count || 0),
+                                    successScore: Number(row.success_score || 0)
+                                };
+                            }
+                        });
+                        console.log(`[Intent Memory] Found ${intentData.length} store preferences for "${normalizedQ}" (boost map: ${JSON.stringify(nextBoostMap)})`);
+                    }
+                    return { boostMap: nextBoostMap, signalMetaMap: nextSignalMetaMap };
+                },
+                { boostMap: {}, signalMetaMap: {} },
+                preSearchTimeoutMs
+            )
+            : Promise.resolve({ boostMap: {}, signalMetaMap: {} });
+
+        const [cachedResults, resolvedIntentSignals] = await Promise.all([cachePromise, intentPromise]);
+
+        let intentBoostMap = resolvedIntentSignals?.boostMap || {};
+        let intentSignalMetaMap = resolvedIntentSignals?.signalMetaMap || {};
+
         if (cachedResults) {
             costMetrics.cacheHit = true;
             logSearchCostMetrics('search.cache_hit', costMetrics, {
@@ -1169,55 +1218,6 @@ exports.searchProduct = async (req, res) => {
         }
 
         bumpProviderCostMetrics(costMetrics, { intentType: llmAnalysis.intent_type, radius, lat, lng });
-
-        // --- QUERY INTENT MEMORY: Boost stores with historical click data ---
-        // Runs BEFORE shopping call so preferred stores can influence site: operators
-        let intentBoostMap = {};
-        let intentSignalMetaMap = {};
-        if (supabase) {
-            const resolvedIntentSignals = await resolveWithSoftTimeout(
-                'query_intent_memory lookup',
-                async () => {
-                const normalizedQ = (llmAnalysis.searchQuery || query).toLowerCase().trim();
-                const canonicalK = llmAnalysis.canonicalKey || '';
-                let intentQuery = supabase.from('query_intent_memory')
-                    .select('store_name_key, clicked_count, success_score')
-                    .eq('country_code', countryCode)
-                    .order('clicked_count', { ascending: false })
-                    .limit(20);
-
-                if (canonicalK) {
-                    intentQuery = intentQuery.or(`normalized_query.eq.${normalizedQ},canonical_key.eq.${canonicalK}`);
-                } else {
-                    intentQuery = intentQuery.eq('normalized_query', normalizedQ);
-                }
-
-                    const { data: intentData, error: intentErr } = await intentQuery;
-                    const nextBoostMap = {};
-                    const nextSignalMetaMap = {};
-                    if (!intentErr && intentData && intentData.length > 0) {
-                        const maxClicks = Math.max(...intentData.map(r => Number(r.clicked_count || 0)), 1);
-                        const maxSuccessScore = Math.max(...intentData.map(r => Number(r.success_score || 0)), 1);
-                        intentData.forEach(row => {
-                            const key = row.store_name_key;
-                            if (key) {
-                                nextBoostMap[key] = buildIntentMemoryBoost(row, maxClicks, maxSuccessScore);
-                                nextSignalMetaMap[key] = {
-                                    clickedCount: Number(row.clicked_count || 0),
-                                    successScore: Number(row.success_score || 0)
-                                };
-                            }
-                        });
-                        console.log(`[Intent Memory] Found ${intentData.length} store preferences for "${normalizedQ}" (boost map: ${JSON.stringify(nextBoostMap)})`);
-                    }
-                    return { boostMap: nextBoostMap, signalMetaMap: nextSignalMetaMap };
-                },
-                { boostMap: {}, signalMetaMap: {} },
-                preSearchTimeoutMs
-            );
-            intentBoostMap = resolvedIntentSignals?.boostMap || {};
-            intentSignalMetaMap = resolvedIntentSignals?.signalMetaMap || {};
-        }
 
         console.log(`[Search Pipeline] Buscando: "${searchQuery}" | radius=${radius} | lat=${lat} | lng=${lng} | intent=${llmAnalysis.intent_type}`);
         // Extract preferred store keys from intent memory for adaptive site: operators
@@ -1284,12 +1284,12 @@ exports.searchProduct = async (req, res) => {
                 });
             }
 
-            for (const rescueStep of rescuedQueries) {
-                if (shoppingResults.length >= 8) break;
-                console.log(`[Search Pipeline] Reintentando (${rescueStep.label}) con query: "${rescueStep.query}"`);
-                costMetrics.retrySearches += 1;
-                bumpProviderCostMetrics(costMetrics, { intentType: llmAnalysis.intent_type, radius, lat, lng });
-                const retryResults = await shoppingService.searchGoogleShopping(
+            // PERF: Run ALL rescue queries in PARALLEL instead of sequentially (saves 8-16s)
+            costMetrics.retrySearches += rescuedQueries.length;
+            rescuedQueries.forEach(() => bumpProviderCostMetrics(costMetrics, { intentType: llmAnalysis.intent_type, radius, lat, lng }));
+            console.log(`[Search Pipeline] Running ${rescuedQueries.length} rescue queries in parallel...`);
+            const rescuePromises = rescuedQueries.map(rescueStep =>
+                shoppingService.searchGoogleShopping(
                     rescueStep.query,
                     radius,
                     lat,
@@ -1302,12 +1302,14 @@ exports.searchProduct = async (req, res) => {
                     llmAnalysis.productCategory || '',
                     rescueStep.preferredStoreKeys,
                     rescueStep.brandOfficialQuery
-                );
-
-                if (!Array.isArray(retryResults) || retryResults.length === 0) {
-                    continue;
-                }
-
+                ).catch(err => {
+                    console.warn(`[Search Pipeline] Rescue "${rescueStep.label}" failed: ${err.message}`);
+                    return [];
+                })
+            );
+            const rescueResultSets = await Promise.all(rescuePromises);
+            rescueResultSets.forEach((retryResults, idx) => {
+                if (!Array.isArray(retryResults) || retryResults.length === 0) return;
                 const freshResults = retryResults.filter(item => {
                     const key = String(item?.url || '').split('?')[0].toLowerCase();
                     if (!key) return true;
@@ -1315,12 +1317,11 @@ exports.searchProduct = async (req, res) => {
                     rescueSeenKeys.add(key);
                     return true;
                 });
-
                 if (freshResults.length > 0) {
                     shoppingResults.push(...freshResults);
-                    console.log(`[Search Pipeline] Reintento ${rescueStep.label} rescató ${freshResults.length} resultados.`);
+                    console.log(`[Search Pipeline] Rescue ${rescuedQueries[idx].label} rescued ${freshResults.length} results.`);
                 }
-            }
+            });
 
             if (shoppingResults.length === 0) {
                 logSearchCostMetrics('search.no_results', costMetrics, {
@@ -1694,8 +1695,8 @@ exports.searchProduct = async (req, res) => {
         });
 
         // --- DIVERSIDAD: Round-robin por tienda (máx 3 por tienda) ---
-        const MAX_PER_STORE = 6;
-        const MAX_RESULTS = 36;
+        const MAX_PER_STORE = 8;
+        const MAX_RESULTS = 50;
         const topResults = selectBalancedResults(sortedResults, llmAnalysis.broadProfile, MAX_RESULTS, MAX_PER_STORE);
 
         // 5. Inyectar links de afiliados (o dejarlos como Loss Leaders)
@@ -1741,8 +1742,13 @@ exports.searchProduct = async (req, res) => {
             };
         });
 
-        // Historial de precios: comparar con snapshots previos por URL
-        const priceHistoryMap = await cacheService.getPriceHistoryMap(searchQuery, radius, lat, lng, finalProducts, countryCode);
+        // PERF: Price history with soft timeout (3s max) to avoid blocking response
+        const priceHistoryMap = await resolveWithSoftTimeout(
+            'cacheService.getPriceHistoryMap',
+            () => cacheService.getPriceHistoryMap(searchQuery, radius, lat, lng, finalProducts, countryCode),
+            {},
+            3000
+        );
         const productsWithTrend = finalProducts.map((product) => {
             const normalizedUrl = cacheService.normalizeProductUrl(product.urlMonetizada || product.urlOriginal);
             const productHistory = priceHistoryMap[normalizedUrl] || [];
@@ -1781,10 +1787,10 @@ exports.searchProduct = async (req, res) => {
             };
         });
 
-        // NUEVO: Guardar en Caché
+        // PERF: Fire-and-forget cache save (don't block response)
         if (productsWithTrend.length > 0) {
-            await cacheService.saveToCache(searchQuery, radius, lat, lng, productsWithTrend, countryCode, llmAnalysis.canonicalKey, llmAnalysis.priceVolatility);
-            await cacheService.savePriceSnapshot(searchQuery, radius, lat, lng, productsWithTrend, countryCode);
+            cacheService.saveToCache(searchQuery, radius, lat, lng, productsWithTrend, countryCode, llmAnalysis.canonicalKey, llmAnalysis.priceVolatility).catch(e => console.warn('[Cache Save] Error:', e.message));
+            cacheService.savePriceSnapshot(searchQuery, radius, lat, lng, productsWithTrend, countryCode).catch(e => console.warn('[Price Snapshot] Error:', e.message));
         }
 
         // FIX #6: Unificar logging - solo loguear en searches (no en rate_limits para autenticados)

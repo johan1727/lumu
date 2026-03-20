@@ -5,9 +5,9 @@ const localPriceExtractor = require('./localPriceExtractor');
 const regionConfigService = require('./regionConfigService');
 
 // Timeout por defecto para Serper API
-const SERPER_TIMEOUT = 8000;
-const SERPER_MAX_RETRIES = 2;
-const LOCAL_FAST_TIMEOUT = 5000;
+const SERPER_TIMEOUT = 6000;
+const SERPER_MAX_RETRIES = 1;
+const LOCAL_FAST_TIMEOUT = 4000;
 
 function extractSnippetPrice(text) {
     const source = String(text || '');
@@ -367,7 +367,7 @@ exports.searchGoogleShopping = async (query, radius, lat, lng, intentType, abort
             method: 'post',
             url: 'https://google.serper.dev/shopping',
             headers: { 'X-API-KEY': apiKey, 'Content-Type': 'application/json' },
-            data: JSON.stringify({ q: shoppingQuery, gl: regionCfg.gl, hl: regionCfg.hl, num: 40 }),
+            data: JSON.stringify({ q: shoppingQuery, gl: regionCfg.gl, hl: regionCfg.hl, num: 50 }),
             timeout: serperTimeout,
             signal: abortSignal
         }, serperRetries).catch(err => { console.error('Error Google Shopping:', err.message); return null; });
@@ -422,6 +422,30 @@ exports.searchGoogleShopping = async (query, radius, lat, lng, intentType, abort
             }, serperRetries).catch(err => { console.error('Error Official Serper Web:', err.message); return null; })
             : Promise.resolve(null);
 
+        // PERF: Dedicated ML+Amazon Serper query to guarantee results from top marketplaces
+        const mlAmazonDomains = countryCode === 'US'
+            ? 'site:amazon.com OR site:ebay.com'
+            : countryCode === 'CL'
+                ? 'site:mercadolibre.cl OR site:amazon.com'
+                : countryCode === 'CO'
+                    ? 'site:mercadolibre.com.co OR site:amazon.com'
+                    : countryCode === 'AR'
+                        ? 'site:mercadolibre.com.ar'
+                        : countryCode === 'PE'
+                            ? 'site:mercadolibre.com.pe OR site:amazon.com'
+                            : 'site:mercadolibre.com.mx OR site:amazon.com.mx';
+        const mlAmazonPromise = fetchWithRetry({
+            method: 'post',
+            url: 'https://google.serper.dev/search',
+            headers: { 'X-API-KEY': apiKey, 'Content-Type': 'application/json' },
+            data: JSON.stringify({
+                q: `${webQuery} ${mlAmazonDomains}`,
+                gl: regionCfg.gl, hl: regionCfg.hl, num: 20
+            }),
+            timeout: serperTimeout,
+            signal: abortSignal
+        }, serperRetries).catch(err => { console.error('Error Serper ML+Amazon:', err.message); return null; });
+
         const serperAltQueryCount = isLocalFastMode ? 1 : (Math.max(0, parseInt(process.env.ALT_QUERY_SERPER_COUNT || '1', 10) || 1));
         const altShoppingPromises = (alternativeQueries || [])
             .filter(Boolean)
@@ -438,7 +462,7 @@ exports.searchGoogleShopping = async (query, radius, lat, lng, intentType, abort
                 return null;
             }));
 
-        const [shoppingRes, webRes, broadWebRes, officialWebRes, ...altShoppingResponses] = await Promise.all([shoppingPromise, webPromise, broadWebPromise, officialWebPromise, ...altShoppingPromises]);
+        const [shoppingRes, webRes, broadWebRes, officialWebRes, mlAmazonRes, ...altShoppingResponses] = await Promise.all([shoppingPromise, webPromise, broadWebPromise, officialWebPromise, mlAmazonPromise, ...altShoppingPromises]);
 
         // Procesar Shopping
         if (shoppingRes?.data?.shopping) {
@@ -601,6 +625,37 @@ exports.searchGoogleShopping = async (query, radius, lat, lng, intentType, abort
             console.log(`[Serper Official Web] Encontró ${officialMapped.length} resultados oficiales`);
         }
 
+        // Process dedicated ML+Amazon results
+        if (mlAmazonRes?.data?.organic) {
+            const mlAmazonMapped = mlAmazonRes.data.organic
+                .filter(r => r.link && !r.link.includes('google.com'))
+                .filter(r => looksLikeProductPage(r.link, countryCode) || isKnownStoreUrl(r.link, countryCode) || Number.isFinite(extractSnippetPrice(r.snippet || '') ?? extractSnippetPrice(r.title || '')))
+                .map(r => {
+                    const knownStore = isKnownStoreUrl(r.link, countryCode);
+                    const directProductPage = looksLikeProductPage(r.link, countryCode);
+                    const priceMeta = resolvePriceMetadata({
+                        primaryPrice: extractSnippetPrice(r.snippet || '') ?? extractSnippetPrice(r.title || ''),
+                        text: `${r.title || ''} ${r.snippet || ''}`,
+                        sourceType: 'web_snippet',
+                        isDirectProductPage: directProductPage
+                    });
+                    return {
+                        title: r.title || 'Sin Título',
+                        price: priceMeta.price,
+                        url: r.link,
+                        source: regionConfigService.resolveStoreName(r.link, countryCode),
+                        image: normalizeIncomingImage(r.imageUrl || ''),
+                        snippet: r.snippet || '',
+                        isDirectProductPage: directProductPage,
+                        isKnownStoreDomain: knownStore,
+                        ...priceMeta,
+                        resultSource: 'ml_amazon_web'
+                    };
+                });
+            serperResults = [...serperResults, ...mlAmazonMapped];
+            console.log(`[Serper ML+Amazon] Encontró ${mlAmazonMapped.length} resultados dedicados de marketplaces`);
+        }
+
         if (broadWebRes?.data?.organic && serperResults.length < 50) {
             const broadMapped = broadWebRes.data.organic
                 .filter(r => r.link && !r.link.includes('google.com'))
@@ -743,17 +798,7 @@ exports.searchGoogleShopping = async (query, radius, lat, lng, intentType, abort
                 () => monitor.wrap(directScraper.scrapeCoppelMX, 'coppel_direct', cleanQuery, abortSignal),
                 () => monitor.wrap(directScraper.scrapeElektraMX, 'elektra_direct', cleanQuery, abortSignal),
                 () => monitor.wrap(directScraper.scrapeBestBuyMX, 'bestbuy_direct', cleanQuery, abortSignal),
-                () => monitor.wrap(directScraper.scrapeCostcoMX, 'costco_direct', cleanQuery, abortSignal),
-                () => monitor.wrap(directScraper.scrapeSamsClubMX, 'sams_direct', cleanQuery, abortSignal),
-                () => monitor.wrap(directScraper.scrapeHomeDepotMX, 'homedepot_direct', cleanQuery, abortSignal),
-                () => monitor.wrap(directScraper.scrapeOfficeDepotMX, 'officedepot_direct', cleanQuery, abortSignal),
-                () => monitor.wrap(directScraper.scrapeSorianaMX, 'soriana_direct', cleanQuery, abortSignal),
-                () => monitor.wrap(directScraper.scrapeSearsMX, 'sears_direct', cleanQuery, abortSignal),
-                () => monitor.wrap(directScraper.scrapeSheinMX, 'shein_direct', cleanQuery, abortSignal),
-                () => monitor.wrap(directScraper.scrapeTemuMX, 'temu_direct', cleanQuery, abortSignal),
-                () => monitor.wrap(directScraper.scrapeBodegaAurreraMX, 'bodega_aurrera_direct', cleanQuery, abortSignal),
-                () => monitor.wrap(directScraper.scrapeLinioMX, 'linio_direct', cleanQuery, abortSignal),
-                () => monitor.wrap(directScraper.scrapeClaroShopMX, 'claroshop_direct', cleanQuery, abortSignal)
+                () => monitor.wrap(directScraper.scrapeCostcoMX, 'costco_direct', cleanQuery, abortSignal)
             );
         } else if (['CL', 'CO', 'PE'].includes(countryCode)) {
             scraperFunctions.unshift(() => monitor.wrap(() => directScraper.scrapeFalabellaRegional(cleanQuery, countryCode, abortSignal), 'falabella_direct'));
@@ -773,7 +818,7 @@ exports.searchGoogleShopping = async (query, radius, lat, lng, intentType, abort
             });
         }
         
-        const CONCURRENCY_LIMIT = isLocalFastMode ? (isBroadExploration ? 3 : 2) : 5;
+        const CONCURRENCY_LIMIT = isLocalFastMode ? (isBroadExploration ? 3 : 2) : 8;
         const scraperResultsRaw = await runWithConcurrencyLimit(scraperFunctions, CONCURRENCY_LIMIT, abortSignal);
         
         scraperResultsRaw.forEach(result => {
