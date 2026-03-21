@@ -58,6 +58,8 @@ function resolvePriceMetadata({ primaryPrice = null, text = '', sourceType = 'un
     const snippetPrices = extractAllSnippetPrices(text);
     const hasInstallmentLanguage = /meses|msi|mensual|mensualidades|quincena|quincenal|semanales|semana|por mes|desde\s+\$|pagos de|pay as low as|monthly/i.test(String(text || ''));
     const hasSaleLanguage = /ahora|rebaja|descuento|oferta|sale|promo|promoci[oó]n|precio final|antes|hot sale|buen fin|liquidaci[oó]n/i.test(String(text || ''));
+    const hasCouponLanguage = /cup[oó]n|coupon|cup[oó]n aplicado|extra|save extra|promo code|c[oó]digo/i.test(String(text || ''));
+    const hasShippingLanguage = /env[ií]o|shipping|llega|arrives|delivery|entrega|prime/i.test(String(text || ''));
     const sortedSnippetPrices = [...snippetPrices].sort((a, b) => a - b);
     const lowestSnippetPrice = sortedSnippetPrices[0] || null;
     const highestSnippetPrice = sortedSnippetPrices[sortedSnippetPrices.length - 1] || null;
@@ -66,6 +68,8 @@ function resolvePriceMetadata({ primaryPrice = null, text = '', sourceType = 'un
     let priceSource = price != null ? sourceType : 'missing';
     let priceConfidence = sourceType === 'shopping_api'
         ? (isRedirect ? 0.82 : 0.94)
+        : sourceType === 'amazon_serpapi'
+            ? 0.96
         : sourceType === 'official_web'
             ? 0.72
             : sourceType === 'web_snippet'
@@ -110,6 +114,14 @@ function resolvePriceMetadata({ primaryPrice = null, text = '', sourceType = 'un
         priceConfidence = Math.max(0.22, priceConfidence - (hasInstallmentLanguage ? 0.18 : 0.1) - (priceSpreadRatio >= 0.18 ? 0.08 : 0));
     }
 
+    if (hasShippingLanguage && !priceNeedsVerification) {
+        priceConfidence = Math.min(0.99, priceConfidence + 0.02);
+    }
+
+    if (hasCouponLanguage && sourceType !== 'broad_web' && sourceType !== 'web_snippet') {
+        priceConfidence = Math.min(0.99, priceConfidence + 0.02);
+    }
+
     return {
         price,
         priceSource,
@@ -117,7 +129,9 @@ function resolvePriceMetadata({ primaryPrice = null, text = '', sourceType = 'un
         observedPrices: observedPrices.slice(0, 4),
         priceNeedsVerification,
         hasSaleLanguage,
-        hasInstallmentLanguage
+        hasInstallmentLanguage,
+        hasCouponLanguage,
+        hasShippingLanguage
     };
 }
 

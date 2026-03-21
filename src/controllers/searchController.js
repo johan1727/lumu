@@ -1664,8 +1664,36 @@ exports.searchProduct = async (req, res) => {
             const bMarketplacePenalty = b.isHighRiskMarketplace ? 220 : (b.isLessTrustedMarketplace ? 90 : 0);
             const aVerifiedSignalBoost = a.hasVerifiedStoreSignal ? -90 : 0;
             const bVerifiedSignalBoost = b.hasVerifiedStoreSignal ? -90 : 0;
-            const aSourceBoost = a.resultSource === 'shopping_api' ? -80 : a.resultSource === 'direct_scraper' ? -110 : a.resultSource === 'official_web' ? -70 : 0;
-            const bSourceBoost = b.resultSource === 'shopping_api' ? -80 : b.resultSource === 'direct_scraper' ? -110 : b.resultSource === 'official_web' ? -70 : 0;
+            const aSourceBoost = a.resultSource === 'amazon_serpapi'
+                ? -150
+                : a.resultSource === 'ml_api_direct'
+                    ? -135
+                    : a.resultSource === 'ml_amazon_web'
+                        ? -115
+                        : a.resultSource === 'shopping_api'
+                            ? -80
+                            : a.resultSource === 'direct_scraper'
+                                ? -110
+                                : a.resultSource === 'official_web'
+                                    ? -70
+                                    : 0;
+            const bSourceBoost = b.resultSource === 'amazon_serpapi'
+                ? -150
+                : b.resultSource === 'ml_api_direct'
+                    ? -135
+                    : b.resultSource === 'ml_amazon_web'
+                        ? -115
+                        : b.resultSource === 'shopping_api'
+                            ? -80
+                            : b.resultSource === 'direct_scraper'
+                                ? -110
+                                : b.resultSource === 'official_web'
+                                    ? -70
+                                    : 0;
+            const aShippingBoost = a.hasShippingLanguage ? -35 : 0;
+            const bShippingBoost = b.hasShippingLanguage ? -35 : 0;
+            const aCouponBoost = a.hasCouponLanguage ? -28 : 0;
+            const bCouponBoost = b.hasCouponLanguage ? -28 : 0;
 
             const aPrice = a.price == null ? Infinity : parseFloat(a.price);
             const bPrice = b.price == null ? Infinity : parseFloat(b.price);
@@ -1688,8 +1716,8 @@ exports.searchProduct = async (req, res) => {
 
             const aLocalBoost = hasLocation && a.isLocalStore ? -220 : 0;
             const bLocalBoost = hasLocation && b.isLocalStore ? -220 : 0;
-            const aScore = aPriceScore + aConditionBoost + aTrustPenalty + aSuspiciousPenalty + aAnomalyPenalty + aPriceConfidencePenalty + aPriceVerificationPenalty + aPriceConflictPenalty + aRedirectPenalty + aAvailabilityPenalty + aMatchPenalty + aImagePenalty + aLowSignalPenalty + aGarbagePenalty + aSpecificityBoost + aComparabilityBoost + aOfficialBoost + aIntentBoost + aLocalBoost + aMarketplacePenalty + aVerifiedSignalBoost + aSourceBoost;
-            const bScore = bPriceScore + bConditionBoost + bTrustPenalty + bSuspiciousPenalty + bAnomalyPenalty + bPriceConfidencePenalty + bPriceVerificationPenalty + bPriceConflictPenalty + bRedirectPenalty + bAvailabilityPenalty + bMatchPenalty + bImagePenalty + bLowSignalPenalty + bGarbagePenalty + bSpecificityBoost + bComparabilityBoost + bOfficialBoost + bIntentBoost + bLocalBoost + bMarketplacePenalty + bVerifiedSignalBoost + bSourceBoost;
+            const aScore = aPriceScore + aConditionBoost + aTrustPenalty + aSuspiciousPenalty + aAnomalyPenalty + aPriceConfidencePenalty + aPriceVerificationPenalty + aPriceConflictPenalty + aRedirectPenalty + aAvailabilityPenalty + aMatchPenalty + aImagePenalty + aLowSignalPenalty + aGarbagePenalty + aSpecificityBoost + aComparabilityBoost + aOfficialBoost + aIntentBoost + aLocalBoost + aMarketplacePenalty + aVerifiedSignalBoost + aSourceBoost + aShippingBoost + aCouponBoost;
+            const bScore = bPriceScore + bConditionBoost + bTrustPenalty + bSuspiciousPenalty + bAnomalyPenalty + bPriceConfidencePenalty + bPriceVerificationPenalty + bPriceConflictPenalty + bRedirectPenalty + bAvailabilityPenalty + bMatchPenalty + bImagePenalty + bLowSignalPenalty + bGarbagePenalty + bSpecificityBoost + bComparabilityBoost + bOfficialBoost + bIntentBoost + bLocalBoost + bMarketplacePenalty + bVerifiedSignalBoost + bSourceBoost + bShippingBoost + bCouponBoost;
 
             return aScore - bScore;
         });

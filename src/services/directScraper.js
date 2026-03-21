@@ -117,6 +117,85 @@ function getAmazonPaapiConfig(countryCode = 'MX') {
     return { host, region, marketplace };
 }
 
+function getAmazonDomainConfig(countryCode = 'MX') {
+    const normalizedCountry = String(countryCode || 'MX').toUpperCase();
+    return normalizedCountry === 'US'
+        ? {
+            sourceLabel: 'Amazon',
+            domain: 'amazon.com',
+            marketplace: 'www.amazon.com',
+            amazonDomain: 'https://www.amazon.com'
+        }
+        : {
+            sourceLabel: 'Amazon MX',
+            domain: 'amazon.com.mx',
+            marketplace: 'www.amazon.com.mx',
+            amazonDomain: 'https://www.amazon.com.mx'
+        };
+}
+
+async function searchAmazonSerpApi(query, countryCode = 'MX', signal) {
+    const apiKey = process.env.SERPAPI_KEY;
+    if (!apiKey) return null;
+
+    const normalizedCountry = String(countryCode || 'MX').toUpperCase();
+    const { sourceLabel, domain } = getAmazonDomainConfig(normalizedCountry);
+    const cacheKey = `amazon_serpapi:${normalizedCountry}:${String(query || '').toLowerCase().trim()}`;
+    const cacheHit = getMarketplaceCache(cacheKey);
+    if (cacheHit) {
+        console.log(`[Amazon SerpApi Cache Hit] ${sourceLabel} -> ${query}`);
+        return cacheHit;
+    }
+
+    const response = await axios.get('https://serpapi.com/search.json', {
+        timeout: 4500,
+        signal,
+        params: {
+            engine: 'amazon',
+            api_key: apiKey,
+            amazon_domain: domain,
+            k: query,
+            sort_by: 'price_low_to_high',
+            language: normalizedCountry === 'US' ? 'en_US' : 'es_MX'
+        }
+    });
+
+    const products = Array.isArray(response.data?.organic_results) ? response.data.organic_results : [];
+    const mapped = products.map((item) => {
+        const price = Number(
+            item?.price?.value
+            || item?.extracted_price
+            || item?.prices?.[0]?.value
+            || 0
+        );
+        const url = item?.link || item?.product_link || '';
+        const shippingText = item?.shipping || item?.delivery || item?.extensions?.join(' ') || '';
+        const couponText = item?.coupon_text || item?.coupon || '';
+        if (!item?.title || !url || !Number.isFinite(price) || price <= 0) return null;
+        return {
+            title: item.title,
+            price,
+            url,
+            source: sourceLabel,
+            image: item.thumbnail || item.image || '',
+            rating: item.rating || null,
+            snippet: [shippingText, couponText].filter(Boolean).join(' · '),
+            shippingText,
+            couponText,
+            observedPrices: [price].filter(Boolean),
+            priceConfidence: 0.95,
+            priceSource: 'amazon_serpapi',
+            resultSource: 'amazon_serpapi',
+            isDirectProductPage: true,
+            hasStockSignal: !/currently unavailable|agotado|unavailable/i.test(String(item?.availability || '')),
+            hasVerifiedStoreSignal: true
+        };
+    }).filter(Boolean);
+
+    setMarketplaceCache(cacheKey, mapped);
+    return mapped;
+}
+
 async function searchAmazonPaapi(query, countryCode = 'MX', signal) {
     const accessKey = process.env.AMAZON_PAAPI_ACCESS_KEY;
     const secretKey = process.env.AMAZON_PAAPI_SECRET_KEY;
@@ -485,9 +564,15 @@ exports.scrapeAmazonDirect = async (query, countryCode = 'MX', signal) => {
     try {
         throwIfAborted(signal);
         const normalizedCountry = String(countryCode || 'MX').toUpperCase();
-        const isUS = normalizedCountry === 'US';
-        const amazonDomain = isUS ? 'https://www.amazon.com' : 'https://www.amazon.com.mx';
-        const sourceLabel = isUS ? 'Amazon' : 'Amazon MX';
+        const { sourceLabel, amazonDomain } = getAmazonDomainConfig(normalizedCountry);
+        const serpApiResults = await searchAmazonSerpApi(query, normalizedCountry, signal).catch((error) => {
+            console.warn(`[Amazon SerpApi] Fallback a otras fuentes: ${error.message}`);
+            return null;
+        });
+        if (Array.isArray(serpApiResults) && serpApiResults.length > 0) {
+            console.log(`[Amazon SerpApi] ${sourceLabel} encontró: ${serpApiResults.length} resultados.`);
+            return serpApiResults;
+        }
         const paApiResults = await searchAmazonPaapi(query, normalizedCountry, signal).catch((error) => {
             console.warn(`[Amazon PAAPI] Fallback al scraper HTML: ${error.message}`);
             return null;
