@@ -4715,6 +4715,35 @@ async function initApp() {
             const onlyRealDealsInput = document.getElementById('only-real-deals');
             const currentSearchText = document.getElementById('search-input')?.value || '';
             const broadUiSearch = isBroadUiSearch(currentSearchText);
+            const parseProductPriceValue = (rawPrice) => {
+                if (typeof rawPrice === 'number') {
+                    return Number.isFinite(rawPrice) ? rawPrice : 0;
+                }
+                const source = String(rawPrice || '').trim();
+                if (!source || source === 'null' || source === 'undefined') return 0;
+                let normalized = source.replace(/[^0-9.,-]/g, '');
+                const hasDot = normalized.includes('.');
+                const hasComma = normalized.includes(',');
+                if (hasDot && hasComma) {
+                    const lastDot = normalized.lastIndexOf('.');
+                    const lastComma = normalized.lastIndexOf(',');
+                    if (lastDot > lastComma) {
+                        normalized = normalized.replace(/,/g, '');
+                    } else {
+                        normalized = normalized.replace(/\./g, '').replace(',', '.');
+                    }
+                } else if (hasComma && !hasDot) {
+                    const parts = normalized.split(',');
+                    const looksLikeThousands = parts.length > 1 && parts.slice(1).every(part => part.length === 3);
+                    normalized = looksLikeThousands ? normalized.replace(/,/g, '') : normalized.replace(',', '.');
+                } else if (hasDot) {
+                    const parts = normalized.split('.');
+                    const looksLikeThousands = parts.length > 1 && parts.slice(1).every(part => part.length === 3);
+                    normalized = looksLikeThousands ? normalized.replace(/\./g, '') : normalized;
+                }
+                const parsed = parseFloat(normalized);
+                return Number.isFinite(parsed) ? parsed : 0;
+            };
             const filteredProducts = (products || []).filter((product) => {
                 if (onlyCouponsInput?.value === 'true' && !product.cupon) {
                     return false;
@@ -4733,7 +4762,7 @@ async function initApp() {
                         }
                         return false;
                     }
-                    const numP = typeof rawP === 'number' ? rawP : parseFloat(String(rawP).replace(/[^0-9.-]/g, ''));
+                    const numP = parseProductPriceValue(rawP);
                     if (Number.isNaN(numP) || numP <= 0) {
                         if (hasVerifiedSignal && (broadUiSearch || Number(product.storeTier || 0) === 1) && (product.urlOriginal || product.urlMonetizada)) {
                             return true;
@@ -4863,19 +4892,7 @@ async function initApp() {
                 const shippingSource = product.shippingText || product.shippingLabel || product.deliveryText || product.deliveryLabel || product.couponDetails || '';
                 const localizedShippingText = localizeDynamicResultText(shippingSource, isUS);
                 let rawPrice = product.precio || 0;
-                let precioNumerico = 0;
-
-                if (typeof rawPrice === 'string') {
-                    // Remove currency symbols, commas, and whitespace
-                    const cleanPrice = rawPrice.replace(/[^0-9.]/g, '');
-                    precioNumerico = parseFloat(cleanPrice);
-                } else if (typeof rawPrice === 'number') {
-                    precioNumerico = rawPrice;
-                }
-
-                if (isNaN(precioNumerico) || precioNumerico === null) {
-                    precioNumerico = 0;
-                }
+                let precioNumerico = parseProductPriceValue(rawPrice);
 
                 const formattedPrice = formatCurrencyByRegion(precioNumerico);
 
@@ -4909,9 +4926,12 @@ async function initApp() {
 
                 // Local store: price can be null
                 const isLocal = product.isLocalStore;
+                const hasUsableOnlinePrice = !isLocal && precioNumerico > 0;
                 let priceDisplay;
-                if (isLocal || precioNumerico === 0) {
+                if (isLocal) {
                     priceDisplay = `<span class="text-base md:text-lg font-black text-amber-600">${isUS ? 'Check in-store price' : 'Ver precio en tienda'}</span>`;
+                } else if (!hasUsableOnlinePrice) {
+                    priceDisplay = `<span class="text-base md:text-lg font-black text-slate-500">${isUS ? 'Price unavailable' : 'Precio no disponible'}</span>`;
                 } else {
                     const formattedFull = formatCurrencyByRegion(precioNumerico);
                     const numericMatch = formattedFull.match(/[\d,.]+/);

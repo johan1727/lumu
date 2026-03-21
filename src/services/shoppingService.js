@@ -159,6 +159,8 @@ function applyResultMetadata(item = {}) {
         observedPrices: metadata.observedPrices,
         priceNeedsVerification: metadata.priceNeedsVerification,
         hasInstallmentLanguage: metadata.hasInstallmentLanguage,
+        hasCouponLanguage: metadata.hasCouponLanguage,
+        hasShippingLanguage: metadata.hasShippingLanguage,
         resultSource: inferredSource
     };
 }
