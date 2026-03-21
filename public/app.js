@@ -4709,41 +4709,42 @@ async function initApp() {
         document.getElementById('price-min')?.addEventListener('keydown', e => { if (e.key === 'Enter') applyFiltersAndSort(); });
         document.getElementById('price-max')?.addEventListener('keydown', e => { if (e.key === 'Enter') applyFiltersAndSort(); });
 
+        const parseProductPriceValue = (rawPrice) => {
+            if (typeof rawPrice === 'number') {
+                return Number.isFinite(rawPrice) ? rawPrice : 0;
+            }
+            const source = String(rawPrice || '').trim();
+            if (!source || source === 'null' || source === 'undefined') return 0;
+            let normalized = source.replace(/[^0-9.,-]/g, '');
+            const hasDot = normalized.includes('.');
+            const hasComma = normalized.includes(',');
+            if (hasDot && hasComma) {
+                const lastDot = normalized.lastIndexOf('.');
+                const lastComma = normalized.lastIndexOf(',');
+                if (lastDot > lastComma) {
+                    normalized = normalized.replace(/,/g, '');
+                } else {
+                    normalized = normalized.replace(/\./g, '').replace(',', '.');
+                }
+            } else if (hasComma && !hasDot) {
+                const parts = normalized.split(',');
+                const looksLikeThousands = parts.length > 1 && parts.slice(1).every(part => part.length === 3);
+                normalized = looksLikeThousands ? normalized.replace(/,/g, '') : normalized.replace(',', '.');
+            } else if (hasDot) {
+                const parts = normalized.split('.');
+                const looksLikeThousands = parts.length > 1 && parts.slice(1).every(part => part.length === 3);
+                normalized = looksLikeThousands ? normalized.replace(/\./g, '') : normalized;
+            }
+            const parsed = parseFloat(normalized);
+            return Number.isFinite(parsed) ? parsed : 0;
+        };
+
         async function renderProducts(products) {
             resultsContainer.innerHTML = '';
             const onlyCouponsInput = document.getElementById('only-coupons');
             const onlyRealDealsInput = document.getElementById('only-real-deals');
             const currentSearchText = document.getElementById('search-input')?.value || '';
             const broadUiSearch = isBroadUiSearch(currentSearchText);
-            const parseProductPriceValue = (rawPrice) => {
-                if (typeof rawPrice === 'number') {
-                    return Number.isFinite(rawPrice) ? rawPrice : 0;
-                }
-                const source = String(rawPrice || '').trim();
-                if (!source || source === 'null' || source === 'undefined') return 0;
-                let normalized = source.replace(/[^0-9.,-]/g, '');
-                const hasDot = normalized.includes('.');
-                const hasComma = normalized.includes(',');
-                if (hasDot && hasComma) {
-                    const lastDot = normalized.lastIndexOf('.');
-                    const lastComma = normalized.lastIndexOf(',');
-                    if (lastDot > lastComma) {
-                        normalized = normalized.replace(/,/g, '');
-                    } else {
-                        normalized = normalized.replace(/\./g, '').replace(',', '.');
-                    }
-                } else if (hasComma && !hasDot) {
-                    const parts = normalized.split(',');
-                    const looksLikeThousands = parts.length > 1 && parts.slice(1).every(part => part.length === 3);
-                    normalized = looksLikeThousands ? normalized.replace(/,/g, '') : normalized.replace(',', '.');
-                } else if (hasDot) {
-                    const parts = normalized.split('.');
-                    const looksLikeThousands = parts.length > 1 && parts.slice(1).every(part => part.length === 3);
-                    normalized = looksLikeThousands ? normalized.replace(/\./g, '') : normalized;
-                }
-                const parsed = parseFloat(normalized);
-                return Number.isFinite(parsed) ? parsed : 0;
-            };
             const filteredProducts = (products || []).filter((product) => {
                 if (onlyCouponsInput?.value === 'true' && !product.cupon) {
                     return false;
