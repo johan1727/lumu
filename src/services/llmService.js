@@ -2,6 +2,10 @@ const fetchWithTimeout = require('../utils/fetchWithTimeout');
 const supabase = require('../config/supabase');
 const { z } = require('zod');
 
+let _supabaseFailing = false;
+let _supabaseFailingSince = 0;
+const SUPABASE_CIRCUIT_BREAKER_MS = 5 * 60 * 1000;
+
 const REGION_PROMPT_CONTEXT = {
     MX: {
         label: 'México',
@@ -715,7 +719,11 @@ exports.analyzeMessage = async (userText, chatHistory = [], context = {}) => {
 
     // --- RAG: Extraer memorias relevantes de Supabase ---
     let extraContext = '';
-    if (supabase) {
+    if (_supabaseFailing && (Date.now() - _supabaseFailingSince) > SUPABASE_CIRCUIT_BREAKER_MS) {
+        _supabaseFailing = false;
+        console.log('[RAG] Supabase circuit breaker reset — retrying.');
+    }
+    if (supabase && !_supabaseFailing) {
         try {
             // ALWAYS use models that output 768 dimensions to match Supabase RPC `match_ai_memory`
             const candidateModels = [
@@ -749,7 +757,11 @@ exports.analyzeMessage = async (userText, chatHistory = [], context = {}) => {
                     match_count: 3
                 });
 
-                if (!error && matches && matches.length > 0) {
+                if (error) {
+                    _supabaseFailing = true;
+                    _supabaseFailingSince = Date.now();
+                    console.warn('[RAG] Supabase failing, disabling RAG for 5 min:', error.message);
+                } else if (matches && matches.length > 0) {
                     extraContext = "\n\n=== MEMORIA DE ÉXITO PREVIA (Usa esto para dar mejores resultados) ===\n";
                     matches.forEach(m => {
                         extraContext += `- Contexto Exitoso Pasado: ${m.content}\n`;
@@ -757,38 +769,48 @@ exports.analyzeMessage = async (userText, chatHistory = [], context = {}) => {
                 }
             }
         } catch (err) {
-            console.error("RAG no disponible temporalmente:", err);
+            _supabaseFailing = true;
+            _supabaseFailingSince = Date.now();
+            console.error("RAG no disponible temporalmente:", err.message || err);
         }
 
-        try {
-            const clickTerms = [...new Set(sanitizedText.toLowerCase().split(/\s+/).filter(token => token.length >= 4))].slice(0, 3);
-            if (clickTerms.length > 0) {
-                const { data: clickRows, error: clickError } = await supabase
-                    .from('click_events')
-                    .select('search_query, product_title, store, created_at')
-                    .eq('event_type', 'click')
-                    .not('search_query', 'is', null)
-                    .order('created_at', { ascending: false })
-                    .limit(50);
+        if (!_supabaseFailing) {
+            try {
+                const clickTerms = [...new Set(sanitizedText.toLowerCase().split(/\s+/).filter(token => token.length >= 4))].slice(0, 3);
+                if (clickTerms.length > 0) {
+                    const { data: clickRows, error: clickError } = await supabase
+                        .from('click_events')
+                        .select('search_query, product_title, store, created_at')
+                        .eq('event_type', 'click')
+                        .not('search_query', 'is', null)
+                        .order('created_at', { ascending: false })
+                        .limit(50);
 
-                if (!clickError && Array.isArray(clickRows) && clickRows.length > 0) {
-                    const relevantClicks = clickRows
-                        .filter(row => {
-                            const source = `${row.search_query || ''} ${row.product_title || ''}`.toLowerCase();
-                            return clickTerms.some(term => source.includes(term));
-                        })
-                        .slice(0, 5);
+                    if (clickError) {
+                        _supabaseFailing = true;
+                        _supabaseFailingSince = Date.now();
+                        console.warn('[Click-RAG] Supabase failing, disabling for 5 min:', clickError.message);
+                    } else if (Array.isArray(clickRows) && clickRows.length > 0) {
+                        const relevantClicks = clickRows
+                            .filter(row => {
+                                const source = `${row.search_query || ''} ${row.product_title || ''}`.toLowerCase();
+                                return clickTerms.some(term => source.includes(term));
+                            })
+                            .slice(0, 5);
 
-                    if (relevantClicks.length > 0) {
-                        extraContext += "\n\n=== QUERIES EXITOSOS BASADOS EN CLICS REALES ===\n";
-                        relevantClicks.forEach(row => {
-                            extraContext += `- Query exitosa: ${row.search_query || ''} -> Producto: ${row.product_title || ''} @ ${row.store || 'tienda desconocida'}\n`;
-                        });
+                        if (relevantClicks.length > 0) {
+                            extraContext += "\n\n=== QUERIES EXITOSOS BASADOS EN CLICS REALES ===\n";
+                            relevantClicks.forEach(row => {
+                                extraContext += `- Query exitosa: ${row.search_query || ''} -> Producto: ${row.product_title || ''} @ ${row.store || 'tienda desconocida'}\n`;
+                            });
+                        }
                     }
                 }
+            } catch (err) {
+                _supabaseFailing = true;
+                _supabaseFailingSince = Date.now();
+                console.error("Click-RAG no disponible temporalmente:", err.message || err);
             }
-        } catch (err) {
-            console.error("Click-RAG no disponible temporalmente:", err);
         }
     }
 

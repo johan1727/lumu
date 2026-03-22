@@ -69,7 +69,31 @@ const getAxiosConfig = (countryCode = 'MX') => {
     return config;
 };
 
-const MARKETPLACE_CACHE_TTL_MS = 90 * 60 * 1000;
+const MARKETPLACE_CACHE_TTL_MS = 4 * 60 * 60 * 1000;
+
+// SerpApi daily budget tracker (resets on day change)
+let serpApiDailyCount = 0;
+let serpApiDayKey = new Date().toISOString().slice(0, 10);
+const SERPAPI_DAILY_CAP = 50;
+
+function canUseSerpApi() {
+    const today = new Date().toISOString().slice(0, 10);
+    if (today !== serpApiDayKey) {
+        serpApiDayKey = today;
+        serpApiDailyCount = 0;
+    }
+    return serpApiDailyCount < SERPAPI_DAILY_CAP;
+}
+
+function recordSerpApiUsage() {
+    const today = new Date().toISOString().slice(0, 10);
+    if (today !== serpApiDayKey) {
+        serpApiDayKey = today;
+        serpApiDailyCount = 0;
+    }
+    serpApiDailyCount++;
+    console.log(`[SerpApi Budget] ${serpApiDailyCount}/${SERPAPI_DAILY_CAP} used today`);
+}
 const marketplaceApiCache = new Map();
 
 function getMarketplaceCache(key) {
@@ -83,6 +107,7 @@ function getMarketplaceCache(key) {
 }
 
 function setMarketplaceCache(key, data) {
+    if (!data || (Array.isArray(data) && data.length === 0)) return;
     marketplaceApiCache.set(key, {
         ts: Date.now(),
         data
@@ -135,8 +160,12 @@ function getAmazonDomainConfig(countryCode = 'MX') {
 }
 
 async function searchAmazonSerpApi(query, countryCode = 'MX', signal) {
-    const apiKey = process.env.SERPAPI_KEY;
+    const apiKey = (process.env.SERPAPI_KEY || '').trim();
     if (!apiKey) return null;
+    if (!canUseSerpApi()) {
+        console.warn('[Amazon SerpApi] Daily budget exhausted, skipping');
+        return null;
+    }
 
     const normalizedCountry = String(countryCode || 'MX').toUpperCase();
     const { sourceLabel, domain } = getAmazonDomainConfig(normalizedCountry);
@@ -147,18 +176,27 @@ async function searchAmazonSerpApi(query, countryCode = 'MX', signal) {
         return cacheHit;
     }
 
-    const response = await axios.get('https://serpapi.com/search.json', {
-        timeout: 4500,
-        signal,
-        params: {
-            engine: 'amazon',
-            api_key: apiKey,
-            amazon_domain: domain,
-            k: query,
-            sort_by: 'price_low_to_high',
-            language: normalizedCountry === 'US' ? 'en_US' : 'es_MX'
-        }
-    });
+    recordSerpApiUsage();
+    let response;
+    try {
+        response = await axios.get('https://serpapi.com/search.json', {
+            timeout: 6000,
+            signal,
+            params: {
+                engine: 'amazon',
+                api_key: apiKey,
+                amazon_domain: domain,
+                k: query,
+                sort_by: 'price_low_to_high',
+                language: normalizedCountry === 'US' ? 'en_US' : 'es'
+            }
+        });
+    } catch (err) {
+        const status = err?.response?.status;
+        const detail = JSON.stringify(err?.response?.data || {}).slice(0, 300);
+        console.warn(`[Amazon SerpApi] HTTP ${status || err.code}: ${detail || err.message}`);
+        return null;
+    }
 
     const products = Array.isArray(response.data?.organic_results) ? response.data.organic_results : [];
     const mapped = products.map((item) => {
@@ -276,6 +314,34 @@ function throwIfAborted(signal) {
     }
 }
 
+async function fetchMercadoLibreApi(url, apiOpts, signal, label = 'query', maxRetries = 2) {
+    let lastError = null;
+    for (let attempt = 0; attempt <= maxRetries; attempt++) {
+        try {
+            throwIfAborted(signal);
+            return await axios.get(url, apiOpts);
+        } catch (error) {
+            lastError = error;
+            if (error?.name === 'AbortError' || error?.code === 'ERR_CANCELED') {
+                throw error;
+            }
+            const status = error?.response?.status;
+            const retryable = error.code === 'ECONNABORTED' || error.code === 'ETIMEDOUT' || [403, 429, 500, 502, 503, 504].includes(status);
+            if (attempt < maxRetries && retryable) {
+                const delay = status === 403
+                    ? (1500 + (attempt * 1200) + Math.round(Math.random() * 400))
+                    : (700 + (attempt * 900) + Math.round(Math.random() * 300));
+                console.warn(`[ML API] ${label} failed (${status || error.code || error.message}). Retry ${attempt + 1}/${maxRetries} in ${delay}ms`);
+                await sleep(delay);
+                continue;
+            }
+            console.warn(`[ML API] ${label} failed definitivamente: ${status || error.code || error.message}`);
+            return null;
+        }
+    }
+    return null;
+}
+
 function getAxiosConfigWithSignal(countryCode = 'MX', signal) {
     const config = getAxiosConfig(countryCode);
     if (signal) {
@@ -300,6 +366,15 @@ const MERCADO_LIBRE_SOURCE_MAP = {
     CO: 'Mercado Libre CO',
     PE: 'Mercado Libre PE',
     US: 'Mercado Libre'
+};
+
+const MERCADO_LIBRE_BASE_DOMAIN_MAP = {
+    MX: 'www.mercadolibre.com.mx',
+    CL: 'www.mercadolibre.cl',
+    AR: 'www.mercadolibre.com.ar',
+    CO: 'www.mercadolibre.com.co',
+    PE: 'www.mercadolibre.com.pe',
+    US: 'www.mercadolibre.com.mx'
 };
 
 const FALABELLA_CONFIG_MAP = {
@@ -349,12 +424,38 @@ function mapMercadoLibreApiResults(data, sourceLabel) {
             const price = Number(item.price);
             const permalink = item.permalink || item.url || '';
             if (!item.title || !Number.isFinite(price) || !permalink) return null;
+            const originalPrice = Number(item.original_price);
+            const hasDiscount = Number.isFinite(originalPrice) && originalPrice > price;
+            const shippingFree = item.shipping?.free_shipping === true;
+            const shippingText = shippingFree ? 'Envío gratis' : '';
+            const conditionLabel = item.condition === 'used' ? 'used' : (item.condition === 'refurbished' ? 'refurbished' : 'new');
+            const sellerRep = item.seller?.seller_reputation?.level_id || '';
+            const sellerPowerLevel = item.seller?.seller_reputation?.power_seller_status || '';
+            const installments = item.installments;
+            const installmentText = installments ? `${installments.quantity}x $${installments.amount}` : '';
             return {
                 title: item.title,
                 price,
                 url: permalink,
                 source: sourceLabel,
-                image: item.thumbnail || item.secure_thumbnail || item.pictures?.[0]?.url || ''
+                image: item.thumbnail || item.secure_thumbnail || item.pictures?.[0]?.url || '',
+                originalPrice: hasDiscount ? originalPrice : null,
+                discountPct: hasDiscount ? Math.round((1 - price / originalPrice) * 100) : 0,
+                shippingText,
+                hasShippingLanguage: shippingFree,
+                conditionLabel,
+                sellerReputation: sellerRep,
+                sellerPowerLevel,
+                installmentText,
+                hasInstallmentLanguage: Boolean(installments),
+                observedPrices: [price].filter(Boolean),
+                priceConfidence: 0.95,
+                priceSource: 'ml_api_direct',
+                resultSource: 'ml_api_direct',
+                isDirectProductPage: true,
+                hasStockSignal: item.available_quantity > 0,
+                hasVerifiedStoreSignal: ['5_green', '4_light_green', '3_yellow'].includes(sellerRep) || Boolean(sellerPowerLevel),
+                rating: item.reviews?.rating_average || null
             };
         }).filter(Boolean)
         : [];
@@ -431,8 +532,22 @@ exports.scrapeMercadoLibreAPI = async (query, countryCode = 'MX', signal, condit
         const normalizedCountry = String(countryCode || 'MX').toUpperCase();
         const siteId = MERCADO_LIBRE_SITE_MAP[normalizedCountry] || 'MLM';
         const sourceLabel = MERCADO_LIBRE_SOURCE_MAP[normalizedCountry] || 'Mercado Libre';
+        const baseDomain = MERCADO_LIBRE_BASE_DOMAIN_MAP[normalizedCountry] || 'www.mercadolibre.com.mx';
         const encodedQuery = encodeURIComponent(query);
-        const apiOpts = { timeout: 5000, signal, headers: { 'User-Agent': getRandomUA(), 'Accept': 'application/json' } };
+        const apiOpts = {
+            timeout: 6000,
+            signal,
+            headers: {
+                'User-Agent': getRandomUA(),
+                'Accept': 'application/json',
+                'Accept-Language': getAcceptLanguage(normalizedCountry),
+                'Accept-Encoding': 'gzip, deflate',
+                'Cache-Control': 'no-cache',
+                'Connection': 'keep-alive',
+                'Origin': `https://${baseDomain}`,
+                'Referer': `https://${baseDomain}/`
+            }
+        };
         const conditionParam = buildMercadoLibreConditionParam(conditionMode);
         const cacheKey = `ml_api:${normalizedCountry}:${String(conditionMode || 'any').toLowerCase()}:${query.toLowerCase().trim()}`;
         const cacheHit = getMarketplaceCache(cacheKey);
@@ -446,10 +561,9 @@ exports.scrapeMercadoLibreAPI = async (query, countryCode = 'MX', signal, condit
         const relevanceUrl = `https://api.mercadolibre.com/sites/${siteId}/search?q=${encodedQuery}${conditionParam}&limit=50`;
         console.log(`[ML API] Buscando en ${siteId} para ${normalizedCountry}: ${query} (precio + relevancia en paralelo, condition=${conditionMode || 'any'})`);
 
-        const [priceRes, relevanceRes] = await Promise.all([
-            axios.get(priceUrl, apiOpts).catch(err => { console.warn('[ML API] Price query failed:', err.message); return null; }),
-            axios.get(relevanceUrl, apiOpts).catch(err => { console.warn('[ML API] Relevance query failed:', err.message); return null; })
-        ]);
+        const priceRes = await fetchMercadoLibreApi(priceUrl, apiOpts, signal, 'price_asc');
+        await sleep(320);
+        const relevanceRes = await fetchMercadoLibreApi(relevanceUrl, apiOpts, signal, 'relevance');
 
         const priceResults = mapMercadoLibreApiResults(priceRes?.data, sourceLabel);
         const relevanceResults = mapMercadoLibreApiResults(relevanceRes?.data, sourceLabel);
@@ -465,13 +579,27 @@ exports.scrapeMercadoLibreAPI = async (query, countryCode = 'MX', signal, condit
             }
         }
 
+        if (combined.length === 0) {
+            console.warn(`[ML API] 0 resultados para "${query}". Intentando fallback simple...`);
+            await sleep(1500);
+            const fallbackUrl = `https://api.mercadolibre.com/sites/${siteId}/search?q=${encodedQuery}${conditionParam}&limit=30`;
+            const fallbackRes = await fetchMercadoLibreApi(fallbackUrl, apiOpts, signal, 'fallback_simple', 1);
+            for (const item of mapMercadoLibreApiResults(fallbackRes?.data, sourceLabel)) {
+                const key = item.url.split('?')[0].toLowerCase();
+                if (!seenUrls.has(key)) {
+                    seenUrls.add(key);
+                    combined.push(item);
+                }
+            }
+        }
+
         // If zero results, retry with simplified query (strip specs like "256gb", model numbers)
         if (combined.length === 0 && query.split(/\s+/).length > 2) {
             const simplified = simplifyMarketplaceQuery(query);
             if (simplified !== query && simplified.length > 2) {
                 console.log(`[ML API] Retry con query simplificada: "${simplified}"`);
                 const retryUrl = `https://api.mercadolibre.com/sites/${siteId}/search?q=${encodeURIComponent(simplified)}${conditionParam}&limit=30`;
-                const retryRes = await axios.get(retryUrl, apiOpts).catch(() => null);
+                const retryRes = await fetchMercadoLibreApi(retryUrl, apiOpts, signal, 'fallback_simplified', 1);
                 combined.push(...mapMercadoLibreApiResults(retryRes?.data, sourceLabel).filter(item => {
                     const key = item.url.split('?')[0].toLowerCase();
                     if (seenUrls.has(key)) return false;
@@ -482,7 +610,7 @@ exports.scrapeMercadoLibreAPI = async (query, countryCode = 'MX', signal, condit
         }
 
         setMarketplaceCache(cacheKey, combined);
-        console.log(`[ML API] ${sourceLabel} encontró: ${combined.length} resultados (precio: ${priceResults.length}, relevancia: ${relevanceResults.length}).`);
+        console.log(`[ML API] ${sourceLabel} encontró: ${combined.length} resultados.`);
         return combined;
     } catch (error) {
         console.error('[ML API] Error consultando MercadoLibre API:', error.message);

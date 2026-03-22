@@ -316,15 +316,46 @@ function tokenizeSearchText(value = '') {
 
 function extractStructuredProductTokens(value = '') {
     const text = String(value || '').toLowerCase();
-    const matches = text.match(/\b(?:[a-z]{1,5}\d{1,4}[a-z]{0,4}|\d{2,4}gb|\d{1,3}tb|\d{1,2}(?:\.\d)?(?:"|pulgadas?)|m[1-5]|i[3579]-?\d{3,5}|ryzen\s?[3579]|snapdragon\s?\d{3,4}|a\d{2,3}|s\d{2,3}|note\s?\d{1,2}|g\d{1,3}|edge\s?\d{1,3}|watch\s?\d{1,2})\b/gi) || [];
-    return [...new Set(matches.map(token => token.replace(/\s+/g, ' ').trim()).filter(Boolean))];
+    const tokens = [];
+    // Storage/RAM: 64gb, 128gb, 256gb, 1tb, 8gb ram, 16gb
+    const storageMatches = text.match(/\b\d{1,4}\s*(gb|tb|mb)\b/gi) || [];
+    tokens.push(...storageMatches.map(m => m.replace(/\s+/g, '')));
+    // Screen sizes: 6.1", 55 pulgadas, 13.3"
+    const screenMatches = text.match(/\b\d{1,3}(?:\.\d{1,2})?\s*(?:"|pulgadas?|inch(?:es)?)\b/gi) || [];
+    tokens.push(...screenMatches.map(m => m.replace(/\s+/g, '')));
+    // Processor/chip: m1, m2, m3, m4, i3-12100, i5, i7, ryzen 5, snapdragon 8
+    const cpuMatches = text.match(/\b(?:m[1-5](?:\s*pro|\s*max|\s*ultra)?|i[3579]-?\d{3,5}[a-z]{0,2}|ryzen\s?[3579]\s?\d{3,4}[a-z]{0,2}|snapdragon\s?\d{3,4}|a\d{2}\s*bionic|dimensity\s?\d{3,4}|exynos\s?\d{4})\b/gi) || [];
+    tokens.push(...cpuMatches.map(m => m.replace(/\s+/g, ' ').trim()));
+    // Phone/tablet models: iphone 15, iphone 16 pro, galaxy s24, pixel 9, a55
+    const modelMatches = text.match(/\b(?:iphone\s?\d{1,2}(?:\s*(?:pro|plus|max|mini|se))*|galaxy\s?(?:s|a|z|note|tab)\s?\d{1,2}(?:\s*(?:ultra|plus|fe|\+))?|pixel\s?\d{1,2}(?:\s*(?:pro|a))?|ipad\s*(?:pro|air|mini)?\s*(?:\d{1,2}(?:th|va|nd|rd)?)?|watch\s*(?:ultra\s*)?\d{0,2}|airpods\s*(?:pro|max)?\s*\d{0,2})\b/gi) || [];
+    tokens.push(...modelMatches.map(m => m.replace(/\s+/g, ' ').trim()));
+    // Alphanumeric model codes: a55, s24, a15, g84, note 12
+    const codeMatches = text.match(/\b(?:a\d{2,3}|s\d{2,3}|note\s?\d{1,2}|g\d{1,3}|edge\s?\d{1,3}|redmi\s*(?:note\s*)?\d{1,2}[a-z]?)\b/gi) || [];
+    tokens.push(...codeMatches.map(m => m.replace(/\s+/g, ' ').trim()));
+    // Colors (common in product variants)
+    const colorMatches = text.match(/\b(?:negro|blanco|azul|rojo|rosa|verde|morado|gris|plateado|dorado|titanio|natural|midnight|starlight|black|white|blue|red|pink|green|purple|gray|silver|gold|titanium|graphite|sierra blue|space gray|space black|desert titanium|cream)\b/gi) || [];
+    tokens.push(...colorMatches.map(m => m.trim()));
+    // WiFi/Cellular variants
+    const connMatches = text.match(/\b(?:wifi|wi-fi|cellular|5g|4g|lte)\b/gi) || [];
+    tokens.push(...connMatches.map(m => m.trim()));
+    // Generation markers
+    const genMatches = text.match(/\b(?:\d{1,2}(?:th|va|nd|rd|ta|ma)\s*(?:gen|generaci[oó]n)?|gen\s*\d{1,2})\b/gi) || [];
+    tokens.push(...genMatches.map(m => m.replace(/\s+/g, ' ').trim()));
+    return [...new Set(tokens.map(t => t.toLowerCase()).filter(Boolean))];
+}
+
+function extractVariantKey(value = '') {
+    const tokens = extractStructuredProductTokens(value);
+    const storageTokens = tokens.filter(t => /\d+(?:gb|tb)/.test(t)).sort();
+    const colorTokens = tokens.filter(t => /^(negro|blanco|azul|rojo|rosa|verde|morado|gris|plateado|dorado|titanio|natural|midnight|starlight|black|white|blue|red|pink|green|purple|gray|silver|gold|titanium|graphite|cream|space\s*(?:gray|black)|sierra\s*blue|desert\s*titanium)$/.test(t));
+    return { storage: storageTokens.join('+'), color: colorTokens[0] || '', allTokens: tokens };
 }
 
 function buildMatchSignals(searchText = '', titleText = '') {
     const queryTokens = [...new Set(tokenizeSearchText(searchText))];
     const titleTokens = new Set(tokenizeSearchText(titleText));
     if (queryTokens.length === 0) {
-        return { matchScore: 0, strongMatch: false, weakMatch: false, structuredTokenOverlap: 0, exactStructuredMatch: false };
+        return { matchScore: 0, strongMatch: false, weakMatch: false, structuredTokenOverlap: 0, exactStructuredMatch: false, variantMismatch: false };
     }
 
     const matchedTokens = queryTokens.filter(token => titleTokens.has(token)).length;
@@ -334,13 +365,22 @@ function buildMatchSignals(searchText = '', titleText = '') {
     const structuredMatches = queryStructuredTokens.filter(token => titleStructuredTokens.has(token)).length;
     const structuredTokenOverlap = queryStructuredTokens.length > 0 ? (structuredMatches / queryStructuredTokens.length) : 0;
     const exactStructuredMatch = queryStructuredTokens.length > 0 && structuredMatches === queryStructuredTokens.length;
-    const matchScore = Math.min(1, baseScore + (structuredTokenOverlap * 0.28));
+    // Detect variant mismatch: query asks for "256gb" but title says "128gb"
+    const queryVariant = extractVariantKey(searchText);
+    const titleVariant = extractVariantKey(titleText);
+    const variantMismatch = Boolean(
+        (queryVariant.storage && titleVariant.storage && queryVariant.storage !== titleVariant.storage) ||
+        (queryVariant.color && titleVariant.color && queryVariant.color !== titleVariant.color)
+    );
+    const variantPenalty = variantMismatch ? 0.15 : 0;
+    const matchScore = Math.min(1, Math.max(0, baseScore + (structuredTokenOverlap * 0.28) - variantPenalty));
     return {
         matchScore,
-        strongMatch: exactStructuredMatch || matchScore >= 0.72 || (matchedTokens >= 3 && matchScore >= 0.6),
-        weakMatch: matchScore < 0.45 && structuredTokenOverlap < 0.5,
+        strongMatch: !variantMismatch && (exactStructuredMatch || matchScore >= 0.72 || (matchedTokens >= 3 && matchScore >= 0.6)),
+        weakMatch: variantMismatch || (matchScore < 0.45 && structuredTokenOverlap < 0.5),
         structuredTokenOverlap,
-        exactStructuredMatch
+        exactStructuredMatch,
+        variantMismatch
     };
 }
 
@@ -445,13 +485,24 @@ function buildComparableFingerprint(item = {}) {
     return [family, brand, ...structured, ...coreTokens].filter(Boolean).join('|');
 }
 
-function getAffiliatePriorityMeta(item = {}) {
+function getAffiliatePriorityMeta(item = {}, countryCode = 'MX') {
     const text = `${item.source || ''} ${item.url || ''}`.toLowerCase();
-    if (/amazon\./.test(text) || /\bamazon\b/.test(text)) {
-        return { rank: 0, boost: -320, capBoost: 4 };
-    }
+    const normalizedCountry = String(countryCode || 'MX').toUpperCase();
     if (/mercadolibre\./.test(text) || /mercado\s*libre/.test(text)) {
-        return { rank: 1, boost: -260, capBoost: 4 };
+        return normalizedCountry === 'MX'
+            ? { rank: 0, boost: -320, capBoost: 4 }
+            : { rank: 1, boost: -260, capBoost: 4 };
+    }
+    if (/amazon\./.test(text) || /\bamazon\b/.test(text)) {
+        if (normalizedCountry === 'MX') {
+            if (/amazon\.com\.mx/.test(text)) {
+                return { rank: 1, boost: -120, capBoost: 3 };
+            }
+            if (/amazon\.com(\/|\?|$)/.test(text) || /\bamazon\b/.test(String(item.source || '').toLowerCase())) {
+                return { rank: 1, boost: -190, capBoost: 4 };
+            }
+        }
+        return { rank: 0, boost: -320, capBoost: 4 };
     }
     return { rank: 9, boost: 0, capBoost: 0 };
 }
@@ -640,22 +691,25 @@ function bumpProviderCostMetrics(metrics, { intentType, radius, lat, lng }) {
     const brandOfficialQuery = arguments[1]?.brandOfficialQuery || null;
     const alternativeQueries = Array.isArray(arguments[1]?.alternativeQueries) ? arguments[1].alternativeQueries.filter(Boolean) : [];
     const productCategory = String(arguments[1]?.productCategory || '').toLowerCase();
+    const queryType = String(arguments[1]?.queryType || 'generic').toLowerCase();
+    const isSpecificProduct = queryType === 'brand_model' || queryType === 'comparison';
     const isBroadExploration = Boolean(broadProfile?.broad);
-    const shouldQueryBroadWeb = isBroadExploration
+    const shouldQueryBroadWeb = !isSpecificProduct && (isBroadExploration
         || alternativeQueries.length >= 2
-        || ['fashion', 'home', 'appliance'].includes(productCategory);
-    const shouldQueryOfficialWeb = Boolean(String(brandOfficialQuery || '').trim());
+        || ['fashion', 'home', 'appliance'].includes(productCategory));
+    const shouldQueryOfficialWeb = !isSpecificProduct && Boolean(String(brandOfficialQuery || '').trim());
+    const shouldQueryMlPriority = !isSpecificProduct;
     const isLocalFastMode = process.env.NODE_ENV !== 'production' && process.env.FORCE_FULL_SEARCH !== 'true';
-    const serperAltQueryCount = isLocalFastMode
+    const serperAltQueryCount = isSpecificProduct ? 0 : (isLocalFastMode
         ? 1
-        : (isBroadExploration ? 2 : 1);
+        : (isBroadExploration ? 2 : 1));
     const altShoppingCalls = Math.min(
         alternativeQueries.length,
         serperAltQueryCount
     );
 
     metrics.serperShoppingCalls += 1 + altShoppingCalls;
-    metrics.serperWebCalls += 3 + (shouldQueryBroadWeb ? 1 : 0) + (shouldQueryOfficialWeb ? 1 : 0);
+    metrics.serperWebCalls += 2 + (shouldQueryBroadWeb ? 1 : 0) + (shouldQueryOfficialWeb ? 1 : 0) + (shouldQueryMlPriority ? 1 : 0);
 
     if (hasLocation) {
         metrics.serperPlacesCalls += 1;
@@ -1266,7 +1320,8 @@ exports.searchProduct = async (req, res) => {
             broadProfile: llmAnalysis.broadProfile || null,
             brandOfficialQuery: effectiveBrandOfficialQuery,
             alternativeQueries: cleanAlternativeQueries,
-            productCategory: llmAnalysis.productCategory || ''
+            productCategory: llmAnalysis.productCategory || '',
+            queryType: llmAnalysis.queryType || 'generic'
         });
 
         console.log(`[Search Pipeline] Buscando: "${searchQuery}" | radius=${radius} | lat=${lat} | lng=${lng} | intent=${llmAnalysis.intent_type}`);
@@ -1287,7 +1342,8 @@ exports.searchProduct = async (req, res) => {
             effectiveBrandOfficialQuery,
             {
                 webQuery: searchQuery,
-                broadProfile: llmAnalysis.broadProfile || null
+                broadProfile: llmAnalysis.broadProfile || null,
+                queryType: llmAnalysis.queryType || 'generic'
             }
         );
         console.log(`[Search Pipeline] Resultados de shoppingService: ${shoppingResults.length}`);
@@ -1366,7 +1422,8 @@ exports.searchProduct = async (req, res) => {
                     rescueStep.alternativeQueries,
                     llmAnalysis.productCategory || '',
                     rescueStep.preferredStoreKeys,
-                    rescueStep.brandOfficialQuery
+                    rescueStep.brandOfficialQuery,
+                    { queryType: 'brand_model', rescue: true }
                 ).catch(err => {
                     console.warn(`[Search Pipeline] Rescue "${rescueStep.label}" failed: ${err.message}`);
                     return [];
@@ -1437,6 +1494,7 @@ exports.searchProduct = async (req, res) => {
             item.image = sanitizeProductImage(item.image);
             item.shippingText = sanitizeShippingText(item.snippet);
             const sourceText = `${item.source || ''} ${item.url || ''}`.toLowerCase();
+            item.isManufacturerDirectStore = /(?:^|\s)(apple|samsung|sony|nintendo|playstation|google store|microsoft)(?:\s|$)|apple\.com|samsung\.com|sony\.com|playstation\.com|store\.google\.com|microsoft\.com/i.test(sourceText);
             if (/aliexpress\./.test(sourceText) || /\baliexpress\b/.test(sourceText)) return false;
             if (countryCode === 'MX' && /apple\.com\/(us-edu|ca|us-es)\//i.test(sourceText)) return false;
             if (countryCode === 'MX' && (/apple\.com\/.+\/newsroom\//i.test(sourceText) || /apple\.com\/newsroom\//i.test(sourceText))) return false;
@@ -1527,11 +1585,29 @@ exports.searchProduct = async (req, res) => {
             if (item.priceConfidence < 0.22 && !item.isOfficialBrandResult && !item.isDirectProductPage && !item.isLocalStore) {
                 return false;
             }
-            if (/(meses|msi|mensual|mensualidades|quincena|por mes|semanales)/i.test(`${item.snippet || ''} ${item.title || ''}`)) {
+            const combinedText = `${item.snippet || ''} ${item.title || ''}`;
+            if (/(meses|msi|mensual|mensualidades|quincena|por mes|semanales)/i.test(combinedText)) {
                 item.isSuspicious = true;
+                item.priceAnomalyReason = 'installment_language';
             }
             if (item.hasInstallmentLanguage && item.priceConfidence < 0.7) {
                 item.isSuspicious = true;
+                item.priceAnomalyReason = item.priceAnomalyReason || 'installment_low_confidence';
+            }
+            // Bundle detection: "pack de 2", "kit 3 piezas", "set de", "x2", "x3", etc.
+            if (/\b(pack|kit|set|lote|combo|bundle)\b.*\b\d+\b|\bx\s*[2-9]\b|\b\d+\s*(pz|piezas|unidades|pcs|pieces)\b/i.test(combinedText)) {
+                item.isBundle = true;
+                item.priceAnomalyReason = item.priceAnomalyReason || 'bundle_detected';
+            }
+            // Per-unit pricing: "precio por pieza", "c/u", "each", "por unidad"
+            if (/\b(c\/u|cada uno|each|por (unidad|pieza|metro|kilo|litro)|precio unitario|unit price)\b/i.test(combinedText)) {
+                item.isSuspicious = true;
+                item.priceAnomalyReason = item.priceAnomalyReason || 'per_unit_pricing';
+            }
+            // Rental/subscription pricing: "al mes", "mensual", "/mes", "suscripción"
+            if (/\b(\/mes|suscripci[oó]n|subscription|rental|renta|alquiler|leasing)\b/i.test(combinedText)) {
+                item.isSuspicious = true;
+                item.priceAnomalyReason = item.priceAnomalyReason || 'subscription_pricing';
             }
             if (expensiveProductSearch && price < 1500) {
                 item.isSuspicious = true;
@@ -1561,6 +1637,14 @@ exports.searchProduct = async (req, res) => {
             return true;
         });
         console.log(`[Search Pipeline] Después de pre - filter: ${cleanedResults.length} de ${shoppingResults.length} `);
+
+        const hasMarketplaceCandidates = cleanedResults.some(item => {
+            const sourceText = `${item.source || ''} ${item.url || ''}`.toLowerCase();
+            return /mercado libre|mercadolibre|amazon|walmart|liverpool|coppel|costco|best buy|target/i.test(sourceText)
+                && Number.isFinite(Number(item.price))
+                && Number(item.price) > 0
+                && !item.isSuspicious;
+        });
 
         const medianPrice = calculateMedian(cleanedResults
             .filter(item => Number(item.priceConfidence || 0) >= 0.45)
@@ -1593,7 +1677,7 @@ exports.searchProduct = async (req, res) => {
         for (const item of cleanedResults) {
             const conditionMeta = classifyCondition(item);
             const matchSignals = buildMatchSignals(llmAnalysis.searchQuery || query, item.title || '');
-            const affiliatePriorityMeta = getAffiliatePriorityMeta(item);
+            const affiliatePriorityMeta = getAffiliatePriorityMeta(item, countryCode);
             item.conditionLabel = conditionMeta.conditionLabel;
             item.isC2C = conditionMeta.isC2C;
             const broadSearch = Boolean(llmAnalysis.broadProfile?.broad);
@@ -1733,6 +1817,8 @@ exports.searchProduct = async (req, res) => {
             const bComparabilityBoost = -Math.round(Number(b.structuredTokenOverlap || 0) * 220) - (b.exactStructuredMatch ? 120 : 0);
             const aOfficialBoost = a.isOfficialBrandResult ? -160 : 0;
             const bOfficialBoost = b.isOfficialBrandResult ? -160 : 0;
+            const aManufacturerPenalty = hasMarketplaceCandidates && a.isManufacturerDirectStore ? 420 : 0;
+            const bManufacturerPenalty = hasMarketplaceCandidates && b.isManufacturerDirectStore ? 420 : 0;
             const aMarketplacePenalty = a.isHighRiskMarketplace ? 220 : (a.isLessTrustedMarketplace ? 90 : 0);
             const bMarketplacePenalty = b.isHighRiskMarketplace ? 220 : (b.isLessTrustedMarketplace ? 90 : 0);
             const aVerifiedSignalBoost = a.hasVerifiedStoreSignal ? -90 : 0;
@@ -1771,15 +1857,15 @@ exports.searchProduct = async (req, res) => {
             const aPrice = a.price == null ? Infinity : parseFloat(a.price);
             const bPrice = b.price == null ? Infinity : parseFloat(b.price);
             const aPriceScore = !Number.isFinite(aPrice)
-                ? 2200
+                ? 3000
                 : (medianPrice && medianPrice > 0
-                    ? Math.max(-260, Math.min(520, Math.round(((aPrice - medianPrice) / medianPrice) * 380)))
-                    : Math.round(aPrice / 35));
+                    ? Math.max(-480, Math.min(900, Math.round(((aPrice - medianPrice) / medianPrice) * 620)))
+                    : Math.round(aPrice / 20));
             const bPriceScore = !Number.isFinite(bPrice)
-                ? 2200
+                ? 3000
                 : (medianPrice && medianPrice > 0
-                    ? Math.max(-260, Math.min(520, Math.round(((bPrice - medianPrice) / medianPrice) * 380)))
-                    : Math.round(bPrice / 35));
+                    ? Math.max(-480, Math.min(900, Math.round(((bPrice - medianPrice) / medianPrice) * 620)))
+                    : Math.round(bPrice / 20));
 
             // Intent Memory boost: reward stores with historical clicks
             const aStoreKey = (a.source || '').toLowerCase().trim();
@@ -1791,8 +1877,8 @@ exports.searchProduct = async (req, res) => {
             const bLocalBoost = hasLocation && b.isLocalStore ? -220 : 0;
             const aAffiliateBoost = Number(a.affiliateBoost || 0);
             const bAffiliateBoost = Number(b.affiliateBoost || 0);
-            const aScore = aPriceScore + aConditionBoost + aTrustPenalty + aSuspiciousPenalty + aAnomalyPenalty + aPriceConfidencePenalty + aPriceVerificationPenalty + aPriceConflictPenalty + aRedirectPenalty + aAvailabilityPenalty + aMatchPenalty + aImagePenalty + aLowSignalPenalty + aGarbagePenalty + aSpecificityBoost + aComparabilityBoost + aOfficialBoost + aIntentBoost + aLocalBoost + aMarketplacePenalty + aVerifiedSignalBoost + aSourceBoost + aShippingBoost + aCouponBoost + aAffiliateBoost;
-            const bScore = bPriceScore + bConditionBoost + bTrustPenalty + bSuspiciousPenalty + bAnomalyPenalty + bPriceConfidencePenalty + bPriceVerificationPenalty + bPriceConflictPenalty + bRedirectPenalty + bAvailabilityPenalty + bMatchPenalty + bImagePenalty + bLowSignalPenalty + bGarbagePenalty + bSpecificityBoost + bComparabilityBoost + bOfficialBoost + bIntentBoost + bLocalBoost + bMarketplacePenalty + bVerifiedSignalBoost + bSourceBoost + bShippingBoost + bCouponBoost + bAffiliateBoost;
+            const aScore = aPriceScore + aConditionBoost + aTrustPenalty + aSuspiciousPenalty + aAnomalyPenalty + aPriceConfidencePenalty + aPriceVerificationPenalty + aPriceConflictPenalty + aRedirectPenalty + aAvailabilityPenalty + aMatchPenalty + aImagePenalty + aLowSignalPenalty + aGarbagePenalty + aSpecificityBoost + aComparabilityBoost + aOfficialBoost + aManufacturerPenalty + aIntentBoost + aLocalBoost + aMarketplacePenalty + aVerifiedSignalBoost + aSourceBoost + aShippingBoost + aCouponBoost + aAffiliateBoost;
+            const bScore = bPriceScore + bConditionBoost + bTrustPenalty + bSuspiciousPenalty + bAnomalyPenalty + bPriceConfidencePenalty + bPriceVerificationPenalty + bPriceConflictPenalty + bRedirectPenalty + bAvailabilityPenalty + bMatchPenalty + bImagePenalty + bLowSignalPenalty + bGarbagePenalty + bSpecificityBoost + bComparabilityBoost + bOfficialBoost + bManufacturerPenalty + bIntentBoost + bLocalBoost + bMarketplacePenalty + bVerifiedSignalBoost + bSourceBoost + bShippingBoost + bCouponBoost + bAffiliateBoost;
 
             return aScore - bScore;
         });

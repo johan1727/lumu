@@ -361,7 +361,8 @@ function isResultSellable(result = {}) {
     if (!url || !/^https?:\/\//i.test(url)) return false;
     if (/agotado|out of stock|currently unavailable|unavailable|sin stock|not available|no disponible/.test(combined)) return false;
     if (/\/s\?|\/search\?|[?&](k|q|query|search|searchterms|ntt)=/i.test(url) && !result.isDirectProductPage) return false;
-    if (!result.price && !Number.isFinite(extractSnippetPrice(snippet) ?? extractSnippetPrice(title))) return false;
+    const isKnownMarketplace = /amazon\.|mercadolibre\.|walmart\.|liverpool\.|costco\.|bestbuy\.|target\./i.test(url);
+    if (!isKnownMarketplace && !result.price && !Number.isFinite(extractSnippetPrice(snippet) ?? extractSnippetPrice(title))) return false;
     return !looksLikeGarbageTitleLocal(result.title || '') && !looksGenericListingTitleLocal(result);
 }
 
@@ -428,13 +429,15 @@ exports.searchGoogleShopping = async (query, radius, lat, lng, intentType, abort
     const shoppingQuery = String(query || '').trim();
     const webQuery = String(searchOptions.webQuery || query || '').trim();
     const isBroadExploration = Boolean(searchOptions?.broadProfile?.broad);
-    const shouldQueryBroadWeb = shouldRunBroadWebQuery(webQuery, {
+    const queryType = String(searchOptions?.queryType || 'generic').toLowerCase();
+    const isSpecificProduct = queryType === 'brand_model' || queryType === 'comparison';
+    const shouldQueryBroadWeb = !isSpecificProduct && shouldRunBroadWebQuery(webQuery, {
         productCategory,
         preferredStoreKeys,
         isBroadExploration: isBroadExploration && !['smartphone', 'laptop', 'audio', 'tv'].includes(String(productCategory || '').toLowerCase()),
         alternativeQueries
     });
-    const shouldQueryOfficialWeb = shouldRunOfficialWebQuery(webQuery, brandOfficialQuery, countryCode);
+    const shouldQueryOfficialWeb = !isSpecificProduct && shouldRunOfficialWebQuery(webQuery, brandOfficialQuery, countryCode);
     const shouldRunDirectScrapers = !isService
         && intentType !== 'mayoreo_perecedero'
         && (!isLocalFastMode || isBroadExploration || ['smartphone', 'laptop', 'audio', 'tv', 'fashion', 'home', 'appliance'].includes(String(productCategory || '').toLowerCase()));
@@ -484,7 +487,8 @@ exports.searchGoogleShopping = async (query, radius, lat, lng, intentType, abort
         }
     } else if (apiKey) {
         // Flujo normal: Google Shopping + Web en PARALELO para máxima velocidad y variedad
-        console.log(`[ShoppingService] Ejecutando Serper Shopping + Web para: "${shoppingQuery}" (${searchConditionMode})`);
+        const skippedCalls = isSpecificProduct ? ' [COST-OPT: skipping broadWeb/officialWeb/mlPriority/altShopping]' : '';
+        console.log(`[ShoppingService] Ejecutando Serper Shopping + Web para: "${shoppingQuery}" (${searchConditionMode}, queryType=${queryType})${skippedCalls}`);
         
         const shoppingPromise = fetchWithRetry({
             method: 'post',
@@ -571,21 +575,23 @@ exports.searchGoogleShopping = async (query, radius, lat, lng, intentType, abort
         }, serperRetries).catch(err => { console.error('Error Serper ML+Amazon:', err.message); return null; });
 
         const mercadoLibreDomain = getMercadoLibreDomain(countryCode);
-        const mlPriorityPromise = fetchWithRetry({
-            method: 'post',
-            url: 'https://google.serper.dev/search',
-            headers: { 'X-API-KEY': apiKey, 'Content-Type': 'application/json' },
-            data: JSON.stringify({
-                q: `${webQuery} site:${mercadoLibreDomain}`,
-                gl: regionCfg.gl,
-                hl: regionCfg.hl,
-                num: 12
-            }),
-            timeout: serperTimeout,
-            signal: abortSignal
-        }, serperRetries).catch(err => { console.error('Error Serper MercadoLibre Priority:', err.message); return null; });
+        const mlPriorityPromise = isSpecificProduct
+            ? Promise.resolve(null)
+            : fetchWithRetry({
+                method: 'post',
+                url: 'https://google.serper.dev/search',
+                headers: { 'X-API-KEY': apiKey, 'Content-Type': 'application/json' },
+                data: JSON.stringify({
+                    q: `${webQuery} site:${mercadoLibreDomain}`,
+                    gl: regionCfg.gl,
+                    hl: regionCfg.hl,
+                    num: 12
+                }),
+                timeout: serperTimeout,
+                signal: abortSignal
+            }, serperRetries).catch(err => { console.error('Error Serper MercadoLibre Priority:', err.message); return null; });
 
-        const serperAltQueryCount = isBroadExploration ? 2 : 1;
+        const serperAltQueryCount = isSpecificProduct ? 0 : (isBroadExploration ? 2 : 1);
         const altShoppingPromises = (alternativeQueries || [])
             .filter(Boolean)
             .slice(0, serperAltQueryCount)
@@ -953,24 +959,36 @@ exports.searchGoogleShopping = async (query, radius, lat, lng, intentType, abort
     if (shouldRunDirectScrapers) {
         // Strip Google-only negative keywords (-funda -case etc.) since direct scrapers use URL search params
         const cleanQuery = query.replace(/\s+-\w+/g, '').trim();
-        console.log(`Ejecutando scrapers directos rápidos para ${countryCode}: ${cleanQuery} ...`);
+        const hasProxy = Boolean(process.env.SCRAPER_PROXIES);
+        console.log(`Ejecutando scrapers directos rápidos para ${countryCode}: ${cleanQuery} ...${hasProxy ? '' : ' [sin proxy — solo API scrapers]'}`);
 
         const scraperFunctions = [
             () => monitor.wrap(() => directScraper.scrapeMercadoLibreAPI(cleanQuery, countryCode, abortSignal, conditionMode), 'ml_api_direct'),
-            () => monitor.wrap(() => directScraper.scrapeMercadoLibreDirect(cleanQuery, abortSignal), 'ml_web_direct'),
         ];
 
-        if (countryCode === 'MX') {
-            scraperFunctions.unshift(() => monitor.wrap(() => directScraper.scrapeAmazonDirect(cleanQuery, 'MX', abortSignal), 'amazon_direct'));
+        if (hasProxy) {
             scraperFunctions.push(
-                () => monitor.wrap(directScraper.scrapeWalmartMX, 'walmart_direct', cleanQuery, abortSignal),
-                () => monitor.wrap(directScraper.scrapeLiverpoolMX, 'liverpool_direct', cleanQuery, abortSignal),
-                () => monitor.wrap(directScraper.scrapeCostcoMX, 'costco_direct', cleanQuery, abortSignal)
+                () => monitor.wrap(() => directScraper.scrapeMercadoLibreDirect(cleanQuery, abortSignal), 'ml_web_direct')
             );
+        }
+
+        if (countryCode === 'MX') {
+            if (hasProxy) {
+                scraperFunctions.unshift(() => monitor.wrap(() => directScraper.scrapeAmazonDirect(cleanQuery, 'MX', abortSignal), 'amazon_direct'));
+                scraperFunctions.push(
+                    () => monitor.wrap(directScraper.scrapeWalmartMX, 'walmart_direct', cleanQuery, abortSignal),
+                    () => monitor.wrap(directScraper.scrapeLiverpoolMX, 'liverpool_direct', cleanQuery, abortSignal),
+                    () => monitor.wrap(directScraper.scrapeCostcoMX, 'costco_direct', cleanQuery, abortSignal)
+                );
+            }
         } else if (['CL', 'CO', 'PE'].includes(countryCode)) {
-            scraperFunctions.unshift(() => monitor.wrap(() => directScraper.scrapeFalabellaRegional(cleanQuery, countryCode, abortSignal), 'falabella_direct'));
+            if (hasProxy) {
+                scraperFunctions.unshift(() => monitor.wrap(() => directScraper.scrapeFalabellaRegional(cleanQuery, countryCode, abortSignal), 'falabella_direct'));
+            }
         } else if (countryCode === 'US') {
-            scraperFunctions.unshift(() => monitor.wrap(() => directScraper.scrapeAmazonDirect(cleanQuery, 'US', abortSignal), 'amazon_direct'));
+            if (hasProxy) {
+                scraperFunctions.unshift(() => monitor.wrap(() => directScraper.scrapeAmazonDirect(cleanQuery, 'US', abortSignal), 'amazon_direct'));
+            }
         }
 
         const preferredStores = getStorePriorityForCategory(productCategory, countryCode);
