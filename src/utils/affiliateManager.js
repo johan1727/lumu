@@ -1,9 +1,7 @@
 const ML_AFFILIATE_CAMPAIGN = process.env.ML_AFFILIATE_CAMPAIGN || '';
-const ALIEXPRESS_AFFILIATE_KEY = process.env.ALIEXPRESS_AFFILIATE_KEY || '';
 
 const missingAffiliateConfigs = [];
 if (!ML_AFFILIATE_CAMPAIGN) missingAffiliateConfigs.push('ML_AFFILIATE_CAMPAIGN');
-if (!ALIEXPRESS_AFFILIATE_KEY) missingAffiliateConfigs.push('ALIEXPRESS_AFFILIATE_KEY');
 if (missingAffiliateConfigs.length > 0) {
     console.warn(`[Affiliate] Variables faltantes: ${missingAffiliateConfigs.join(', ')}. Se usarán enlaces sin afiliado en esas tiendas.`);
 }
@@ -138,16 +136,6 @@ exports.generateAffiliateLink = (originalUrl, source) => {
         if (sourceLower.includes('mercadolibre') || sourceLower.includes('mercado libre')) {
             if (ML_AFFILIATE_CAMPAIGN) {
                 urlObj.searchParams.set('re_id', ML_AFFILIATE_CAMPAIGN);
-            }
-            return urlObj.toString();
-        }
-
-        // 3. Inyectar afiliado de AliExpress
-        if (sourceLower.includes('aliexpress')) {
-            if (ALIEXPRESS_AFFILIATE_KEY) {
-                // El formato correcto para deep links dinámicos sin llamadas a la API
-                const targetUrl = encodeURIComponent(urlObj.toString());
-                return `https://s.click.aliexpress.com/deep_link.htm?aff_short_key=${ALIEXPRESS_AFFILIATE_KEY}&dl_target_url=${targetUrl}`;
             }
             return urlObj.toString();
         }

@@ -1431,6 +1431,17 @@
                         class="nav-link hover:text-[#00C853] transition-colors text-slate-600">Tendencias</a>
                     <a href="/precios.html" id="nav-precios"
                         class="nav-link hover:text-[#00C853] transition-colors text-slate-600 font-bold">Precios</a>
+                    <div class="relative">
+                        <button type="button" id="continuity-open-history" class="nav-link inline-flex items-center gap-1 text-slate-600 transition-colors hover:text-[#00C853]">
+                            <span>Historial</span>
+                            <span id="continuity-recent-list" class="max-w-[110px] truncate text-slate-400">Abrir</span>
+                        </button>
+                        <div id="continuity-history-menu" class="hidden absolute top-full left-1/2 z-[120] mt-2 w-[min(88vw,320px)] -translate-x-1/2 rounded-2xl border border-slate-200 bg-white p-2 shadow-xl">
+                            <div id="continuity-history-items" class="flex flex-col gap-1">
+                                <button type="button" class="w-full rounded-xl px-3 py-2 text-left text-sm font-medium text-slate-500 hover:bg-slate-50">Sin búsquedas recientes</button>
+                            </div>
+                        </div>
+                    </div>
                     <div class="relative group"
                         onmouseenter="if(typeof renderMiniFavorites === 'function') renderMiniFavorites()">
                         <button id="nav-favoritos" class="hover:text-primary transition-colors flex items-center gap-1">
@@ -1509,12 +1520,22 @@
             <!-- Hero Titles (Restored) -->
             <div class="text-center max-w-3xl mx-auto mb-8 md:mb-12 relative z-20">
                 <h1 id="hero-title" class="font-display text-5xl md:text-6xl lg:text-[72px] font-black text-slate-900 tracking-[-0.04em] leading-[1.05] mb-5">
-                    El precio perfecto,<br/>
-                    <span class="text-transparent bg-clip-text bg-gradient-to-r from-emerald-500 to-teal-400">en un instante.</span>
+                    Pídeme lo que quieres comprar,<br/>
+                    <span class="text-transparent bg-clip-text bg-gradient-to-r from-emerald-500 to-teal-400">yo encuentro dónde conviene.</span>
                 </h1>
                 <p id="hero-subtitle" class="text-lg md:text-xl text-slate-500 font-medium max-w-2xl mx-auto leading-relaxed">
-                    Comparamos precios en Amazon, Mercado Libre y tiendas locales con IA.
+                    Describe tu compra con lenguaje natural y Lumu compara precios, tiendas confiables y opciones cerca de ti.
                 </p>
+                <div class="mt-5 flex flex-wrap items-center justify-center gap-2.5 text-left">
+                    <button type="button" onclick="document.getElementById('search-input').value='Encuéntrame la opción más barata de unos AirPods'; document.getElementById('search-form').dispatchEvent(new Event('submit', { cancelable: true, bubbles: true }));"
+                        class="search-prompt-chip rounded-full px-4 py-2 text-xs md:text-sm font-bold shadow-sm"> Encuéntrame lo más barato</button>
+                    <button type="button" onclick="document.getElementById('search-input').value='Compara iPhone 15 vs Galaxy S24 y dime cuál conviene'; document.getElementById('search-form').dispatchEvent(new Event('submit', { cancelable: true, bubbles: true }));"
+                        class="search-prompt-chip rounded-full px-4 py-2 text-xs md:text-sm font-bold shadow-sm"> Compárame dos opciones</button>
+                    <button type="button" onclick="document.getElementById('search-input').value='Quiero una laptop para estudiar por menos de 12000 pesos'; document.getElementById('search-form').dispatchEvent(new Event('submit', { cancelable: true, bubbles: true }));"
+                        class="search-prompt-chip rounded-full px-4 py-2 text-xs md:text-sm font-bold shadow-sm"> Tengo presupuesto</button>
+                    <button type="button" onclick="document.getElementById('search-input').value='Solo tiendas confiables para Nintendo Switch OLED'; document.getElementById('search-form').dispatchEvent(new Event('submit', { cancelable: true, bubbles: true }));"
+                        class="search-prompt-chip rounded-full px-4 py-2 text-xs md:text-sm font-bold shadow-sm"> Solo tiendas seguras</button>
+                </div>
             </div>
 
             <!-- Search Form -->
@@ -1528,7 +1549,7 @@
                         placeholder="Dime qué estás buscando... Ej: iPhone 15 Pro Max" required
                         autocomplete="off"></textarea>
                     <div id="search-assistant-copy" class="px-4 pb-1 text-[13px] text-slate-500 font-medium">
-                        Describe lo que necesitas y Lumu compara precios, tiendas confiables y opciones cerca de ti.
+                        Escríbelo como si hablaras con un asistente: producto, presupuesto, uso o si quieres que compare por ti.
                     </div>
 
                     <!-- Fase 6: Autocomplete Dropdown -->
@@ -1586,12 +1607,31 @@
                     </div>
                 </div>
 
+                <div class="mt-4 mx-auto max-w-3xl px-2">
+                    <div class="prompt-surface-card rounded-[28px] p-4 md:p-5">
+                        <div class="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+                            <div>
+                                <p class="text-[11px] font-black uppercase tracking-[0.22em] text-emerald-700">Empieza rápido</p>
+                                <h2 class="text-lg md:text-xl font-black text-slate-900 tracking-tight">Haz una pregunta completa y Lumu se encarga del resto</h2>
+                                <p class="mt-1 text-sm text-slate-500 font-medium max-w-2xl">No necesitas ajustar todo antes de buscar. Si quieres, luego afinas región, condición o tiendas.</p>
+                            </div>
+                            <button type="button" id="btn-toggle-filters"
+                                class="self-start md:self-auto inline-flex items-center gap-2 rounded-full border border-emerald-100 bg-white/85 px-4 py-2 text-[11px] font-black uppercase tracking-[0.18em] text-slate-700 shadow-sm transition-all hover:border-emerald-200 hover:bg-emerald-50">
+                                <span id="toggle-filters-label">Refinar búsqueda</span>
+                                <svg id="toggle-filters-icon" class="w-4 h-4 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="m6 9 6 6 6-6" />
+                                </svg>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
                 <div class="mt-5 max-w-4xl mx-auto px-2">
                     <div class="filters-shell relative isolate rounded-[2rem] p-3 md:p-4">
                         <div class="relative z-[180] flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
                             <div>
                                 <p id="guided-search-title" class="text-[11px] font-black uppercase tracking-[0.22em] text-emerald-700">Búsqueda guiada</p>
-                                <p id="guided-search-copy" class="text-sm text-slate-500 font-medium">Elige cómo quieres buscar sin perderte entre tantos botones.</p>
+                                <p id="guided-search-copy" class="text-sm text-slate-500 font-medium">Ajustes opcionales para afinar resultados cuando ya tengas clara la búsqueda.</p>
                             </div>
                             <div class="flex items-center gap-2 flex-wrap overflow-visible">
                                 <div class="relative z-[190] w-full sm:w-auto overflow-visible">
@@ -1609,13 +1649,6 @@
                                         <button type="button" class="region-option-btn flex w-full items-center gap-3 text-left px-3 py-2 rounded-xl text-sm font-bold hover:bg-emerald-50" data-region="US"><span aria-hidden="true" class="inline-flex h-6 min-w-[2.25rem] items-center justify-center rounded-full bg-slate-100 px-2 text-[10px] font-black uppercase tracking-[0.16em] text-slate-700">US</span><span class="min-w-0 truncate">United States</span></button>
                                     </div>
                                 </div>
-                                <button type="button" id="btn-toggle-filters"
-                                    class="self-start sm:self-auto inline-flex items-center gap-2 rounded-full border border-emerald-100 bg-white/85 px-4 py-2 text-[11px] font-black uppercase tracking-[0.18em] text-slate-700 shadow-sm transition-all hover:border-emerald-200 hover:bg-emerald-50">
-                                    <span id="toggle-filters-label">Ajustar búsqueda</span>
-                                    <svg id="toggle-filters-icon" class="w-4 h-4 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="m6 9 6 6 6-6" />
-                                    </svg>
-                                </button>
                             </div>
                         </div>
 
@@ -1710,7 +1743,7 @@
 
             <!-- BARRA DE CATEGORÍAS (Premium Pills) -->
             <div id="category-icon-bar"
-                class="w-full max-w-4xl mx-auto flex justify-start sm:justify-center gap-3 overflow-x-auto pb-4 custom-scrollbar no-scrollbar-at-md px-2">
+                class="w-full max-w-4xl mx-auto flex justify-start sm:justify-center gap-3 overflow-x-auto pb-3 custom-scrollbar no-scrollbar-at-md px-2 opacity-80">
 
                 <button data-macro-category="Tecnología celulares laptops audífonos gadgets"
                     class="flex items-center gap-2.5 px-4 py-2 bg-white border border-slate-200 rounded-full shadow-sm hover:shadow-md hover:border-emerald-300 hover:bg-emerald-50 transition-all flex-shrink-0 group">
@@ -1776,7 +1809,7 @@
                 </button>
             </div>
 
-            <section id="browse-hub-section" class="w-full max-w-6xl mx-auto mb-14 fade-in px-4">
+            <section id="browse-hub-section" class="w-full max-w-6xl mx-auto mb-14 fade-in px-4 opacity-85">
                 <div class="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between mb-5">
                     <div>
                         <p class="text-[11px] font-black uppercase tracking-[0.22em] text-emerald-700">Explora sin escribir</p>

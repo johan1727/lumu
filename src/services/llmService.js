@@ -51,7 +51,7 @@ const llmResponseSchema = z.object({
     cupon: z.string().max(100).nullable().optional(),
     searchQuery: z.string().max(500).optional().default(''),
     normalizedQuery: z.string().max(500).optional(),
-    alternativeQueries: z.array(z.string().max(500)).max(6).optional(),
+    alternativeQueries: z.array(z.string().max(500)).max(12).optional(),
     brandOfficialQuery: z.string().max(300).nullable().optional(),
     condition: z.enum(['new', 'used']).optional().default('new'),
     canonicalKey: z.string().max(160).optional(),

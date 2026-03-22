@@ -45,6 +45,8 @@ let currentRegion = 'MX';
 let serverDetectedRegion = null;
 const SEARCH_SNAPSHOTS_KEY = 'lumu_search_snapshots';
 const REGION_OVERRIDE_KEY = 'lumu_region_override';
+const ONBOARDING_V3_KEY = 'lumu_onboarding_v3';
+const ONBOARDING_PREF_KEY = 'lumu_onboarding_preference';
 
 const REGION_LABELS = {
     MX: {
@@ -1026,6 +1028,334 @@ function formatCurrencyByRegion(amount) {
     }).format(Number(amount || 0));
 }
 
+function formatCurrencyByCode(amount, regionCode = currentRegion) {
+    const normalizedRegion = String(regionCode || currentRegion || 'MX').toUpperCase();
+    const config = REGION_LABELS[normalizedRegion] || REGION_LABELS.MX;
+    return new Intl.NumberFormat(config.locale, {
+        style: 'currency',
+        currency: config.currency
+    }).format(Number(amount || 0));
+}
+
+function getProductCurrencyCode(product = {}) {
+    const explicitCode = String(product.currencyCode || product.currency || '').trim().toUpperCase();
+    if (explicitCode) return explicitCode;
+    const countryCode = String(product.countryCode || product.country || product.region || currentRegion || 'MX').trim().toUpperCase();
+    const config = REGION_LABELS[countryCode] || REGION_LABELS.MX;
+    return config.currency || 'MXN';
+}
+
+function formatProductPriceLabel(amount, product = {}) {
+    const countryCode = String(product.countryCode || product.country || product.region || currentRegion || 'MX').trim().toUpperCase();
+    const formatted = formatCurrencyByCode(amount, countryCode);
+    const currencyCode = getProductCurrencyCode(product);
+    return `${formatted} ${currencyCode}`.trim();
+}
+
+function getStoredOnboardingPreference() {
+    return String(localStorage.getItem(ONBOARDING_PREF_KEY) || '').trim().toLowerCase();
+}
+
+function applyOnboardingPreference(preference = '') {
+    const normalizedPreference = String(preference || '').trim().toLowerCase();
+    if (!normalizedPreference) return;
+
+    if (conditionModeInput && !conditionModeInput.value) {
+        conditionModeInput.value = 'all';
+    }
+
+    const btnSafeStores = document.getElementById('btn-safe-stores');
+    if (btnSafeStores && normalizedPreference === 'trusted') {
+        btnSafeStores.setAttribute('data-safe', 'true');
+        btnSafeStores.classList.remove('border-slate-200', 'bg-white', 'text-slate-600');
+        btnSafeStores.classList.add('border-emerald-500', 'bg-emerald-50', 'text-emerald-700');
+    } else if (btnSafeStores && btnSafeStores.getAttribute('data-safe') !== 'true') {
+        btnSafeStores.setAttribute('data-safe', 'false');
+        btnSafeStores.classList.remove('border-emerald-500', 'bg-emerald-50', 'text-emerald-700');
+        btnSafeStores.classList.add('border-slate-200', 'bg-white', 'text-slate-600');
+    }
+
+    if (searchInput) {
+        if (normalizedPreference === 'cheapest' && !searchInput.placeholder.toLowerCase().includes('barato')) {
+            searchInput.placeholder = currentRegion === 'US'
+                ? 'Search products and find the cheapest real option...'
+                : 'Busca productos y encuentra la opción más barata real...';
+        } else if (normalizedPreference === 'best_value' && !searchInput.placeholder.toLowerCase().includes('value')) {
+            searchInput.placeholder = currentRegion === 'US'
+                ? 'Search products and compare the best value options...'
+                : 'Busca productos y compara las opciones que más convienen...';
+        }
+    }
+
+    if (typeof renderActiveFiltersSummary === 'function') renderActiveFiltersSummary();
+}
+
+function buildWelcomeOnboardingModal() {
+    const existing = document.getElementById('welcome-onboarding-modal');
+    if (existing) return existing;
+
+    const overlay = document.createElement('div');
+    overlay.id = 'welcome-onboarding-modal';
+    overlay.className = 'fixed inset-0 z-[120] hidden items-center justify-center bg-slate-950/60 backdrop-blur-sm p-4';
+    overlay.innerHTML = `
+        <div class="relative w-full max-w-2xl overflow-hidden rounded-[32px] border border-white/60 bg-white shadow-2xl">
+            <button id="welcome-onboarding-close" class="absolute right-4 top-4 z-10 inline-flex h-10 w-10 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-500 transition hover:text-slate-800" aria-label="Close onboarding">
+                <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M6 18L18 6M6 6l12 12"></path></svg>
+            </button>
+            <div class="bg-gradient-to-br from-emerald-500 via-teal-500 to-cyan-500 px-6 py-8 text-white md:px-8">
+                <div class="inline-flex items-center rounded-full bg-white/15 px-3 py-1 text-[11px] font-black uppercase tracking-[0.25em]">Welcome to Lumu</div>
+                <h2 id="welcome-onboarding-title" class="mt-4 text-3xl font-black leading-tight">Where are you shopping from?</h2>
+                <p id="welcome-onboarding-copy" class="mt-2 max-w-xl text-sm font-medium text-emerald-50/90">Pick your country so we can show the right stores, prices and currency from the start.</p>
+            </div>
+            <div class="px-6 py-6 md:px-8 md:py-8">
+                <div id="welcome-onboarding-step-1" class="space-y-4">
+                    <div class="grid grid-cols-2 gap-3 md:grid-cols-3">
+                        <button type="button" data-region-choice="MX" class="welcome-region-option rounded-2xl border border-slate-200 px-4 py-4 text-left transition hover:border-emerald-300 hover:bg-emerald-50"><div class="text-2xl">🇲🇽</div><div class="mt-2 text-sm font-black text-slate-900">México</div><div class="text-xs font-medium text-slate-500">MXN · Amazon MX · Mercado Libre</div></button>
+                        <button type="button" data-region-choice="US" class="welcome-region-option rounded-2xl border border-slate-200 px-4 py-4 text-left transition hover:border-emerald-300 hover:bg-emerald-50"><div class="text-2xl">🇺🇸</div><div class="mt-2 text-sm font-black text-slate-900">United States</div><div class="text-xs font-medium text-slate-500">USD · Amazon · Walmart · Target</div></button>
+                        <button type="button" data-region-choice="CL" class="welcome-region-option rounded-2xl border border-slate-200 px-4 py-4 text-left transition hover:border-emerald-300 hover:bg-emerald-50"><div class="text-2xl">🇨🇱</div><div class="mt-2 text-sm font-black text-slate-900">Chile</div><div class="text-xs font-medium text-slate-500">CLP · Falabella · Ripley · Paris</div></button>
+                        <button type="button" data-region-choice="CO" class="welcome-region-option rounded-2xl border border-slate-200 px-4 py-4 text-left transition hover:border-emerald-300 hover:bg-emerald-50"><div class="text-2xl">🇨🇴</div><div class="mt-2 text-sm font-black text-slate-900">Colombia</div><div class="text-xs font-medium text-slate-500">COP · Éxito · Alkosto · ML</div></button>
+                        <button type="button" data-region-choice="AR" class="welcome-region-option rounded-2xl border border-slate-200 px-4 py-4 text-left transition hover:border-emerald-300 hover:bg-emerald-50"><div class="text-2xl">🇦🇷</div><div class="mt-2 text-sm font-black text-slate-900">Argentina</div><div class="text-xs font-medium text-slate-500">ARS · Frávega · ML · Musimundo</div></button>
+                        <button type="button" data-region-choice="PE" class="welcome-region-option rounded-2xl border border-slate-200 px-4 py-4 text-left transition hover:border-emerald-300 hover:bg-emerald-50"><div class="text-2xl">🇵🇪</div><div class="mt-2 text-sm font-black text-slate-900">Perú</div><div class="text-xs font-medium text-slate-500">PEN · Falabella · Ripley · Plaza Vea</div></button>
+                    </div>
+                </div>
+                <div id="welcome-onboarding-step-2" class="hidden space-y-4">
+                    <div class="grid gap-3">
+                        <button type="button" data-pref-choice="cheapest" class="welcome-pref-option rounded-2xl border border-slate-200 px-4 py-4 text-left transition hover:border-emerald-300 hover:bg-emerald-50"><div class="text-sm font-black text-slate-900">💰 Cheapest price</div><div class="mt-1 text-xs font-medium text-slate-500">We prioritize lower prices first.</div></button>
+                        <button type="button" data-pref-choice="best_value" class="welcome-pref-option rounded-2xl border border-slate-200 px-4 py-4 text-left transition hover:border-emerald-300 hover:bg-emerald-50"><div class="text-sm font-black text-slate-900">⭐ Best value</div><div class="mt-1 text-xs font-medium text-slate-500">Balance price, trust and product quality.</div></button>
+                        <button type="button" data-pref-choice="trusted" class="welcome-pref-option rounded-2xl border border-slate-200 px-4 py-4 text-left transition hover:border-emerald-300 hover:bg-emerald-50"><div class="text-sm font-black text-slate-900">🏪 Trusted stores only</div><div class="mt-1 text-xs font-medium text-slate-500">Start with safer stores and official sellers.</div></button>
+                    </div>
+                </div>
+                <div class="mt-6 flex items-center justify-between gap-3 border-t border-slate-100 pt-4">
+                    <button id="welcome-onboarding-back" type="button" class="hidden rounded-2xl border border-slate-200 px-4 py-2 text-sm font-bold text-slate-600 transition hover:bg-slate-50">Back</button>
+                    <div class="ml-auto flex items-center gap-2">
+                        <button id="welcome-onboarding-skip" type="button" class="rounded-2xl border border-slate-200 px-4 py-2 text-sm font-bold text-slate-500 transition hover:bg-slate-50">Skip</button>
+                        <button id="welcome-onboarding-next" type="button" class="rounded-2xl bg-slate-900 px-5 py-2.5 text-sm font-black text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-50" disabled>Continue</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    `;
+    document.body.appendChild(overlay);
+    return overlay;
+}
+
+function initWelcomeOnboarding() {
+    applyOnboardingPreference(getStoredOnboardingPreference());
+    const overlay = buildWelcomeOnboardingModal();
+    const title = document.getElementById('welcome-onboarding-title');
+    const copy = document.getElementById('welcome-onboarding-copy');
+    const step1 = document.getElementById('welcome-onboarding-step-1');
+    const step2 = document.getElementById('welcome-onboarding-step-2');
+    const nextBtn = document.getElementById('welcome-onboarding-next');
+    const backBtn = document.getElementById('welcome-onboarding-back');
+    const skipBtn = document.getElementById('welcome-onboarding-skip');
+    const closeBtn = document.getElementById('welcome-onboarding-close');
+
+    if (!overlay || !title || !copy || !step1 || !step2 || !nextBtn || !backBtn || !skipBtn || !closeBtn) return;
+
+    let selectedRegion = '';
+    let selectedPreference = '';
+    let currentStep = 1;
+    let autoOpenTimer = null;
+
+    const hideModal = (markDone = false) => {
+        if (autoOpenTimer) {
+            clearTimeout(autoOpenTimer);
+            autoOpenTimer = null;
+        }
+        overlay.classList.add('hidden');
+        overlay.classList.remove('flex');
+        if (markDone) {
+            localStorage.setItem(ONBOARDING_V3_KEY, 'done');
+        }
+    };
+
+    const syncStepUi = () => {
+        const isStepOne = currentStep === 1;
+        step1.classList.toggle('hidden', !isStepOne);
+        step2.classList.toggle('hidden', isStepOne);
+        backBtn.classList.toggle('hidden', isStepOne);
+        title.textContent = isStepOne ? 'Where are you shopping from?' : 'What matters most to you?';
+        copy.textContent = isStepOne
+            ? 'Pick your country so we can show the right stores, prices and currency from the start.'
+            : 'Choose a default shopping style. You can still change filters any time.';
+        nextBtn.textContent = isStepOne ? 'Continue' : 'Start using Lumu';
+        nextBtn.disabled = isStepOne ? !selectedRegion : !selectedPreference;
+    };
+
+    overlay.querySelectorAll('[data-region-choice]').forEach((button) => {
+        button.addEventListener('click', () => {
+            selectedRegion = button.getAttribute('data-region-choice') || 'MX';
+            overlay.querySelectorAll('[data-region-choice]').forEach((item) => {
+                item.classList.remove('border-emerald-500', 'bg-emerald-50', 'ring-2', 'ring-emerald-200');
+            });
+            button.classList.add('border-emerald-500', 'bg-emerald-50', 'ring-2', 'ring-emerald-200');
+            nextBtn.disabled = false;
+        });
+    });
+
+    overlay.querySelectorAll('[data-pref-choice]').forEach((button) => {
+        button.addEventListener('click', () => {
+            selectedPreference = button.getAttribute('data-pref-choice') || 'best_value';
+            overlay.querySelectorAll('[data-pref-choice]').forEach((item) => {
+                item.classList.remove('border-emerald-500', 'bg-emerald-50', 'ring-2', 'ring-emerald-200');
+            });
+            button.classList.add('border-emerald-500', 'bg-emerald-50', 'ring-2', 'ring-emerald-200');
+            nextBtn.disabled = false;
+        });
+    });
+
+    nextBtn.addEventListener('click', () => {
+        if (currentStep === 1) {
+            if (!selectedRegion) return;
+            localStorage.setItem(REGION_OVERRIDE_KEY, selectedRegion);
+            currentRegion = selectedRegion;
+            applyRegionalCopy();
+            currentStep = 2;
+            syncStepUi();
+            return;
+        }
+
+        if (!selectedPreference) return;
+        localStorage.setItem(ONBOARDING_PREF_KEY, selectedPreference);
+        applyOnboardingPreference(selectedPreference);
+        hideModal(true);
+        if (searchInput) searchInput.focus();
+    });
+
+    backBtn.addEventListener('click', () => {
+        currentStep = 1;
+        syncStepUi();
+    });
+
+    const dismissOnboarding = () => {
+        applyOnboardingPreference(getStoredOnboardingPreference());
+        hideModal(true);
+    };
+
+    skipBtn.addEventListener('click', dismissOnboarding);
+    closeBtn.addEventListener('click', dismissOnboarding);
+    overlay.addEventListener('click', (event) => {
+        if (event.target === overlay) dismissOnboarding();
+    });
+
+    syncStepUi();
+
+    window.openWelcomeOnboarding = () => {
+        if (autoOpenTimer) {
+            clearTimeout(autoOpenTimer);
+            autoOpenTimer = null;
+        }
+        overlay.classList.remove('hidden');
+        overlay.classList.add('flex');
+        syncStepUi();
+    };
+
+    const onboardingAlreadyDone = localStorage.getItem(ONBOARDING_V3_KEY) === 'done';
+    const userAlreadyInteracted = localStorage.getItem('lumu_local_history') || sessionStorage.getItem('just_logged_in');
+    const shouldAutoOpen = !onboardingAlreadyDone && !userAlreadyInteracted;
+
+    if (shouldAutoOpen) {
+        autoOpenTimer = setTimeout(() => {
+            if (document.visibilityState !== 'visible') return;
+            if (resultsWrapper && !resultsWrapper.classList.contains('hidden')) return;
+            window.openWelcomeOnboarding();
+        }, 900);
+    }
+}
+
+function getRecentHistoryEntries(limit = 4) {
+    const rawEntries = JSON.parse(localStorage.getItem('lumu_local_history') || '[]');
+    return rawEntries
+        .map((entry) => {
+            if (typeof entry === 'string') {
+                return { query: entry, savedAt: null };
+            }
+            return {
+                query: String(entry?.query || '').trim(),
+                savedAt: entry?.savedAt || null
+            };
+        })
+        .filter((entry) => entry.query)
+        .slice(0, limit);
+}
+
+function renderContinuityHub() {
+    const continuityList = document.getElementById('continuity-recent-list');
+    const openHistoryBtn = document.getElementById('continuity-open-history');
+    const historyMenu = document.getElementById('continuity-history-menu');
+    const historyItems = document.getElementById('continuity-history-items');
+
+    if (!continuityList) return;
+
+    const recentEntries = getRecentHistoryEntries(4);
+    if (recentEntries.length === 0) {
+        continuityList.textContent = currentRegion === 'US' ? 'No recent searches' : 'Sin recientes';
+        if (historyItems) {
+            historyItems.innerHTML = `
+                <button type="button" class="continuity-history-open w-full rounded-xl px-3 py-2 text-left text-sm font-medium text-slate-500 hover:bg-slate-50">
+                    ${currentRegion === 'US' ? 'Open full history' : 'Abrir historial completo'}
+                </button>
+            `;
+        }
+    } else {
+        continuityList.textContent = recentEntries[0]?.query || (currentRegion === 'US' ? 'Open history' : 'Abrir historial');
+        if (historyItems) {
+            historyItems.innerHTML = `
+                ${recentEntries.map((entry) => `
+                    <button type="button" class="continuity-history-entry w-full rounded-xl px-3 py-2 text-left hover:bg-slate-50" data-query="${sanitize(entry.query)}">
+                        <p class="truncate text-sm font-bold text-slate-800">${sanitize(entry.query)}</p>
+                        <p class="mt-0.5 text-[11px] font-medium text-slate-400">${currentRegion === 'US' ? 'Search again' : 'Buscar otra vez'}</p>
+                    </button>
+                `).join('')}
+                <div class="my-1 h-px bg-slate-100"></div>
+                <button type="button" class="continuity-history-open w-full rounded-xl px-3 py-2 text-left text-sm font-bold text-emerald-700 hover:bg-emerald-50">
+                    ${currentRegion === 'US' ? 'Open full history' : 'Abrir historial completo'}
+                </button>
+            `;
+        }
+    }
+
+    if (historyItems) {
+        historyItems.querySelectorAll('.continuity-history-entry').forEach((button) => {
+            button.addEventListener('click', () => {
+                const query = button.getAttribute('data-query') || '';
+                historyMenu?.classList.add('hidden');
+                if (!query || typeof window.quickSearch !== 'function') return;
+                window.quickSearch(query);
+            });
+        });
+
+        historyItems.querySelectorAll('.continuity-history-open').forEach((button) => {
+            button.addEventListener('click', () => {
+                historyMenu?.classList.add('hidden');
+                if (typeof openHistoryModal === 'function') openHistoryModal();
+            });
+        });
+    }
+
+    if (openHistoryBtn) {
+        openHistoryBtn.onclick = (event) => {
+            event.preventDefault();
+            event.stopPropagation();
+            if (historyMenu) {
+                historyMenu.classList.toggle('hidden');
+            } else if (typeof openHistoryModal === 'function') {
+                openHistoryModal();
+            }
+        };
+    }
+
+    if (historyMenu && !historyMenu.dataset.outsideBound) {
+        document.addEventListener('click', (event) => {
+            if (!historyMenu.contains(event.target) && !openHistoryBtn?.contains(event.target)) {
+                historyMenu.classList.add('hidden');
+            }
+        });
+        historyMenu.dataset.outsideBound = 'true';
+    }
+}
+
 function detectRegion() {
     const savedOverride = localStorage.getItem(REGION_OVERRIDE_KEY);
     if (savedOverride && savedOverride !== 'auto' && REGION_LABELS[savedOverride]) {
@@ -1885,7 +2215,7 @@ async function renderFavoritesList() {
             const safeUrl = sanitize(item.product_url || '#');
             const safeImage = sanitize(item.product_image || '');
             return `
-                <div class="bg-white rounded-2xl p-4 border border-slate-100 shadow-sm hover:shadow-md transition-all group">
+                <div class="bg-white rounded-2xl p-4 border border-slate-100 shadow-sm hover:shadow-md transition-all">
                     <div class="flex gap-4">
                         <div class="w-20 h-20 bg-slate-50 rounded-xl overflow-hidden flex-shrink-0">
                             <img src="${safeImage}" class="w-full h-full object-contain" onerror="this.onerror=null; this.src='data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 width=%27100%27 height=%27100%27 viewBox=%270 0 100 100%27%3E%3Crect width=%27100%27 height=%27100%27 fill=%27%23f1f5f9%27/%3E%3Ctext x=%2750%27 y=%2755%27 text-anchor=%27middle%27 font-size=%2730%27 fill=%27%2394a3b8%27%3E📦%3C/text%3E%3C/svg%3E'">
@@ -2264,6 +2594,7 @@ async function initApp() {
         const locFilterBtns = document.querySelectorAll('.loc-filter-btn');
         const conditionChips = document.querySelectorAll('[data-condition]');
         applyRegionalCopy();
+        applyOnboardingPreference(getStoredOnboardingPreference());
         const categoryBtns = document.querySelectorAll('[data-macro-category]');
         const btnLoginHeader = document.getElementById('btn-login');
         const homeLogoLink = document.getElementById('home-logo-link');
@@ -2617,7 +2948,7 @@ async function initApp() {
             };
 
             const syncFiltersPanelForViewport = () => {
-                const shouldCollapse = window.innerWidth < 640;
+                const shouldCollapse = true;
                 syncFiltersPanel(shouldCollapse);
             };
 
@@ -2750,6 +3081,9 @@ async function initApp() {
 
         // (Event listeners for history/favorites/profile/modals registered elsewhere — no duplicates)
 
+        if (closeHistoryBtn) closeHistoryBtn.addEventListener('click', closeHistoryModal);
+        if (historyBackdrop) historyBackdrop.addEventListener('click', closeHistoryModal);
+
         if (btnMobileMenu) btnMobileMenu.addEventListener('click', () => toggleMobileMenu(true));
         if (btnCloseMobileMenu) btnCloseMobileMenu.addEventListener('click', () => toggleMobileMenu(false));
         if (mobileMenuBackdrop) mobileMenuBackdrop.addEventListener('click', () => toggleMobileMenu(false));
@@ -2810,6 +3144,8 @@ async function initApp() {
         document.querySelectorAll('.mobile-nav-link').forEach(link => {
             link.addEventListener('click', () => toggleMobileMenu(false));
         });
+
+        initWelcomeOnboarding();
 
         function toggleMobileMenu(show) {
             if (!mobileMenuDrawer || !mobileMenuBackdrop || !mobileMenuPanel) return;
@@ -3137,7 +3473,7 @@ async function initApp() {
                 } else {
                     mobileAuthContainer.innerHTML = `
                         <button id="btn-mobile-login" class="w-full bg-emerald-500 hover:bg-emerald-600 text-white font-bold py-3 px-4 rounded-xl transition-colors flex items-center justify-center gap-2">
-                            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 16l-4-4m0 0l4-4m-4 4h14m-5 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h7a3 3 0 013 3v1"></path></svg>
+                            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 16l-4-4m0 0l4-4m-4 4h14m-5 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"></path></svg>
                             ${currentRegion === 'US' ? 'Sign in with Google' : 'Ingresar con Google'}
                         </button>
                     `;
@@ -3362,6 +3698,8 @@ async function initApp() {
             // Ejecutar búsqueda con skipLLM
             executeSearch(query, true);
         };
+
+        renderContinuityHub();
 
 
         // ------------------------------------
@@ -4839,20 +5177,20 @@ async function initApp() {
                 const bestLocal = [...localProducts].sort((a,b) => a.precio - b.precio)[0];
                 const bestOnline = [...onlineProducts].sort((a,b) => a.precio - b.precio)[0];
                 
-                const fmtLocal = formatCurrencyByRegion(bestLocal.precio);
-                const fmtOnline = formatCurrencyByRegion(bestOnline.precio);
+                const fmtLocal = formatProductPriceLabel(bestLocal.precio, bestLocal);
+                const fmtOnline = formatProductPriceLabel(bestOnline.precio, bestOnline);
                 
                 let comparisonMsg = '';
                 if (bestLocal.precio <= bestOnline.precio) {
                     comparisonMsg = isUS
-                        ? `<span class="text-emerald-700 font-bold">Buying local is better today!</span> You save ${formatCurrencyByRegion(bestOnline.precio - bestLocal.precio)} and get it right away.`
-                        : `<span class="text-emerald-700 font-bold">¡Sale mejor comprar local hoy!</span> Ahorras ${formatCurrencyByRegion(bestOnline.precio - bestLocal.precio)} y lo tienes al instante.`;
+                        ? `<span class="text-emerald-700 font-bold">Buying local is better today!</span> You save ${formatProductPriceLabel(bestOnline.precio - bestLocal.precio, bestLocal)} and get it right away.`
+                        : `<span class="text-emerald-700 font-bold">¡Sale mejor comprar local hoy!</span> Ahorras ${formatProductPriceLabel(bestOnline.precio - bestLocal.precio, bestLocal)} y lo tienes al instante.`;
                 } else if (bestOnline.precio < bestLocal.precio) {
                     const diff = bestLocal.precio - bestOnline.precio;
                     if (diff > 50) {
                         comparisonMsg = isUS
-                            ? `<span class="text-blue-700 font-bold">Buying online is cheaper.</span> You save ${formatCurrencyByRegion(diff)}, but you have to wait for shipping.`
-                            : `<span class="text-blue-700 font-bold">Comprar online es más barato.</span> Ahorras ${formatCurrencyByRegion(diff)}, pero debes esperar el envío.`;
+                            ? `<span class="text-blue-700 font-bold">Buying online is cheaper.</span> You save ${formatProductPriceLabel(diff, bestOnline)}, but you have to wait for shipping.`
+                            : `<span class="text-blue-700 font-bold">Comprar online es más barato.</span> Ahorras ${formatProductPriceLabel(diff, bestOnline)}, pero debes esperar el envío.`;
                     } else {
                         comparisonMsg = isUS
                             ? `<span class="text-slate-700 font-bold">Similar price.</span> Buy local if you need it fast, or order online from home.`
@@ -4895,7 +5233,7 @@ async function initApp() {
                 let rawPrice = product.precio || 0;
                 let precioNumerico = parseProductPriceValue(rawPrice);
 
-                const formattedPrice = formatCurrencyByRegion(precioNumerico);
+                const formattedPrice = formatProductPriceLabel(precioNumerico, product);
 
                 // Verificar si ya es favorito y si bajó de precio
                 const favRecord = userFavorites.find(f => f.product_url === (product.urlMonetizada || product.urlOriginal));
@@ -4908,7 +5246,7 @@ async function initApp() {
                     const oldPrice = typeof rawFavPrice === 'number' ? rawFavPrice : parseFloat(String(rawFavPrice).replace(/[^0-9.-]+/g, ""));
                     if (precioNumerico < oldPrice && precioNumerico > 0) {
                         const ahorro = oldPrice - precioNumerico;
-                        priceDropBadge = `<div class="absolute top-2 left-2 bg-emerald-500 text-white text-[10px] font-black px-2 py-1 rounded-md z-30 shadow-lg animate-bounce">${isUS ? `DOWN ${formatCurrencyByRegion(ahorro)}!` : `¡BAJÓ $${ahorro.toFixed(0)}!`}</div>`;
+                        priceDropBadge = `<div class="absolute top-2 left-2 bg-emerald-500 text-white text-[10px] font-black px-2 py-1 rounded-md z-30 shadow-lg animate-bounce">${isUS ? `DOWN ${formatProductPriceLabel(ahorro, product)}!` : `¡BAJÓ ${formatProductPriceLabel(ahorro, product)}!`}</div>`;
                     }
                 }
 
@@ -4934,15 +5272,16 @@ async function initApp() {
                 } else if (!hasUsableOnlinePrice) {
                     priceDisplay = `<span class="text-base md:text-lg font-black text-slate-500">${isUS ? 'Price unavailable' : 'Precio no disponible'}</span>`;
                 } else {
-                    const formattedFull = formatCurrencyByRegion(precioNumerico);
+                    const formattedFull = formatCurrencyByCode(precioNumerico, String(product.countryCode || product.country || product.region || currentRegion || 'MX').trim().toUpperCase());
                     const numericMatch = formattedFull.match(/[\d,.]+/);
                     const numericPart = numericMatch ? numericMatch[0] : '0.00';
                     const currencySymbol = formattedFull.replace(numericPart, '').trim() || (getRegionConfig().currency === 'USD' ? '$' : '$');
                     const lastSeparatorIndex = Math.max(numericPart.lastIndexOf('.'), numericPart.lastIndexOf(','));
                     const integerPart = lastSeparatorIndex >= 0 ? numericPart.slice(0, lastSeparatorIndex) : numericPart;
                     const decimalPart = lastSeparatorIndex >= 0 ? numericPart.slice(lastSeparatorIndex + 1) : '00';
+                    const explicitCurrencyCode = getProductCurrencyCode(product);
                     
-                    priceDisplay = `<span class="text-xs md:text-sm font-bold text-slate-500">${currencySymbol}</span><span class="text-[1.7rem] md:text-3xl font-black text-slate-900 leading-none">${integerPart}</span><span class="text-xs md:text-sm font-bold text-slate-900">.${decimalPart}</span>`;
+                    priceDisplay = `<span class="text-xs md:text-sm font-bold text-slate-500">${currencySymbol}</span><span class="text-[1.7rem] md:text-3xl font-black text-slate-900 leading-none">${integerPart}</span><span class="text-xs md:text-sm font-bold text-slate-900">.${decimalPart}</span><span class="ml-2 text-[10px] md:text-xs font-black uppercase tracking-[0.18em] text-slate-400">${explicitCurrencyCode}</span>`;
                     
                     if (product.isSuspicious) {
                         priceDisplay += `<div class="mt-2 inline-flex items-center gap-1.5 px-2 py-1 rounded-md bg-rose-50 border border-rose-200 text-rose-700 text-[10px] font-black uppercase tracking-wider tooltip" data-tip="${isUS ? 'The price is unusually low compared to the market' : 'El precio es anormalmente bajo comparado con el mercado'}"><span class="text-xs">⚠️</span> ${isUS ? 'SUSPICIOUS' : 'SOSPECHOSO'}</div>`;
