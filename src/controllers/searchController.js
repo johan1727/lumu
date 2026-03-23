@@ -1925,6 +1925,9 @@ exports.searchProduct = async (req, res) => {
                 isPriceAnomaly: Boolean(product.isPriceAnomaly),
                 isPotentiallyUnavailable: Boolean(product.isPotentiallyUnavailable),
                 hasEphemeralRedirect: Boolean(product.hasEphemeralRedirect),
+                hasStockSignal: Boolean(product.hasStockSignal),
+                countryCode,
+                lastVerifiedAt: product.lastVerifiedAt || new Date().toISOString(),
                 rerankBoost: intentMemoryMeta.rerankBoost,
                 intentSuccessScore: intentMemoryMeta.successScore,
                 intentClickedCount: intentMemoryMeta.clickedCount
@@ -1997,23 +2000,30 @@ exports.searchProduct = async (req, res) => {
             const tienda = (product.tienda || product.fuente || '').toLowerCase();
             let injectedCoupon = null;
             let couponDetails = null;
+            let couponDisclaimer = null;
+            let couponSourceUrl = null;
             
             // Si el LLM detectó un cupón universal validado, usarlo
             if (llmAnalysis.cupon && llmAnalysis.cupon.length > 2) {
                 injectedCoupon = llmAnalysis.cupon;
-                couponDetails = "Cupón sugerido por IA";
+                couponDetails = 'Cupón sugerido por IA';
+                couponDisclaimer = 'Cupón sugerido por IA — verifica vigencia y condiciones antes de usarlo.';
             } else {
                 // Lookup active universal coupons for this specific store
                 const storeCoupons = couponService.getCouponsForStore(tienda, countryCode);
                 if (storeCoupons && storeCoupons.length > 0) {
-                    injectedCoupon = storeCoupons[0].code;
+                    injectedCoupon = storeCoupons[0];
                     couponDetails = storeCoupons[0].discount;
+                    couponDisclaimer = storeCoupons[0].disclaimer || null;
+                    couponSourceUrl = storeCoupons[0].source_url || null;
                 }
             }
 
             if (injectedCoupon && !product.cupon) {
                 product.cupon = injectedCoupon;
                 product.couponDetails = couponDetails;
+                product.couponDisclaimer = couponDisclaimer;
+                product.couponSourceUrl = couponSourceUrl;
             }
             product.bestBuyScore = buildBestBuyScore(product);
             product.bestBuyLabel = buildBestBuyLabel(product.bestBuyScore);

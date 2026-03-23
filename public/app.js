@@ -5163,6 +5163,20 @@ async function initApp() {
             return Number.isFinite(parsed) ? parsed : 0;
         };
 
+        const formatRelativeVerification = (value) => {
+            if (!value) return '';
+            const ts = new Date(value).getTime();
+            if (!Number.isFinite(ts)) return '';
+            const diffMs = Math.max(0, Date.now() - ts);
+            const diffMin = Math.round(diffMs / 60000);
+            if (diffMin < 1) return currentRegion === 'US' ? 'Verified just now' : 'Verificado hace un momento';
+            if (diffMin < 60) return currentRegion === 'US' ? `Verified ${diffMin}m ago` : `Verificado hace ${diffMin} min`;
+            const diffHours = Math.round(diffMin / 60);
+            if (diffHours < 24) return currentRegion === 'US' ? `Verified ${diffHours}h ago` : `Verificado hace ${diffHours} h`;
+            const diffDays = Math.round(diffHours / 24);
+            return currentRegion === 'US' ? `Verified ${diffDays}d ago` : `Verificado hace ${diffDays} d`;
+        };
+
         async function renderProducts(products) {
             resultsContainer.innerHTML = '';
             const onlyCouponsInput = document.getElementById('only-coupons');
@@ -5170,6 +5184,9 @@ async function initApp() {
             const currentSearchText = document.getElementById('search-input')?.value || '';
             const broadUiSearch = isBroadUiSearch(currentSearchText);
             const filteredProducts = (products || []).filter((product) => {
+                if (product.isPotentiallyUnavailable && !product.hasStockSignal) {
+                    return false;
+                }
                 if (onlyCouponsInput?.value === 'true' && !product.cupon) {
                     return false;
                 }
@@ -5486,6 +5503,8 @@ async function initApp() {
                                     </div>
                                     <button onclick="event.preventDefault(); event.stopPropagation(); navigator.clipboard.writeText('${code}'); const orig=this.innerHTML; this.innerHTML='${isUS ? 'Copied!' : '¡Copiado!'}'; setTimeout(()=>this.innerHTML=orig, 2000);" class="text-[10px] font-bold bg-white text-emerald-600 hover:bg-emerald-600 hover:text-white px-2 py-1 rounded-lg shadow-sm transition-all border border-emerald-100 z-20 cursor-pointer">${isUS ? 'Copy' : 'Copiar'}</button>
                                 </div>
+                                ${product.couponDisclaimer ? `<p class="mt-2 text-[10px] leading-relaxed text-slate-500">${sanitize(product.couponDisclaimer)}</p>` : ''}
+                                ${product.couponSourceUrl ? `<a href="${sanitize(product.couponSourceUrl)}" target="_blank" rel="noopener noreferrer" onclick="event.stopPropagation();" class="mt-1 inline-flex text-[10px] font-bold text-emerald-700 hover:text-emerald-800">${isUS ? 'View terms →' : 'Ver términos →'}</a>` : ''}
                             </div>`;
                         } else {
                             couponHtml = `
@@ -5500,6 +5519,7 @@ async function initApp() {
                                         </div>
                                     </div>
                                 </div>
+                                ${product.couponDisclaimer ? `<p class="mt-2 text-[10px] leading-relaxed text-slate-500">${sanitize(product.couponDisclaimer)}</p>` : ''}
                             </div>`;
                         }
                     }
@@ -5558,6 +5578,14 @@ async function initApp() {
                 const trustBadgeHtml = trustBadgeText
                     ? `<span class="text-[9px] font-bold px-2 py-0.5 rounded-full ${trustBadgeClass}" title="${trustBadgeText}">${trustBadgeText}</span>`
                     : '';
+                const verificationLabel = formatRelativeVerification(product.lastVerifiedAt);
+                const verificationBadgeHtml = verificationLabel
+                    ? `<span class="text-[9px] font-bold text-slate-600 bg-slate-100 px-2 py-0.5 rounded-full ring-1 ring-slate-200">${sanitize(verificationLabel)}</span>`
+                    : '';
+                const regionTag = sanitize(String(product.countryCode || currentRegion || 'MX').toUpperCase());
+                const regionBadgeHtml = regionTag
+                    ? `<span class="text-[9px] font-bold text-indigo-700 bg-indigo-50 px-2 py-0.5 rounded-full ring-1 ring-indigo-200">${regionTag}</span>`
+                    : '';
                 const sellerSignalHtml = product.sellerModel === 'official_store'
                     ? `<span class="text-[9px] font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full ring-1 ring-emerald-200">${isUS ? 'OFFICIAL' : 'OFICIAL'}</span>`
                     : product.sellerModel === 'verified_marketplace'
@@ -5594,6 +5622,8 @@ async function initApp() {
                         <div class="flex flex-wrap items-center gap-1">
                             ${isBestPrice ? `<span class="text-[9px] font-bold text-white bg-gradient-to-r from-emerald-500 to-teal-500 px-2 py-0.5 rounded-full ring-2 ring-emerald-200 shadow-sm animate-pulse">💰 ${isUS ? 'BEST PRICE' : 'MEJOR PRECIO'}</span>` : ''}
                             ${product.isLocalStore ? `<span class="text-[9px] font-bold text-emerald-700 bg-emerald-100 px-2 py-0.5 rounded-full ring-1 ring-emerald-200">📍 ${isUS ? 'LOCAL' : 'LOCAL'}</span>` : ''}
+                            ${regionBadgeHtml}
+                            ${verificationBadgeHtml}
                             ${trustBadgeHtml}
                             ${sellerSignalHtml}
                             <span class="text-[9px] font-bold px-2 py-0.5 rounded-full ${conditionBadgeClass}">${conditionBadgeText}</span>

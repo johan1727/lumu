@@ -82,7 +82,7 @@ const normalizeProductUrl = (url) => {
  * FIX: Agregar límite por instancia serverless y TTL más agresivo
  */
 const RAM_CACHE_MAX = 500;
-const RAM_CACHE_TTL_MS = 30 * 60 * 1000; // 30 minutos (reducido de 2h)
+const RAM_CACHE_TTL_MS = 15 * 60 * 1000; // 15 minutos
 const _ramCache = new Map();
 const _ramCacheAccessTimes = new Map(); // Para LRU tracking
 
@@ -145,10 +145,10 @@ function ramCacheCleanup() {
  * Busca resultados en caché: primero RAM, luego Supabase (24 horas TTL)
  */
 function getMaxCacheHours(queryKey = '', priceVolatility = 'medium') {
-    if (priceVolatility === 'high') return 12;
-    if (priceVolatility === 'low') return 72;
+    if (priceVolatility === 'high') return 6;
+    if (priceVolatility === 'low') return 48;
     const isGenericQuery = String(queryKey || '').split(' ').length <= 3;
-    return isGenericQuery ? 72 : 48;
+    return isGenericQuery ? 48 : 24;
 }
 
 async function getCachedResultsByKey(queryKey, priceVolatility = 'medium') {
@@ -224,7 +224,7 @@ async function persistCacheKey(queryKey, results, priceVolatility = 'medium') {
 
     if (redisClient) {
         try {
-            await redisClient.set(`lumu:search:${queryKey}`, JSON.stringify(results), 'EX', 86400);
+            await redisClient.set(`lumu:search:${queryKey}`, JSON.stringify(results), 'EX', 21600);
         } catch(e) {
             console.error('[Redis Set Error]:', e.message);
         }

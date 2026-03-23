@@ -69,7 +69,7 @@ const getAxiosConfig = (countryCode = 'MX') => {
     return config;
 };
 
-const MARKETPLACE_CACHE_TTL_MS = 4 * 60 * 60 * 1000;
+const MARKETPLACE_CACHE_TTL_MS = 2 * 60 * 60 * 1000;
 
 // SerpApi daily budget tracker (resets on day change)
 let serpApiDailyCount = 0;
