@@ -2,6 +2,38 @@ const supabase = require('../config/supabase');
 
 const stripe = process.env.STRIPE_SECRET_KEY ? require('stripe')(process.env.STRIPE_SECRET_KEY) : null;
 
+ const STRIPE_PRICE_PLAN_MAP = {
+    price_1TEGf71H4K5iuzsCFMZMnkmR: 'personal_vip_annual',
+    price_1TEGeh1H4K5iuzsCVDKHlDXc: 'b2b_annual'
+ };
+
+ async function resolvePlanFromSession(session) {
+    const metadataPlan = String(session?.metadata?.plan || '').trim();
+    if (metadataPlan) return metadataPlan;
+    if (!stripe || !session?.id) return 'personal_vip';
+    try {
+        const items = await stripe.checkout.sessions.listLineItems(session.id, { limit: 10 });
+        const activePriceId = items?.data?.[0]?.price?.id || '';
+        return STRIPE_PRICE_PLAN_MAP[activePriceId] || 'personal_vip';
+    } catch (error) {
+        console.error('[Stripe] Error resolviendo plan desde line items:', error.message);
+        return 'personal_vip';
+    }
+ }
+
+ async function resolveUserIdFromSession(session) {
+    const directUserId = String(session?.client_reference_id || '').trim();
+    if (directUserId) return directUserId;
+    const candidateEmail = String(session?.customer_email || session?.customer_details?.email || '').trim().toLowerCase();
+    if (!candidateEmail || !supabase) return null;
+    const { data: userByEmail } = await supabase
+        .from('profiles')
+        .select('id')
+        .ilike('email', candidateEmail)
+        .maybeSingle();
+    return userByEmail?.id || null;
+ }
+
 async function trackPurchaseEvent({ userId = null, session, plan }) {
     if (!supabase || !session) return;
     const purchaseEvent = {
@@ -91,27 +123,18 @@ exports.handleWebhook = async (req, res) => {
         switch (event.type) {
             case 'checkout.session.completed': {
                 const session = event.data.object;
-                const userId = session.client_reference_id;
+                const userId = String(session.client_reference_id || '').trim();
+                const resolvedPlan = await resolvePlanFromSession(session);
 
                 if (!userId) {
-                    console.error('⚠️ Checkout completado sin client_reference_id. Email del cliente:', session.customer_email || 'desconocido');
+                    console.error('⚠️ Checkout completado sin client_reference_id. Email del cliente:', session.customer_email || session.customer_details?.email || 'desconocido');
                     console.error('⚠️ Session ID:', session.id, '| Customer:', session.customer);
-                    // Try to find user by email as fallback
-                    let resolvedUserId = null;
-                    if (session.customer_email && supabase) {
-                        const { data: userByEmail } = await supabase
-                            .from('profiles')
-                            .select('id')
-                            .eq('email', session.customer_email)
-                            .maybeSingle();
-                        if (userByEmail) {
-                            resolvedUserId = userByEmail.id;
-                            console.log(`✅ Encontrado usuario por email: ${resolvedUserId}`);
-                        }
+                    let resolvedUserId = await resolveUserIdFromSession(session);
+                    if (resolvedUserId) {
+                        console.log(`✅ Encontrado usuario por email fallback: ${resolvedUserId}`);
                     }
                     if (!resolvedUserId) {
                         console.error('❌ No se pudo vincular el pago a ningún usuario. Se requiere intervención manual.');
-                        // Still store the subscription for manual resolution
                         await supabase
                             .from('subscriptions')
                             .insert([{
@@ -121,15 +144,14 @@ exports.handleWebhook = async (req, res) => {
                                 stripe_payment_intent_id: session.payment_intent,
                                 status: 'pending_user_link',
                                 amount_paid: session.amount_total,
-                                currency: session.currency
+                                currency: session.currency,
+                                plan: resolvedPlan
                             }]);
                         break;
                     }
-                    // Use resolved userId
-                    const plan = session.metadata?.plan || 'personal_vip';
                     await supabase
                         .from('profiles')
-                        .update({ is_premium: true, plan: plan })
+                        .update({ is_premium: true, plan: resolvedPlan })
                         .eq('id', resolvedUserId);
                     await supabase
                         .from('subscriptions')
@@ -140,9 +162,10 @@ exports.handleWebhook = async (req, res) => {
                             stripe_payment_intent_id: session.payment_intent,
                             status: 'active',
                             amount_paid: session.amount_total,
-                            currency: session.currency
+                            currency: session.currency,
+                            plan: resolvedPlan
                         }]);
-                    await trackPurchaseEvent({ userId: resolvedUserId, session, plan });
+                    await trackPurchaseEvent({ userId: resolvedUserId, session, plan: resolvedPlan });
                     console.log('✅ Perfil y suscripción actualizados vía email fallback.');
                     break;
                 }
@@ -150,14 +173,11 @@ exports.handleWebhook = async (req, res) => {
                 if (userId) {
                     console.log(`✅ Pago exitoso para el usuario: ${userId}. Actualizando perfil a VIP...`);
 
-                    // 1. Actualizar perfil (VIP + Detectar Plan)
-                    const plan = session.metadata?.plan || 'personal_vip';
                     await supabase
                         .from('profiles')
-                        .update({ is_premium: true, plan: plan })
+                        .update({ is_premium: true, plan: resolvedPlan })
                         .eq('id', userId);
 
-                    // 2. Crear registro de suscripción
                     await supabase
                         .from('subscriptions')
                         .insert([{
@@ -167,10 +187,11 @@ exports.handleWebhook = async (req, res) => {
                             stripe_payment_intent_id: session.payment_intent,
                             status: 'active',
                             amount_paid: session.amount_total,
-                            currency: session.currency
+                            currency: session.currency,
+                            plan: resolvedPlan
                         }]);
 
-                    await trackPurchaseEvent({ userId, session, plan });
+                    await trackPurchaseEvent({ userId, session, plan: resolvedPlan });
                     console.log('✅ Perfil y suscripción actualizados exitosamente.');
                 }
                 break;

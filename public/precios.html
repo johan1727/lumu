@@ -26,6 +26,7 @@
     <link rel="icon" type="image/svg+xml"
         href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 48 48'%3E%3Crect width='48' height='48' rx='12' fill='%2310B981'/%3E%3Cpath d='M14 32V16h4l10 10V16h6v16h-4L20 22v10z' fill='white'/%3E%3C/svg%3E">
     <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script>tailwind.config = { darkMode: 'class', theme: { extend: { fontFamily: { sans: ['Inter', 'sans-serif'], display: ['Outfit', 'sans-serif'] }, colors: { primary: '#10B981' } } } }</script>
     <style>
         .glass-header {
@@ -162,6 +163,23 @@
 
         <!-- Plans Grid -->
         <section class="max-w-5xl mx-auto px-4 pb-20">
+            <!-- Monthly / Annual Toggle -->
+            <div class="flex items-center justify-center gap-3 mb-10">
+                <span id="i18n-toggle-monthly" class="text-sm font-bold text-slate-700 dark:text-slate-300">Mensual</span>
+                <button id="btn-billing-toggle" type="button" aria-pressed="false"
+                    class="relative inline-flex h-7 w-14 items-center rounded-full transition-colors bg-slate-200 dark:bg-slate-700"
+                    role="switch">
+                    <span class="sr-only">Toggle annual billing</span>
+                    <span id="billing-toggle-dot"
+                        class="inline-block h-5 w-5 rounded-full bg-white shadow transform transition-transform translate-x-1"></span>
+                </button>
+                <span id="i18n-toggle-annual" class="text-sm font-bold text-slate-400 dark:text-slate-500">Anual</span>
+                <span id="annual-save-badge"
+                    class="hidden text-[10px] font-black uppercase tracking-wider bg-emerald-100 dark:bg-emerald-900/40 text-emerald-700 dark:text-emerald-400 px-2.5 py-0.5 rounded-full">
+                    Ahorra ~17%
+                </span>
+            </div>
+
             <div class="grid grid-cols-1 md:grid-cols-3 gap-6 lg:gap-8">
 
                 <!-- FREE Plan -->
@@ -429,7 +447,7 @@
         <div
             class="max-w-5xl mx-auto px-4 flex flex-col md:flex-row justify-between items-center gap-4 text-slate-500 text-sm font-medium">
             <div class="flex items-center gap-6">
-                <span id="i18n-footer-copy">© 2026 Lumu AI.</span>
+                <span id="i18n-footer-copy"> 2026 Lumu AI.</span>
                 <a id="i18n-footer-terms" href="/terminos.html" class="hover:text-primary transition-colors">Términos</a>
                 <a id="i18n-footer-privacy" href="/privacidad.html" class="hover:text-primary transition-colors">Privacidad</a>
             </div>
@@ -512,12 +530,12 @@
         }
 
         const PLAN_PRICING = {
-            MX: { locale: 'es-MX', currency: 'MXN', vip: 39, b2b: 199, periodLabel: 'MXN/mes', vipCaption: 'Aproximadamente un café al mes', b2bCaption: 'Facturación disponible' },
-            US: { locale: 'en-US', currency: 'USD', vip: 3.99, b2b: 19.99, periodLabel: 'USD/month', vipCaption: 'About one coffee a month', b2bCaption: 'Invoicing available' },
-            CL: { locale: 'es-CL', currency: 'CLP', vip: 3900, b2b: 19900, periodLabel: 'CLP/mes', vipCaption: 'Menos que un café al mes', b2bCaption: 'Facturación disponible' },
-            CO: { locale: 'es-CO', currency: 'COP', vip: 15900, b2b: 79900, periodLabel: 'COP/mes', vipCaption: 'Menos que un café al mes', b2bCaption: 'Facturación disponible' },
-            AR: { locale: 'es-AR', currency: 'ARS', vip: 4900, b2b: 24900, periodLabel: 'ARS/mes', vipCaption: 'Menos que un café al mes', b2bCaption: 'Facturación disponible' },
-            PE: { locale: 'es-PE', currency: 'PEN', vip: 14.9, b2b: 79.9, periodLabel: 'PEN/mes', vipCaption: 'Menos que un café al mes', b2bCaption: 'Facturación disponible' }
+            MX: { locale: 'es-MX', currency: 'MXN', vip: 39, b2b: 199, vipAnnual: 390, b2bAnnual: 1990, periodLabel: 'MXN/mes', annualPeriodLabel: 'MXN/año', vipCaption: 'Aproximadamente un café al mes', b2bCaption: 'Facturación disponible', vipAnnualCaption: '≈ $32.50/mes — ahorra 2 meses', b2bAnnualCaption: '≈ $165.83/mes — ahorra 2 meses' },
+            US: { locale: 'en-US', currency: 'USD', vip: 3.99, b2b: 19.99, vipAnnual: 39.99, b2bAnnual: 199.99, periodLabel: 'USD/month', annualPeriodLabel: 'USD/year', vipCaption: 'About one coffee a month', b2bCaption: 'Invoicing available', vipAnnualCaption: '≈ $3.33/mo — save 2 months', b2bAnnualCaption: '≈ $16.67/mo — save 2 months' },
+            CL: { locale: 'es-CL', currency: 'CLP', vip: 3900, b2b: 19900, vipAnnual: 39000, b2bAnnual: 199000, periodLabel: 'CLP/mes', annualPeriodLabel: 'CLP/año', vipCaption: 'Menos que un café al mes', b2bCaption: 'Facturación disponible', vipAnnualCaption: '≈ $3,250/mes — ahorra 2 meses', b2bAnnualCaption: '≈ $16,583/mes — ahorra 2 meses' },
+            CO: { locale: 'es-CO', currency: 'COP', vip: 15900, b2b: 79900, vipAnnual: 159000, b2bAnnual: 799000, periodLabel: 'COP/mes', annualPeriodLabel: 'COP/año', vipCaption: 'Menos que un café al mes', b2bCaption: 'Facturación disponible', vipAnnualCaption: '≈ $13,250/mes — ahorra 2 meses', b2bAnnualCaption: '≈ $66,583/mes — ahorra 2 meses' },
+            AR: { locale: 'es-AR', currency: 'ARS', vip: 4900, b2b: 24900, vipAnnual: 49000, b2bAnnual: 249000, periodLabel: 'ARS/mes', annualPeriodLabel: 'ARS/año', vipCaption: 'Menos que un café al mes', b2bCaption: 'Facturación disponible', vipAnnualCaption: '≈ $4,083/mes — ahorra 2 meses', b2bAnnualCaption: '≈ $20,750/mes — ahorra 2 meses' },
+            PE: { locale: 'es-PE', currency: 'PEN', vip: 14.9, b2b: 79.9, vipAnnual: 149, b2bAnnual: 799, periodLabel: 'PEN/mes', annualPeriodLabel: 'PEN/año', vipCaption: 'Menos que un café al mes', b2bCaption: 'Facturación disponible', vipAnnualCaption: '≈ S/12.42/mes — ahorra 2 meses', b2bAnnualCaption: '≈ S/66.58/mes — ahorra 2 meses' }
         };
 
         function formatPlanPrice(amount, locale, currency) {
@@ -559,54 +577,164 @@
         // Fetch Stripe payment links from API config
         let stripeVipLink = null;
         let stripeB2bLink = null;
+        let stripeVipAnnualLink = null;
+        let stripeB2bAnnualLink = null;
+        let isAnnualBilling = false;
+        let currentPricingConfig = null;
+        let pricingSupabaseClient = null;
+
+        async function resolvePricingUser() {
+            if (!pricingSupabaseClient) return null;
+            try {
+                const { data } = await pricingSupabaseClient.auth.getSession();
+                return data?.session?.user || null;
+            } catch {
+                return null;
+            }
+        }
+
+        function withClientReferenceId(baseUrl, userId) {
+            if (!baseUrl || !userId) return baseUrl;
+            const separator = baseUrl.includes('?') ? '&' : '?';
+            return `${baseUrl}${separator}client_reference_id=${encodeURIComponent(userId)}`;
+        }
 
         fetch('/api/config')
             .then(r => r.json())
-            .then(config => {
+            .then(async (config) => {
                 stripeVipLink = config.stripePaymentLink || null;
                 stripeB2bLink = config.stripeB2bPaymentLink || null;
+                stripeVipAnnualLink = config.stripeVipAnnualPaymentLink || null;
+                stripeB2bAnnualLink = config.stripeB2bAnnualPaymentLink || null;
+                currentPricingConfig = config;
+                if (config.supabaseUrl && config.supabaseAnonKey && window.supabase) {
+                    pricingSupabaseClient = window.supabase.createClient(config.supabaseUrl, config.supabaseAnonKey);
+                }
                 applyLocalizedPricing(config);
             })
             .catch(() => {
-                applyLocalizedPricing({ detectedCountry: 'MX' });
+                currentPricingConfig = { detectedCountry: 'MX' };
+                applyLocalizedPricing(currentPricingConfig);
             });
 
-        // VIP button → Stripe Payment Link
-        document.getElementById('btn-pricing-vip')?.addEventListener('click', () => {
-            if (stripeVipLink) {
+        // --- Billing toggle: monthly annual ---
+        function updatePricingDisplay() {
+            const region = String(currentPricingConfig?.detectedCountry || 'MX').toUpperCase();
+            const pricing = PLAN_PRICING[region] || PLAN_PRICING.MX;
+            const vipPrice = document.getElementById('vip-plan-price');
+            const vipPeriod = document.getElementById('vip-plan-period');
+            const vipCaption = document.getElementById('vip-plan-caption');
+            const b2bPrice = document.getElementById('b2b-plan-price');
+            const b2bPeriod = document.getElementById('b2b-plan-period');
+            const b2bCaption = document.getElementById('b2b-plan-caption');
+
+            if (isAnnualBilling) {
+                if (vipPrice) vipPrice.textContent = formatPlanPrice(pricing.vipAnnual, pricing.locale, pricing.currency);
+                if (vipPeriod) vipPeriod.textContent = pricing.annualPeriodLabel;
+                if (vipCaption) vipCaption.textContent = pricing.vipAnnualCaption;
+                if (b2bPrice) b2bPrice.textContent = formatPlanPrice(pricing.b2bAnnual, pricing.locale, pricing.currency);
+                if (b2bPeriod) b2bPeriod.textContent = pricing.annualPeriodLabel;
+                if (b2bCaption) b2bCaption.textContent = pricing.b2bAnnualCaption;
+            } else {
+                if (vipPrice) vipPrice.textContent = formatPlanPrice(pricing.vip, pricing.locale, pricing.currency);
+                if (vipPeriod) vipPeriod.textContent = pricing.periodLabel;
+                if (vipCaption) vipCaption.textContent = pricing.vipCaption;
+                if (b2bPrice) b2bPrice.textContent = formatPlanPrice(pricing.b2b, pricing.locale, pricing.currency);
+                if (b2bPeriod) b2bPeriod.textContent = pricing.periodLabel;
+                if (b2bCaption) b2bCaption.textContent = pricing.b2bCaption;
+            }
+        }
+
+        document.getElementById('btn-billing-toggle')?.addEventListener('click', () => {
+            isAnnualBilling = !isAnnualBilling;
+            const btn = document.getElementById('btn-billing-toggle');
+            const dot = document.getElementById('billing-toggle-dot');
+            const monthlyLabel = document.getElementById('i18n-toggle-monthly');
+            const annualLabel = document.getElementById('i18n-toggle-annual');
+            const badge = document.getElementById('annual-save-badge');
+
+            if (btn) btn.setAttribute('aria-pressed', String(isAnnualBilling));
+            if (dot) {
+                dot.classList.toggle('translate-x-1', !isAnnualBilling);
+                dot.classList.toggle('translate-x-8', isAnnualBilling);
+            }
+            if (btn) {
+                btn.classList.toggle('bg-emerald-500', isAnnualBilling);
+                btn.classList.toggle('bg-slate-200', !isAnnualBilling);
+                btn.classList.toggle('dark:bg-slate-700', !isAnnualBilling);
+            }
+            if (monthlyLabel) {
+                monthlyLabel.classList.toggle('text-slate-700', !isAnnualBilling);
+                monthlyLabel.classList.toggle('text-slate-400', isAnnualBilling);
+                monthlyLabel.classList.toggle('dark:text-slate-300', !isAnnualBilling);
+                monthlyLabel.classList.toggle('dark:text-slate-500', isAnnualBilling);
+            }
+            if (annualLabel) {
+                annualLabel.classList.toggle('text-slate-400', !isAnnualBilling);
+                annualLabel.classList.toggle('text-emerald-600', isAnnualBilling);
+                annualLabel.classList.toggle('dark:text-slate-500', !isAnnualBilling);
+                annualLabel.classList.toggle('dark:text-emerald-400', isAnnualBilling);
+            }
+            if (badge) badge.classList.toggle('hidden', !isAnnualBilling);
+            updatePricingDisplay();
+        });
+
+        // VIP button Stripe Payment Link (monthly or annual)
+        document.getElementById('btn-pricing-vip')?.addEventListener('click', async () => {
+            const currentUser = await resolvePricingUser();
+            if (!currentUser) {
+                const isEN = (localStorage.getItem('lumu_region_override') === 'US');
+                alert(isEN ? 'Sign in first on the homepage before subscribing.' : 'Inicia sesión primero desde la página principal antes de suscribirte.');
+                window.location.href = '/';
+                return;
+            }
+            const link = isAnnualBilling ? (stripeVipAnnualLink || stripeVipLink) : stripeVipLink;
+            const planLabel = isAnnualBilling ? 'vip_annual' : 'vip';
+            const price = isAnnualBilling ? 390 : 39;
+            if (link) {
                 trackMetaPricingEvent('PlanSelected', {
-                    plan_name: 'vip',
-                    plan_price: 39,
+                    plan_name: planLabel,
+                    plan_price: price,
                     currency: 'MXN',
                     source: 'pricing_page'
                 });
                 trackPricingFunnelEvent('checkout_click', {
                     action_context: 'pricing_page',
-                    price: 39,
-                    brand: 'vip'
+                    price: price,
+                    brand: planLabel
                 });
-                window.open(stripeVipLink, '_blank');
+                window.open(withClientReferenceId(link, currentUser.id), '_blank');
             } else {
                 const isEN = (localStorage.getItem('lumu_region_override') === 'US');
                 alert(isEN ? 'Payment link not available right now. Try again in a few seconds.' : 'El enlace de pago no está disponible en este momento. Intenta de nuevo en unos segundos.');
             }
         });
 
-        // B2B button → Stripe B2B Payment Link
-        document.getElementById('btn-pricing-b2b')?.addEventListener('click', () => {
-            if (stripeB2bLink) {
+        // B2B button Stripe B2B Payment Link (monthly or annual)
+        document.getElementById('btn-pricing-b2b')?.addEventListener('click', async () => {
+            const currentUser = await resolvePricingUser();
+            if (!currentUser) {
+                const isEN2 = (localStorage.getItem('lumu_region_override') === 'US');
+                alert(isEN2 ? 'Sign in first on the homepage before continuing.' : 'Inicia sesión primero desde la página principal antes de continuar.');
+                window.location.href = '/';
+                return;
+            }
+            const link = isAnnualBilling ? (stripeB2bAnnualLink || stripeB2bLink) : stripeB2bLink;
+            const planLabel = isAnnualBilling ? 'b2b_annual' : 'b2b';
+            const price = isAnnualBilling ? 1990 : 199;
+            if (link) {
                 trackMetaPricingEvent('PlanSelected', {
-                    plan_name: 'b2b',
-                    plan_price: 199,
+                    plan_name: planLabel,
+                    plan_price: price,
                     currency: 'MXN',
                     source: 'pricing_page'
                 });
                 trackPricingFunnelEvent('checkout_click', {
                     action_context: 'pricing_page',
-                    price: 199,
-                    brand: 'b2b'
+                    price: price,
+                    brand: planLabel
                 });
-                window.open(stripeB2bLink, '_blank');
+                window.open(withClientReferenceId(link, currentUser.id), '_blank');
             } else {
                 const isEN2 = (localStorage.getItem('lumu_region_override') === 'US');
                 window.location.href = 'mailto:jhonatanvillagomez38@gmail.com?subject=' + (isEN2 ? 'B2B Distributor Plan Lumu' : 'Plan Distribuidor B2B Lumu');
@@ -625,6 +753,8 @@
             'i18n-vip-cta': 'Subscribe',
             'i18n-b2b-name': 'B2B Distributor', 'i18n-b2b-desc': 'Professional use',
             'i18n-b2b-cta': 'Contact Sales',
+            'i18n-toggle-monthly': 'Monthly',
+            'i18n-toggle-annual': 'Annual',
             'i18n-faq-title': 'Frequently Asked Questions',
             'i18n-footer-copy': '\u00a9 2026 Lumu AI.', 'i18n-footer-terms': 'Terms', 'i18n-footer-privacy': 'Privacy',
             freeFeats: ['Daily usage limit', 'Multi-store comparison', 'Voice & image search', 'Saved favorites', 'Nearby stores'],
@@ -658,6 +788,8 @@
             document.querySelectorAll('.i18n-b2b-feat').forEach(el => { const i = el.dataset.i; if (EN.b2bFeats[i]) el.textContent = EN.b2bFeats[i]; });
             document.querySelectorAll('.i18n-faq-q').forEach(el => { const i = el.dataset.i; if (EN.faqQ[i]) el.textContent = EN.faqQ[i]; });
             document.querySelectorAll('.i18n-faq-a').forEach(el => { const i = el.dataset.i; if (EN.faqA[i]) el.textContent = EN.faqA[i]; });
+            const saveBadge = document.getElementById('annual-save-badge');
+            if (saveBadge && !saveBadge.classList.contains('hidden')) saveBadge.textContent = 'Save ~17%';
         }
         applyI18n();
     </script>

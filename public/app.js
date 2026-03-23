@@ -2467,6 +2467,8 @@ async function initApp() {
                 }
                 if (config.stripePaymentLink) stripePaymentLink = config.stripePaymentLink;
                 if (config.stripeB2bPaymentLink) window.stripeB2bPaymentLink = config.stripeB2bPaymentLink;
+                if (config.stripeVipAnnualPaymentLink) window.stripeVipAnnualPaymentLink = config.stripeVipAnnualPaymentLink;
+                if (config.stripeB2bAnnualPaymentLink) window.stripeB2bAnnualPaymentLink = config.stripeB2bAnnualPaymentLink;
                 // Store config globally for push notifications and ad tags
                 window.__LUMU_CONFIG = {
                     vapidPublicKey: config.vapidPublicKey || '',

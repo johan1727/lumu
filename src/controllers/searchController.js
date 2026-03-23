@@ -847,14 +847,14 @@ exports.searchProduct = async (req, res) => {
                 const hasTempVIP = profile.vip_temp_unlocked_at &&
                     (Date.now() - new Date(profile.vip_temp_unlocked_at).getTime()) < VIP_TEMP_DURATION_MS;
 
-                if (profile.plan === 'b2b') {
+                if (profile.plan === 'b2b' || profile.plan === 'b2b_annual') {
                     reqLimit = 250;
                     isDaily = false;
-                    planName = 'Revendedor B2B';
-                } else if (profile.is_premium || profile.plan === 'personal_vip') {
+                    planName = profile.plan === 'b2b_annual' ? 'Revendedor B2B Anual' : 'Revendedor B2B';
+                } else if (profile.is_premium || profile.plan === 'personal_vip' || profile.plan === 'personal_vip_annual') {
                     reqLimit = 40;
                     isDaily = false;
-                    planName = 'VIP';
+                    planName = (profile.plan === 'personal_vip_annual') ? 'VIP Anual' : 'VIP';
                 } else if (hasTempVIP) {
                     reqLimit = 20;
                     isDaily = true;

@@ -2,16 +2,35 @@ require('dotenv').config();
 
 // Validate critical environment variables on startup
 ['SERPER_API_KEY', 'GEMINI_API_KEY'].forEach(v => {
-    if (!process.env[v]) console.error(`\u26A0\uFE0F CRITICAL: ${v} is not set! Searches will fail.`);
+    if (!process.env[v]) console.error(`⚠️ CRITICAL: ${v} is not set! Searches will fail.`);
 });
 ['SUPABASE_URL', 'SUPABASE_ANON_KEY'].forEach(v => {
-    if (!process.env[v]) console.warn(`\u26A0\uFE0F WARNING: ${v} is not set. Auth, caching, and rate limiting will use fallbacks.`);
+    if (!process.env[v]) console.warn(`⚠️ WARNING: ${v} is not set. Auth, caching, and rate limiting will use fallbacks.`);
 });
 
+const Sentry = require('@sentry/node');
 const express = require('express');
 const helmet = require('helmet');
 const cors = require('cors');
 const cacheService = require('../src/services/cacheService');
+
+if (process.env.SENTRY_DSN) {
+    Sentry.init({
+        dsn: process.env.SENTRY_DSN,
+        environment: process.env.SENTRY_ENVIRONMENT || process.env.VERCEL_ENV || process.env.NODE_ENV || 'development',
+        release: process.env.VERCEL_GIT_COMMIT_SHA || process.env.npm_package_version || 'unknown',
+        sendDefaultPii: true,
+        tracesSampleRate: 0,
+        beforeSend(event, hint) {
+            const originalError = hint?.originalException;
+            if (originalError?.message === 'CORS origin no permitido') {
+                return null;
+            }
+            return event;
+        }
+    });
+}
+
 const app = express();
 const PORT = process.env.PORT || 3000;
 
@@ -34,6 +53,27 @@ const allowedHosts = allowedOrigins
 app.locals.allowedOrigins = allowedOrigins;
 app.disable('x-powered-by');
 app.set('trust proxy', 1);
+
+app.use((req, res, next) => {
+    req.sentryTraceId = null;
+    if (process.env.SENTRY_DSN) {
+        Sentry.withScope((scope) => {
+            const forwardedHost = String(req.headers['x-forwarded-host'] || '').split(',')[0].trim();
+            const requestHost = (forwardedHost || req.hostname || '').trim().toLowerCase();
+            const countryHeader = String(req.headers['x-vercel-ip-country'] || '').trim().toUpperCase();
+            scope.setTag('route', req.path || req.url || 'unknown');
+            scope.setTag('method', req.method || 'unknown');
+            scope.setTag('host', requestHost || 'unknown');
+            if (countryHeader) {
+                scope.setTag('country', countryHeader);
+            }
+            req.sentryTraceId = scope.getPropagationContext().traceId || null;
+            next();
+        });
+        return;
+    }
+    next();
+});
 
 app.use(helmet({
     contentSecurityPolicy: {
@@ -204,6 +244,21 @@ app.use((req, res) => {
 // Manejo global de errores
 app.use((err, req, res, next) => {
     console.error(`[Global Error] ${req.method} ${req.url}:`, err);
+    if (process.env.SENTRY_DSN) {
+        Sentry.withScope((scope) => {
+            scope.setTag('route', req.path || req.url || 'unknown');
+            scope.setTag('method', req.method || 'unknown');
+            if (req.userId) {
+                scope.setUser({ id: req.userId });
+            }
+            scope.setContext('request', {
+                url: req.originalUrl || req.url,
+                query: req.query,
+                body: req.method === 'POST' ? req.body : undefined
+            });
+            Sentry.captureException(err);
+        });
+    }
     const isDev = process.env.NODE_ENV !== 'production';
     res.status(500).json({ 
         error: 'Ocurrió un problema inesperado. Asegúrate de configurar las variables de entorno si estás en local.',
@@ -296,5 +351,19 @@ if (require.main === module) {
         process.exit(1);
     });
 }
+
+process.on('unhandledRejection', (reason) => {
+    console.error('[Process] Unhandled rejection:', reason);
+    if (process.env.SENTRY_DSN) {
+        Sentry.captureException(reason instanceof Error ? reason : new Error(String(reason)));
+    }
+});
+
+process.on('uncaughtException', (error) => {
+    console.error('[Process] Uncaught exception:', error);
+    if (process.env.SENTRY_DSN) {
+        Sentry.captureException(error);
+    }
+});
 
 module.exports = app;

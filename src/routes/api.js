@@ -111,6 +111,8 @@ router.get('/config', (req, res, next) => {
         supabaseAnonKey: process.env.SUPABASE_ANON_KEY || '',
         stripePaymentLink: process.env.STRIPE_PAYMENT_LINK || '',
         stripeB2bPaymentLink: process.env.STRIPE_B2B_PAYMENT_LINK || '',
+        stripeVipAnnualPaymentLink: process.env.STRIPE_VIP_ANNUAL_PAYMENT_LINK || '',
+        stripeB2bAnnualPaymentLink: process.env.STRIPE_B2B_ANNUAL_PAYMENT_LINK || '',
         vapidPublicKey: process.env.VAPID_PUBLIC_KEY || '',
         rewardedAdTagUrl: process.env.REWARDED_AD_TAG_URL || '',
         detectedCountry: detectedCountry,
