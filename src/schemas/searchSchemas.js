@@ -56,7 +56,7 @@ const feedbackSchema = z.object({
 });
 
 const trackEventSchema = z.object({
-    event_type: z.enum(['click', 'ad_view', 'ad_skip', 'search', 'favorite', 'favorite_remove', 'alert_create', 'compare', 'history_open', 'feedback_positive', 'feedback_negative', 'zero_results', 'bounce', 'auth_modal_open', 'auth_modal_dismiss', 'signup_complete', 'signup_bonus'], {
+    event_type: z.enum(['click', 'ad_view', 'ad_skip', 'search', 'favorite', 'favorite_remove', 'alert_create', 'compare', 'history_open', 'feedback_positive', 'feedback_negative', 'zero_results', 'bounce', 'auth_modal_open', 'auth_modal_dismiss', 'signup_complete', 'signup_bonus', 'page_view', 'pricing_view', 'checkout_click', 'purchase'], {
         errorMap: () => ({ message: 'event_type inválido para tracking' })
     }),
     product_title: z.string().max(500).optional().default(''),

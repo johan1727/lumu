@@ -445,6 +445,72 @@
             localStorage.setItem('lumu_theme', document.documentElement.classList.contains('dark') ? 'dark' : 'light');
         });
 
+        function ensurePricingSessionId() {
+            const key = 'lumu_session_id';
+            let value = sessionStorage.getItem(key);
+            if (!value) {
+                value = `sess_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
+                sessionStorage.setItem(key, value);
+            }
+            return value;
+        }
+
+        function trackPricingFunnelEvent(eventType, extra = {}) {
+            fetch('/api/track', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    event_type: eventType,
+                    device: /Mobi|Android/i.test(navigator.userAgent) ? 'mobile' : 'desktop',
+                    session_id: ensurePricingSessionId(),
+                    ...extra
+                }),
+                keepalive: true
+            }).catch(() => { });
+        }
+
+        window.addEventListener('load', () => {
+            trackPricingFunnelEvent('page_view', {
+                action_context: 'pricing_page'
+            });
+            trackPricingFunnelEvent('pricing_view', {
+                action_context: 'pricing_page'
+            });
+        }, { once: true });
+
+        window.LUMU_META_PIXEL_ID = window.LUMU_META_PIXEL_ID || 'REPLACE_WITH_META_PIXEL_ID';
+
+        (function initialiseMetaPixel() {
+            const pixelId = String(window.LUMU_META_PIXEL_ID || '').trim();
+            if (!pixelId || pixelId === 'REPLACE_WITH_META_PIXEL_ID' || typeof window.fbq === 'function') return;
+            !function (f, b, e, v, n, t, s) {
+                if (f.fbq) return;
+                n = f.fbq = function () {
+                    n.callMethod ? n.callMethod.apply(n, arguments) : n.queue.push(arguments);
+                };
+                if (!f._fbq) f._fbq = n;
+                n.push = n;
+                n.loaded = true;
+                n.version = '2.0';
+                n.queue = [];
+                t = b.createElement(e);
+                t.async = true;
+                t.src = v;
+                s = b.getElementsByTagName(e)[0];
+                s.parentNode.insertBefore(t, s);
+            }(window, document, 'script', 'https://connect.facebook.net/en_US/fbevents.js');
+            fbq('init', pixelId);
+        })();
+
+        function canTrackMeta() {
+            return localStorage.getItem('lumu_cookies') === 'accepted' && typeof window.fbq === 'function';
+        }
+
+        function trackMetaPricingEvent(eventName, params = {}) {
+            if (!canTrackMeta()) return;
+            window.fbq('trackCustom', eventName, params);
+        }
+
         const PLAN_PRICING = {
             MX: { locale: 'es-MX', currency: 'MXN', vip: 39, b2b: 199, periodLabel: 'MXN/mes', vipCaption: 'Aproximadamente un café al mes', b2bCaption: 'Facturación disponible' },
             US: { locale: 'en-US', currency: 'USD', vip: 3.99, b2b: 19.99, periodLabel: 'USD/month', vipCaption: 'About one coffee a month', b2bCaption: 'Invoicing available' },
@@ -508,6 +574,17 @@
         // VIP button → Stripe Payment Link
         document.getElementById('btn-pricing-vip')?.addEventListener('click', () => {
             if (stripeVipLink) {
+                trackMetaPricingEvent('PlanSelected', {
+                    plan_name: 'vip',
+                    plan_price: 39,
+                    currency: 'MXN',
+                    source: 'pricing_page'
+                });
+                trackPricingFunnelEvent('checkout_click', {
+                    action_context: 'pricing_page',
+                    price: 39,
+                    brand: 'vip'
+                });
                 window.open(stripeVipLink, '_blank');
             } else {
                 const isEN = (localStorage.getItem('lumu_region_override') === 'US');
@@ -518,6 +595,17 @@
         // B2B button → Stripe B2B Payment Link
         document.getElementById('btn-pricing-b2b')?.addEventListener('click', () => {
             if (stripeB2bLink) {
+                trackMetaPricingEvent('PlanSelected', {
+                    plan_name: 'b2b',
+                    plan_price: 199,
+                    currency: 'MXN',
+                    source: 'pricing_page'
+                });
+                trackPricingFunnelEvent('checkout_click', {
+                    action_context: 'pricing_page',
+                    price: 199,
+                    brand: 'b2b'
+                });
                 window.open(stripeB2bLink, '_blank');
             } else {
                 const isEN2 = (localStorage.getItem('lumu_region_override') === 'US');

@@ -1,7 +1,9 @@
 const ML_AFFILIATE_CAMPAIGN = process.env.ML_AFFILIATE_CAMPAIGN || '';
+const AMAZON_AFFILIATE_TAG = (process.env.AMAZON_AFFILIATE_TAG || '').trim();
 
 const missingAffiliateConfigs = [];
 if (!ML_AFFILIATE_CAMPAIGN) missingAffiliateConfigs.push('ML_AFFILIATE_CAMPAIGN');
+if (!AMAZON_AFFILIATE_TAG) missingAffiliateConfigs.push('AMAZON_AFFILIATE_TAG');
 if (missingAffiliateConfigs.length > 0) {
     console.warn(`[Affiliate] Variables faltantes: ${missingAffiliateConfigs.join(', ')}. Se usarán enlaces sin afiliado en esas tiendas.`);
 }
@@ -132,7 +134,7 @@ exports.generateAffiliateLink = (originalUrl, source) => {
         const urlObj = normalizeStoreUrl(original);
         const sourceLower = String(source || '').toLowerCase();
 
-        // 1. Inyectar afiliado de Mercado Libre (Amazon deshabilitado temporalmente)
+        // 1. Inyectar afiliado de Mercado Libre
         if (sourceLower.includes('mercadolibre') || sourceLower.includes('mercado libre')) {
             if (ML_AFFILIATE_CAMPAIGN) {
                 urlObj.searchParams.set('re_id', ML_AFFILIATE_CAMPAIGN);
@@ -140,7 +142,14 @@ exports.generateAffiliateLink = (originalUrl, source) => {
             return urlObj.toString();
         }
 
-        // 4. Loss Leader: Dejar intacto para otras tiendas (Liverpool, Walmart, Coppel, etc.)
+        // 2. Inyectar afiliado de Amazon Associates
+        const host = (urlObj.hostname || '').toLowerCase();
+        if (host.includes('amazon.com') && AMAZON_AFFILIATE_TAG) {
+            urlObj.searchParams.set('tag', AMAZON_AFFILIATE_TAG);
+            return urlObj.toString();
+        }
+
+        // 3. Loss Leader: Dejar intacto para otras tiendas (Liverpool, Walmart, Coppel, etc.)
         return urlObj.toString();
 
     } catch (error) {

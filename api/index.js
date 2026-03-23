@@ -40,11 +40,11 @@ app.use(helmet({
         directives: {
             defaultSrc: ["'self'"],
             // SECURITY FIX #6: Removed 'unsafe-eval'. 'unsafe-inline' kept for AdSense/inline styles.
-            scriptSrc: ["'self'", "'unsafe-inline'", "'unsafe-hashes'", "https://pagead2.googlesyndication.com", "https://cdn.jsdelivr.net", "https://js.stripe.com", "https://imasdk.googleapis.com", "https://accounts.google.com", "https://apis.google.com", "https://*.supabase.co", "https://www.googletagmanager.com", "https://ep1.adtrafficquality.google"],
+            scriptSrc: ["'self'", "'unsafe-inline'", "'unsafe-hashes'", "https://pagead2.googlesyndication.com", "https://cdn.jsdelivr.net", "https://js.stripe.com", "https://imasdk.googleapis.com", "https://accounts.google.com", "https://apis.google.com", "https://*.supabase.co", "https://www.googletagmanager.com", "https://ep1.adtrafficquality.google", "https://connect.facebook.net"],
             scriptSrcAttr: ["'unsafe-inline'"],
             styleSrc: ["'self'", "'unsafe-inline'", "https://cdn.jsdelivr.net", "https://fonts.googleapis.com", "https://accounts.google.com"],
-            imgSrc: ["'self'", "data:", "https:", "blob:"],
-            connectSrc: ["'self'", "https://*.supabase.co", "https://generativelanguage.googleapis.com", "https://google.serper.dev", "https://api.stripe.com", "https://pagead2.googlesyndication.com", "https://imasdk.googleapis.com", "https://ep1.adtrafficquality.google", "https://*.googlesyndication.com", "https://www.google-analytics.com", "https://region1.google-analytics.com"],
+            imgSrc: ["'self'", "data:", "https:", "blob:", "https://www.facebook.com", "https://connect.facebook.net"],
+            connectSrc: ["'self'", "https://*.supabase.co", "https://generativelanguage.googleapis.com", "https://google.serper.dev", "https://api.stripe.com", "https://pagead2.googlesyndication.com", "https://imasdk.googleapis.com", "https://ep1.adtrafficquality.google", "https://*.googlesyndication.com", "https://www.google-analytics.com", "https://region1.google-analytics.com", "https://www.facebook.com", "https://connect.facebook.net"],
             fontSrc: ["'self'", "https://fonts.gstatic.com", "https://cdn.jsdelivr.net"],
             frameSrc: ["https://js.stripe.com", "https://accounts.google.com", "https://pagead2.googlesyndication.com", "https://imasdk.googleapis.com", "https://www.google.com", "https://ep1.adtrafficquality.google", "https://googleads.g.doubleclick.net", "https://tpc.googlesyndication.com"],
             objectSrc: ["'none'"],

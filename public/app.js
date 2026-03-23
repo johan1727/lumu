@@ -5,6 +5,44 @@ let stripePaymentLink = null;
 let currentUser = null;
 let _allProducts = [];
 
+function trackMetaEventSafe(eventName, params = {}) {
+    if (typeof window.trackMetaEvent === 'function') {
+        window.trackMetaEvent(eventName, params);
+    }
+}
+
+function ensureFunnelSessionId() {
+    try {
+        if (typeof _ensureInteractionSessionId === 'function') {
+            return _ensureInteractionSessionId();
+        }
+    } catch (e) { }
+    try {
+        const key = 'lumu_session_id';
+        let value = sessionStorage.getItem(key);
+        if (!value) {
+            value = `sess_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
+            sessionStorage.setItem(key, value);
+        }
+        return value;
+    } catch (e) {
+        return `sess_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
+    }
+}
+
+function trackFunnelEvent(eventType, extra = {}) {
+    _trackEvent(eventType, {
+        session_id: ensureFunnelSessionId(),
+        ...extra
+    });
+}
+
+window.addEventListener('load', () => {
+    trackFunnelEvent('page_view', {
+        action_context: 'home'
+    });
+}, { once: true });
+
 // --- Global Error Handlers ---
 window.addEventListener('error', function (event) {
     console.error('[App Error] Global exception caught:', event.error);
@@ -3097,6 +3135,17 @@ async function initApp() {
                 return;
             }
             if (stripePaymentLink) {
+                trackMetaEventSafe('PlanSelected', {
+                    plan_name: 'vip',
+                    plan_price: 39,
+                    currency: 'MXN',
+                    source: 'homepage_pricing'
+                });
+                trackFunnelEvent('checkout_click', {
+                    action_context: 'homepage_pricing',
+                    price: 39,
+                    brand: 'vip'
+                });
                 window.open(`${stripePaymentLink}?client_reference_id=${encodeURIComponent(currentUser.id)}`, '_blank');
             } else {
                 showToast('Link de pago no disponible. Intenta más tarde.', 'error');
@@ -3110,11 +3159,39 @@ async function initApp() {
                 return;
             }
             if (window.stripeB2bPaymentLink) {
+                trackMetaEventSafe('PlanSelected', {
+                    plan_name: 'b2b',
+                    plan_price: 199,
+                    currency: 'MXN',
+                    source: 'homepage_pricing'
+                });
+                trackFunnelEvent('checkout_click', {
+                    action_context: 'homepage_pricing',
+                    price: 199,
+                    brand: 'b2b'
+                });
                 window.open(`${window.stripeB2bPaymentLink}?client_reference_id=${encodeURIComponent(currentUser.id)}`, '_blank');
             } else {
                 showToast('Contacta a ventas: hola@lumu.dev', 'info');
             }
         });
+
+        if (btnPricingVip || btnPricingB2b) {
+            const pricingTarget = btnPricingVip?.closest('section') || btnPricingB2b?.closest('section') || btnPricingVip || btnPricingB2b;
+            if (pricingTarget && typeof IntersectionObserver === 'function') {
+                const pricingObserver = new IntersectionObserver((entries) => {
+                    entries.forEach((entry) => {
+                        if (!entry.isIntersecting || window.__lumuPricingViewTracked) return;
+                        window.__lumuPricingViewTracked = true;
+                        trackFunnelEvent('pricing_view', {
+                            action_context: 'homepage_pricing_section'
+                        });
+                        pricingObserver.disconnect();
+                    });
+                }, { threshold: 0.35 });
+                pricingObserver.observe(pricingTarget);
+            }
+        }
 
         // --- Logic for Image and Voice ---
         if (btnAttachImage) btnAttachImage.addEventListener('click', () => imageUpload.click());
@@ -3499,6 +3576,10 @@ async function initApp() {
                     if (isNewUser && !sessionStorage.getItem('lumu_confetti_fired')) {
                         _authModalCompleted = true;
                         _trackEvent('signup_complete');
+                        trackMetaEventSafe('SignupCompleted', {
+                            signup_method: 'google_oauth',
+                            region: currentRegion || 'MX'
+                        });
                         setTimeout(() => {
                             confetti({
                                 particleCount: 150,
@@ -4052,6 +4133,11 @@ async function initApp() {
                 window._lastSearchHadClick = false;
                 window._lastSearchContext = { canonical_key: '', product_category: '', search_id: searchId, search_query: finalQuery };
                 _trackEvent('search', { search_query: finalQuery, search_id: searchId, action_context: 'search_submit' });
+                trackMetaEventSafe('SearchPerformed', {
+                    search_term: finalQuery,
+                    region: currentRegion || 'MX',
+                    has_account: Boolean(currentUser)
+                });
                 if (_conversionBounceTimer) clearTimeout(_conversionBounceTimer);
 
                 const response = await fetch('/api/buscar', {

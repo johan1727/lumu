@@ -2,6 +2,40 @@ const supabase = require('../config/supabase');
 
 const stripe = process.env.STRIPE_SECRET_KEY ? require('stripe')(process.env.STRIPE_SECRET_KEY) : null;
 
+async function trackPurchaseEvent({ userId = null, session, plan }) {
+    if (!supabase || !session) return;
+    const purchaseEvent = {
+        user_id: userId,
+        event_type: 'purchase',
+        product_title: '',
+        store: 'stripe',
+        url: '',
+        search_query: '',
+        is_affiliate: false,
+        affiliate_network: 'none',
+        device: 'server',
+        referrer: 'stripe_webhook',
+        country_code: null,
+        canonical_key: null,
+        product_category: 'subscription',
+        position: null,
+        result_source: 'stripe_webhook',
+        store_tier: null,
+        best_buy_score: null,
+        session_id: session.client_reference_id || session.id || null,
+        search_id: null,
+        engagement_ms: null,
+        action_context: plan,
+        price: typeof session.amount_total === 'number' ? session.amount_total / 100 : null,
+        feedback_label: session.currency || null,
+        brand: plan
+    };
+    const { error } = await supabase.from('click_events').insert(purchaseEvent);
+    if (error) {
+        console.error('[Stripe] Error registrando purchase analytics:', error.message);
+    }
+}
+
 exports.handleWebhook = async (req, res) => {
     if (!stripe) {
         console.error('STRIPE_SECRET_KEY not configured');
@@ -108,6 +142,7 @@ exports.handleWebhook = async (req, res) => {
                             amount_paid: session.amount_total,
                             currency: session.currency
                         }]);
+                    await trackPurchaseEvent({ userId: resolvedUserId, session, plan });
                     console.log('✅ Perfil y suscripción actualizados vía email fallback.');
                     break;
                 }
@@ -135,6 +170,7 @@ exports.handleWebhook = async (req, res) => {
                             currency: session.currency
                         }]);
 
+                    await trackPurchaseEvent({ userId, session, plan });
                     console.log('✅ Perfil y suscripción actualizados exitosamente.');
                 }
                 break;

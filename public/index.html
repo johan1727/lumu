@@ -70,6 +70,29 @@
         window.dataLayer = window.dataLayer || [];
         function gtag(){dataLayer.push(arguments);}
         window.gtag = gtag;
+        window.LUMU_META_PIXEL_ID = 'REPLACE_WITH_META_PIXEL_ID';
+
+        (function initialiseMetaPixel() {
+            const pixelId = String(window.LUMU_META_PIXEL_ID || '').trim();
+            if (!pixelId || pixelId === 'REPLACE_WITH_META_PIXEL_ID') return;
+            !function (f, b, e, v, n, t, s) {
+                if (f.fbq) return;
+                n = f.fbq = function () {
+                    n.callMethod ? n.callMethod.apply(n, arguments) : n.queue.push(arguments);
+                };
+                if (!f._fbq) f._fbq = n;
+                n.push = n;
+                n.loaded = true;
+                n.version = '2.0';
+                n.queue = [];
+                t = b.createElement(e);
+                t.async = true;
+                t.src = v;
+                s = b.getElementsByTagName(e)[0];
+                s.parentNode.insertBefore(t, s);
+            }(window, document, 'script', 'https://connect.facebook.net/en_US/fbevents.js');
+            fbq('init', pixelId);
+        })();
 
         function getLumuConsentState() {
             const stored = localStorage.getItem('lumu_cookies');
@@ -107,9 +130,18 @@
             return localStorage.getItem('lumu_cookies') === 'accepted';
         }
 
+        function trackMetaEvent(eventName, params = {}) {
+            if (!canTrackAnalytics()) return;
+            if (typeof fbq !== 'function') return;
+            fbq('trackCustom', eventName, params);
+        }
+
         function trackSearch(query) {
             if (!canTrackAnalytics()) return;
             gtag('event', 'search', {
+                search_term: query
+            });
+            trackMetaEvent('SearchPerformed', {
                 search_term: query
             });
         }
@@ -134,6 +166,8 @@
                 }]
             });
         }
+
+        window.trackMetaEvent = trackMetaEvent;
     </script>
 
     <!-- JSON-LD Structured Data -->

@@ -239,24 +239,62 @@
             <!-- Funnel Cards -->
             <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
                 <div class="stat-card bg-white rounded-2xl p-5 border border-slate-200">
+                    <p class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Visitantes</p>
+                    <p id="an-visitors" class="text-2xl font-extrabold text-slate-800">0</p>
+                </div>
+                <div class="stat-card bg-white rounded-2xl p-5 border border-slate-200">
                     <p class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Búsquedas</p>
-                    <p id="an-searches" class="text-2xl font-extrabold text-slate-800">0</p>
+                    <p id="an-searches" class="text-2xl font-extrabold text-blue-600">0</p>
                 </div>
                 <div class="stat-card bg-white rounded-2xl p-5 border border-slate-200">
-                    <p class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Clicks</p>
-                    <p id="an-clicks" class="text-2xl font-extrabold text-blue-600">0</p>
+                    <p class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Pricing</p>
+                    <p id="an-pricing-views" class="text-2xl font-extrabold text-violet-600">0</p>
                 </div>
                 <div class="stat-card bg-white rounded-2xl p-5 border border-slate-200">
-                    <p class="text-xs font-bold text-emerald-500 uppercase tracking-wider mb-1">Tasa Conversión</p>
-                    <p id="an-conversion" class="text-2xl font-extrabold text-emerald-600">0%</p>
-                </div>
-                <div class="stat-card bg-white rounded-2xl p-5 border border-slate-200">
-                    <p class="text-xs font-bold text-amber-500 uppercase tracking-wider mb-1">Clicks Afiliado</p>
-                    <p id="an-affiliate" class="text-2xl font-extrabold text-amber-600">0</p>
+                    <p class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Compras</p>
+                    <p id="an-purchases" class="text-2xl font-extrabold text-emerald-600">0</p>
                 </div>
             </div>
 
             <!-- Secondary stats -->
+            <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
+                <div class="bg-white rounded-xl p-4 border border-slate-100">
+                    <p class="text-xs text-slate-400 mb-1">Visitante → Búsqueda</p>
+                    <p id="an-rate-visitor-search" class="text-lg font-bold">0%</p>
+                </div>
+                <div class="bg-white rounded-xl p-4 border border-slate-100">
+                    <p class="text-xs text-slate-400 mb-1">Búsqueda → Pricing</p>
+                    <p id="an-rate-search-pricing" class="text-lg font-bold">0%</p>
+                </div>
+                <div class="bg-white rounded-xl p-4 border border-slate-100">
+                    <p class="text-xs text-slate-400 mb-1">Pricing → Checkout</p>
+                    <p id="an-rate-pricing-checkout" class="text-lg font-bold">0%</p>
+                </div>
+                <div class="bg-white rounded-xl p-4 border border-slate-100">
+                    <p class="text-xs text-slate-400 mb-1">Checkout → Compra</p>
+                    <p id="an-rate-checkout-purchase" class="text-lg font-bold">0%</p>
+                </div>
+            </div>
+
+            <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
+                <div class="bg-white rounded-xl p-4 border border-slate-100">
+                    <p class="text-xs text-slate-400 mb-1">Checkout Clicks</p>
+                    <p id="an-checkout-clicks" class="text-lg font-bold">0</p>
+                </div>
+                <div class="bg-white rounded-xl p-4 border border-slate-100">
+                    <p class="text-xs text-slate-400 mb-1">Clicks</p>
+                    <p id="an-clicks" class="text-lg font-bold">0</p>
+                </div>
+                <div class="bg-white rounded-xl p-4 border border-slate-100">
+                    <p class="text-xs text-slate-400 mb-1">Clicks Afiliado</p>
+                    <p id="an-affiliate" class="text-lg font-bold">0</p>
+                </div>
+                <div class="bg-white rounded-xl p-4 border border-slate-100">
+                    <p class="text-xs text-slate-400 mb-1">Tasa Conversión Search → Click</p>
+                    <p id="an-conversion" class="text-lg font-bold">0%</p>
+                </div>
+            </div>
+
             <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
                 <div class="bg-white rounded-xl p-4 border border-slate-100">
                     <p class="text-xs text-slate-400 mb-1">Favoritos</p>
@@ -1341,14 +1379,22 @@ async function loadAnalytics() {
         if (!data.summary) return;
 
         const s = data.summary;
+        document.getElementById('an-visitors').textContent = s.uniqueVisitors || 0;
         document.getElementById('an-searches').textContent = s.totalSearches;
+        document.getElementById('an-pricing-views').textContent = s.uniquePricingVisitors || 0;
+        document.getElementById('an-purchases').textContent = s.uniquePurchasers || 0;
+        document.getElementById('an-rate-visitor-search').textContent = `${s.visitorToSearchRate || '0.0'}%`;
+        document.getElementById('an-rate-search-pricing').textContent = `${s.searchToPricingRate || '0.0'}%`;
+        document.getElementById('an-rate-pricing-checkout').textContent = `${s.pricingToCheckoutRate || '0.0'}%`;
+        document.getElementById('an-rate-checkout-purchase').textContent = `${s.checkoutToPurchaseRate || '0.0'}%`;
+        document.getElementById('an-checkout-clicks').textContent = s.uniqueCheckoutUsers || 0;
         document.getElementById('an-clicks').textContent = s.totalClicks;
-        document.getElementById('an-conversion').textContent = `${s.conversionRate}%`;
         document.getElementById('an-affiliate').textContent = s.totalAffiliateClicks;
+        document.getElementById('an-conversion').textContent = `${s.conversionRate}%`;
         document.getElementById('an-favorites').textContent = s.totalFavorites;
         document.getElementById('an-alerts').textContent = s.totalAlerts;
         document.getElementById('an-adviews').textContent = s.totalAdViews;
-        document.getElementById('an-adcomplete').textContent = `${s.adCompletionRate}%`;
+        document.getElementById('an-adcomplete').textContent = `${s.adCompletionRate || '0.0'}%`;
 
         // Network breakdown
         const netEl = document.getElementById('an-network-list');

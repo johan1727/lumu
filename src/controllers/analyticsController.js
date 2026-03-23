@@ -191,9 +191,23 @@ async function getAnalytics(req, res) {
         if (error) throw error;
         const all = events || [];
 
+        const uniqueBySession = (eventType) => new Set(
+            all
+                .filter(e => e.event_type === eventType && e.session_id)
+                .map(e => e.session_id)
+        ).size;
+
+        const safeRate = (numerator, denominator) => denominator > 0
+            ? ((numerator / denominator) * 100).toFixed(1)
+            : '0.0';
+
         // --- Totals ---
+        const totalPageViews = all.filter(e => e.event_type === 'page_view').length;
         const totalClicks = all.filter(e => e.event_type === 'click').length;
         const totalSearches = all.filter(e => e.event_type === 'search').length;
+        const totalPricingViews = all.filter(e => e.event_type === 'pricing_view').length;
+        const totalCheckoutClicks = all.filter(e => e.event_type === 'checkout_click').length;
+        const totalPurchases = all.filter(e => e.event_type === 'purchase').length;
         const totalAdViews = all.filter(e => e.event_type === 'ad_view').length;
         const totalFavorites = all.filter(e => e.event_type === 'favorite').length;
         const totalAlerts = all.filter(e => e.event_type === 'alert_create').length;
@@ -203,11 +217,25 @@ async function getAnalytics(req, res) {
         const totalAuthModalDismisses = all.filter(e => e.event_type === 'auth_modal_dismiss').length;
         const totalSignupComplete = all.filter(e => e.event_type === 'signup_complete').length;
         const totalSignupBonus = all.filter(e => e.event_type === 'signup_bonus').length;
+        const uniqueVisitors = uniqueBySession('page_view');
+        const uniqueSearchUsers = uniqueBySession('search');
+        const uniquePricingVisitors = uniqueBySession('pricing_view');
+        const uniqueCheckoutUsers = uniqueBySession('checkout_click');
+        const uniquePurchasers = new Set(
+            all
+                .filter(e => e.event_type === 'purchase')
+                .map(e => e.user_id || e.session_id)
+                .filter(Boolean)
+        ).size;
 
         // --- Conversion Rate (searches → clicks) ---
         const conversionRate = totalSearches > 0 ? ((totalClicks / totalSearches) * 100).toFixed(1) : '0.0';
         const bounceRate = totalSearches > 0 ? ((totalBounces / totalSearches) * 100).toFixed(1) : '0.0';
         const signupConversionRate = totalAuthModalOpens > 0 ? ((totalSignupComplete / totalAuthModalOpens) * 100).toFixed(1) : '0.0';
+        const visitorToSearchRate = safeRate(uniqueSearchUsers, uniqueVisitors);
+        const searchToPricingRate = safeRate(uniquePricingVisitors, uniqueSearchUsers);
+        const pricingToCheckoutRate = safeRate(uniqueCheckoutUsers, uniquePricingVisitors);
+        const checkoutToPurchaseRate = safeRate(uniquePurchasers, uniqueCheckoutUsers);
 
         // --- Affiliate clicks ---
         const affiliateClicks = all.filter(e => e.event_type === 'click' && e.is_affiliate);
@@ -285,10 +313,22 @@ async function getAnalytics(req, res) {
 
         res.json({
             summary: {
+                totalPageViews,
+                uniqueVisitors,
                 totalClicks,
                 totalSearches,
+                totalPricingViews,
+                uniquePricingVisitors,
+                totalCheckoutClicks,
+                uniqueCheckoutUsers,
+                totalPurchases,
+                uniquePurchasers,
                 conversionRate,
                 bounceRate,
+                visitorToSearchRate,
+                searchToPricingRate,
+                pricingToCheckoutRate,
+                checkoutToPurchaseRate,
                 totalBounces,
                 totalZeroResults,
                 totalAuthModalOpens,
