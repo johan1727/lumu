@@ -402,7 +402,7 @@ const REGION_UI_COPY = {
             planVip: 'Uso intensivo',
             planFree: 'Plan Básico (Gratis)',
             searchesLeftUnlimited: 'Búsquedas restantes: según tu plan',
-            searchesLeft: 'Búsquedas restantes hoy: {count}',
+            searchesLeft: 'Búsquedas restantes: {count}',
             upgradeTitle: '¡Sube de Nivel AHORA!',
             upgradeCopy: 'Hazte VIP y accede a más capacidad de búsqueda, sin anuncios y con mejores herramientas.',
             upgradeButton: 'Comprar Acceso VIP ($39)',
@@ -639,7 +639,7 @@ const REGION_UI_COPY = {
             planVip: 'Intensive Use',
             planFree: 'Basic Plan (Free)',
             searchesLeftUnlimited: 'Searches left: based on your plan',
-            searchesLeft: 'Searches left today: {count}',
+            searchesLeft: 'Searches left: {count}',
             upgradeTitle: 'Upgrade NOW!',
             upgradeCopy: 'Go VIP and unlock more search capacity, no ads, and better tools.',
             upgradeButton: 'Buy VIP Access ($39)',
@@ -2370,9 +2370,6 @@ function openProductHistoryModal(product = {}) {
         points.push(currentPrice);
     }
 
-    if (titleEl) titleEl.textContent = currentRegion === 'US' ? 'Price history' : 'Historial de precio';
-    if (copyEl) copyEl.textContent = safeTitle;
-
     if (points.length === 0) {
         historyList.innerHTML = `<div class="bg-white rounded-2xl border border-slate-200 p-5 text-sm font-medium text-slate-500">${currentRegion === 'US' ? 'No tracked price history for this product yet.' : 'Aún no hay historial de precio rastreado para este producto.'}</div>`;
         openHistoryModal();
@@ -3343,32 +3340,42 @@ async function initApp() {
             if (profileName) profileName.textContent = user.user_metadata?.full_name || user.email.split('@')[0];
             if (profileEmail) profileEmail.textContent = user.email;
 
-            let searchData = JSON.parse(localStorage.getItem('lumu_searches_data') || '{"count": 0, "date": null}');
-            const today = new Date().toDateString();
-            if (searchData.date !== today) {
-                searchData = { count: 0, date: today };
-                localStorage.setItem('lumu_searches_data', JSON.stringify(searchData));
-            }
-
+            const ui = getRegionUICopy();
             let isVIP = false;
+            let plan = 'free';
+            let remainingSearchesText = ui.profile.searchesLeftUnlimited;
             const sb = window.supabaseClient || null;
+
             if (sb) {
                 try {
-                    const { data } = await sb.from('profiles').select('is_premium').eq('id', user.id).single();
-                    if (data && data.is_premium) isVIP = true;
+                    const [{ data: profileData }, { data: usageData }] = await Promise.all([
+                        sb.from('profiles').select('is_premium, plan').eq('id', user.id).single(),
+                        sb.from('user_search_usage').select('lifetime_searches, monthly_searches').eq('user_id', user.id).maybeSingle()
+                    ]);
+
+                    if (profileData) {
+                        plan = profileData.plan || 'free';
+                        isVIP = !!profileData.is_premium || ['personal_vip', 'personal_vip_annual', 'b2b', 'b2b_annual'].includes(plan);
+                    }
+
+                    const lifetimeSearches = usageData?.lifetime_searches || 0;
+                    const monthlySearches = usageData?.monthly_searches || 0;
+
+                    if (plan === 'b2b' || plan === 'b2b_annual') {
+                        remainingSearchesText = ui.profile.searchesLeft.replace('{count}', Math.max(0, 200 - monthlySearches));
+                    } else if (isVIP) {
+                        remainingSearchesText = ui.profile.searchesLeft.replace('{count}', Math.max(0, 40 - monthlySearches));
+                    } else {
+                        remainingSearchesText = ui.profile.searchesLeft.replace('{count}', Math.max(0, 10 - lifetimeSearches));
+                    }
                 } catch (e) {
-                    console.error('Error fetching VIP status', e);
+                    console.error('Error fetching profile usage', e);
                 }
             }
 
-            const ui = getRegionUICopy();
-            if (planName) planName.textContent = isVIP ? ui.profile.planVip : ui.profile.planFree;
-            if (statusBadge) statusBadge.textContent = isVIP ? 'VIP' : ui.profile.statusFree;
-            if (searchesLeft) {
-                searchesLeft.textContent = isVIP
-                    ? ui.profile.searchesLeftUnlimited
-                    : ui.profile.searchesLeft.replace('{count}', Math.max(0, 10 - searchData.count));
-            }
+            if (planName) planName.textContent = (plan === 'b2b' || plan === 'b2b_annual') ? 'Plan Revendedor B2B' : (isVIP ? ui.profile.planVip : ui.profile.planFree);
+            if (statusBadge) statusBadge.textContent = (plan === 'b2b' || plan === 'b2b_annual') ? 'B2B' : (isVIP ? 'VIP' : ui.profile.statusFree);
+            if (searchesLeft) searchesLeft.textContent = remainingSearchesText;
 
             profileModal.classList.remove('invisible', 'opacity-0');
             const panel = profileModal.querySelector('.glass-panel');
