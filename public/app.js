@@ -4300,7 +4300,7 @@ async function initApp() {
                             nudge.innerHTML = `
                                 <div class="text-center md:text-left">
                                     <h3 class="text-base font-black text-slate-900">${getLocalizedText('¿Te gustaron estos resultados?', 'Did you like these results?')}</h3>
-                                    <p class="text-sm text-slate-600 font-medium">${getLocalizedText('Crea tu cuenta gratis para guardar productos, recibir alertas y obtener +5 búsquedas de bienvenida.', 'Create your free account to save products, enable alerts, and get +5 welcome searches.')}</p>
+                                    <p class="text-sm text-slate-600 font-medium">${getLocalizedText('Crea tu cuenta gratis para guardar productos, recibir alertas y obtener búsquedas bonus de bienvenida.', 'Create your free account to save products, enable alerts, and get welcome bonus searches.')}</p>
                                 </div>
                                 <button class="signup-nudge-btn w-full md:w-auto bg-slate-900 hover:bg-slate-800 text-white px-6 py-3 rounded-2xl font-bold transition-colors">${getLocalizedText('Crear cuenta gratis', 'Create free account')}</button>
                             `;

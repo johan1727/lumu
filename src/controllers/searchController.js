@@ -2360,7 +2360,7 @@ exports.claimReward = async (req, res) => {
 exports.claimSignupBonus = async (req, res) => {
     try {
         const userId = req.userId || null;
-        const BONUS_SEARCHES = 5;
+        const BONUS_SEARCHES = 2;
 
         if (!userId) {
             return res.status(401).json({ error: 'Inicia sesión para reclamar el bono de bienvenida.' });

@@ -7,6 +7,37 @@
 const SITE_URL = 'https://www.lumu.dev';
 const SITE_NAME = 'Lumu';
 
+const EDITORIAL_LINKS = [
+    { href: '/como-saber-si-una-oferta-si-conviene.html', label: 'Cómo saber si una oferta sí conviene' },
+    { href: '/como-ahorrar-hot-sale-2026.html', label: 'Cómo ahorrar de verdad en Hot Sale 2026' },
+    { href: '/mejores-laptops-calidad-precio.html', label: 'Mejores laptops calidad-precio' },
+    { href: '/mejor-momento-para-comprar-laptop.html', label: 'Mejor momento para comprar laptop' },
+    { href: '/comparar-precios-celulares-mexico.html', label: 'Cómo comparar precios de celulares en México' },
+    { href: '/amazon-vs-mercado-libre.html', label: 'Amazon vs Mercado Libre en México' },
+    { href: '/donde-comprar-iphone-mas-barato-mexico.html', label: 'Dónde comprar iPhone más barato en México' },
+    { href: '/mejores-ofertas-reales-hot-sale.html', label: 'Mejores ofertas reales en Hot Sale' }
+];
+
+const PRICE_TO_COMPARISON_SLUG = {
+    'iphone-16-pro-max-mexico': 'iphone-16-pro-max-amazon-vs-mercado-libre-vs-liverpool',
+    'playstation-5-mexico': 'ps5-amazon-vs-walmart-vs-liverpool',
+    'airpods-pro-2-mexico': 'airpods-pro-2-amazon-vs-liverpool-vs-macstore',
+    'smart-tv-55-pulgadas-4k-mexico': 'smart-tv-4k-amazon-vs-walmart-vs-liverpool',
+    'macbook-air-m3-mexico': 'macbook-air-m3-amazon-vs-ishop-vs-liverpool',
+    'samsung-galaxy-s25-ultra-mexico': 'samsung-galaxy-s25-amazon-vs-mercado-libre-vs-samsung-store',
+    'laptop-gamer-mexico': 'laptop-gamer-amazon-vs-mercado-libre-vs-cyberpuerta'
+};
+
+const COMPARISON_TO_PRICE_SLUG = {
+    'iphone-16-pro-max-amazon-vs-mercado-libre-vs-liverpool': 'iphone-16-pro-max-mexico',
+    'ps5-amazon-vs-walmart-vs-liverpool': 'playstation-5-mexico',
+    'airpods-pro-2-amazon-vs-liverpool-vs-macstore': 'airpods-pro-2-mexico',
+    'smart-tv-4k-amazon-vs-walmart-vs-liverpool': 'smart-tv-55-pulgadas-4k-mexico',
+    'macbook-air-m3-amazon-vs-ishop-vs-liverpool': 'macbook-air-m3-mexico',
+    'samsung-galaxy-s25-amazon-vs-mercado-libre-vs-samsung-store': 'samsung-galaxy-s25-ultra-mexico',
+    'laptop-gamer-amazon-vs-mercado-libre-vs-cyberpuerta': 'laptop-gamer-mexico'
+};
+
 const PRICE_PAGES = {
     'iphone-16-pro-max-mexico': {
         title: 'Precio del iPhone 16 Pro Max hoy en México',
@@ -67,6 +98,106 @@ const PRICE_PAGES = {
             { q: '¿Cuánto cuestan los AirPods Pro 2 en México?', a: 'Los AirPods Pro 2 suelen moverse entre $3,800 y $6,500 MXN según tienda y promociones.' },
             { q: '¿Dónde conviene comprar AirPods Pro 2 originales?', a: 'Amazon MX, Liverpool, iShop, MacStore y Mercado Libre con vendedores confiables son referencias comunes.' }
         ]
+    },
+    'smart-tv-55-pulgadas-4k-mexico': {
+        title: 'Precio de Smart TV 55 pulgadas 4K hoy en México',
+        description: 'Consulta el precio de Smart TV 55 pulgadas 4K hoy en México y compara en qué tiendas suele encontrarse una mejor relación entre precio y garantía.',
+        keywords: 'smart tv 55 pulgadas 4k precio mexico, tv 55 4k precio hoy, smart tv 4k 55 mexico',
+        query: 'Smart TV 4K 55 pulgadas',
+        categorySlug: 'smart-tv-4k',
+        productName: 'Smart TV 55 pulgadas 4K',
+        approxRange: '$5,000 a $16,000 MXN',
+        storeHighlights: ['Amazon MX', 'Walmart', 'Liverpool', 'Coppel', 'Mercado Libre'],
+        intro: 'Las Smart TV 4K de 55 pulgadas cambian mucho de precio según marca, sistema operativo y fecha promocional.',
+        buyTips: [
+            'Compara el modelo exacto; muchas televisiones se parecen pero cambian panel, sistema o tasa de refresco.',
+            'Revisa garantía, costo de envío y si la tienda incluye instalación o protección adicional.',
+            'En campañas bancarias suele convenir más el precio final a MSI que el precio de lista.'
+        ],
+        faq: [
+            { q: '¿Cuánto cuesta una Smart TV 55 pulgadas 4K en México?', a: 'Normalmente van de $5,000 a $16,000 MXN dependiendo de la marca, panel y promociones disponibles.' },
+            { q: '¿Qué marcas conviene comparar?', a: 'Hisense, TCL, Samsung y LG suelen concentrar las opciones más populares en 55 pulgadas 4K.' }
+        ]
+    },
+    'macbook-air-m3-mexico': {
+        title: 'Precio de MacBook Air M3 hoy en México',
+        description: 'Consulta el precio de MacBook Air M3 hoy en México y compara en qué tiendas conviene revisar garantía, meses sin intereses y envío.',
+        keywords: 'macbook air m3 precio mexico, macbook air m3 precio hoy, donde comprar macbook air m3 mexico',
+        query: 'MacBook Air M3 16GB 512GB',
+        categorySlug: 'macbook-air-m3',
+        productName: 'MacBook Air M3',
+        approxRange: '$21,000 a $34,000 MXN',
+        storeHighlights: ['Amazon MX', 'iShop', 'MacStore', 'Liverpool', 'Mercado Libre'],
+        intro: 'MacBook Air M3 suele variar más por configuración, color, promociones bancarias y disponibilidad en tiendas oficiales.',
+        buyTips: [
+            'Compara capacidad y memoria exacta; cambiar de 8GB a 16GB o de 256GB a 512GB altera mucho el precio.',
+            'Las tiendas oficiales rara vez son las más baratas, pero pueden compensar con garantía y financiamiento.',
+            'Valida si el precio incluye teclado distribución correcta y garantía nacional.'
+        ],
+        faq: [
+            { q: '¿Cuánto cuesta una MacBook Air M3 en México?', a: 'Dependiendo de configuración, suele moverse entre $21,000 y $34,000 MXN.' },
+            { q: '¿Dónde conviene comparar MacBook Air M3?', a: 'Amazon MX, iShop, MacStore, Liverpool y algunos vendedores confiables en marketplaces.' }
+        ]
+    },
+    'samsung-galaxy-s25-ultra-mexico': {
+        title: 'Precio del Samsung Galaxy S25 Ultra hoy en México',
+        description: 'Consulta el precio del Samsung Galaxy S25 Ultra hoy en México y compara dónde revisar mejor precio, tienda oficial y promociones bancarias.',
+        keywords: 'samsung galaxy s25 ultra precio mexico, s25 ultra precio hoy, donde comprar s25 ultra mexico',
+        query: 'Samsung Galaxy S25 Ultra 256GB',
+        categorySlug: 'samsung-galaxy-s25',
+        productName: 'Samsung Galaxy S25 Ultra',
+        approxRange: '$22,000 a $35,000 MXN',
+        storeHighlights: ['Amazon MX', 'Samsung Store', 'Liverpool', 'Mercado Libre', 'Telcel'],
+        intro: 'El Galaxy S25 Ultra suele tener diferencias importantes por color, almacenamiento y campañas con cashback o bundles.',
+        buyTips: [
+            'Compara si la promoción incluye audífonos, watch o cashback; eso cambia el valor real.',
+            'Samsung Store y retailers grandes suelen competir distinto en meses sin intereses y regalos.',
+            'Verifica que sea versión para México y tenga garantía válida local.'
+        ],
+        faq: [
+            { q: '¿Cuánto cuesta el Samsung Galaxy S25 Ultra en México?', a: 'Suele rondar entre $22,000 y $35,000 MXN según memoria y promociones.' },
+            { q: '¿Dónde conviene comprar un Galaxy S25 Ultra?', a: 'Amazon MX, Samsung Store, Liverpool y algunos marketplaces con vendedores confiables son buenos puntos para comparar.' }
+        ]
+    },
+    'laptop-gamer-mexico': {
+        title: 'Precio de laptop gamer hoy en México',
+        description: 'Consulta el precio de laptop gamer hoy en México y compara configuraciones RTX, procesadores y tiendas antes de comprar.',
+        keywords: 'laptop gamer precio mexico, laptop gamer precio hoy, donde comprar laptop gamer mexico',
+        query: 'Laptop gamer RTX 4060',
+        categorySlug: 'laptop-gamer',
+        productName: 'Laptop gamer',
+        approxRange: '$15,000 a $38,000 MXN',
+        storeHighlights: ['Amazon MX', 'CyberPuerta', 'Mercado Libre', 'Liverpool', 'Walmart'],
+        intro: 'Las laptops gamer varían mucho de precio según GPU, RAM, SSD, pantalla y marca, así que comparar el modelo exacto es clave.',
+        buyTips: [
+            'No compares solo la marca: una GPU o RAM distinta puede justificar una gran diferencia de precio.',
+            'CyberPuerta, Amazon y retailers suelen competir fuerte en modelos gamer concretos.',
+            'Revisa tiempo de entrega, garantía y si la configuración ya incluye RAM y SSD suficientes.'
+        ],
+        faq: [
+            { q: '¿Cuánto cuesta una laptop gamer en México?', a: 'En general van de $15,000 a $38,000 MXN, dependiendo de gráfica, procesador y pantalla.' },
+            { q: '¿Qué conviene comparar primero?', a: 'Tarjeta gráfica, RAM, almacenamiento, pantalla y precio final con envío o promociones.' }
+        ]
+    },
+    'nintendo-switch-oled-mexico': {
+        title: 'Precio del Nintendo Switch OLED hoy en México',
+        description: 'Consulta el precio del Nintendo Switch OLED hoy en México y compara bundles, garantía y precio final entre tiendas populares.',
+        keywords: 'nintendo switch oled precio mexico, switch oled precio hoy, donde comprar nintendo switch oled mexico',
+        query: 'Nintendo Switch OLED',
+        categorySlug: 'nintendo-switch-oled',
+        productName: 'Nintendo Switch OLED',
+        approxRange: '$5,500 a $9,500 MXN',
+        storeHighlights: ['Amazon MX', 'Walmart', 'Liverpool', 'Mercado Libre', 'Sam\'s Club'],
+        intro: 'Nintendo Switch OLED suele cambiar más de precio por bundle, color y si incluye juego o accesorio adicional.',
+        buyTips: [
+            'Compara si el bundle sí te conviene o si es mejor comprar consola y juego por separado.',
+            'En consolas, la diferencia real suele estar en envío, garantía y accesorios incluidos.',
+            'Revisa si la tienda especifica versión OLED y condición nueva sellada.'
+        ],
+        faq: [
+            { q: '¿Cuánto cuesta un Nintendo Switch OLED en México?', a: 'Suele encontrarse entre $5,500 y $9,500 MXN según bundle y tienda.' },
+            { q: '¿Dónde conviene comparar Switch OLED?', a: 'Amazon MX, Walmart, Liverpool, Sam’s y Mercado Libre con vendedores bien calificados.' }
+        ]
     }
 };
 
@@ -123,6 +254,78 @@ const STORE_COMPARISON_PAGES = {
         faq: [
             { q: '¿Dónde hay menos riesgo de comprar AirPods falsos?', a: 'MacStore, iShop y tiendas muy reconocidas ofrecen más certeza, mientras en marketplaces conviene revisar vendedor y reputación.' },
             { q: '¿Amazon o Liverpool para AirPods Pro 2?', a: 'Depende del precio final y del vendedor, pero ambas suelen ser opciones razonables si el producto es nuevo y original.' }
+        ]
+    },
+    'smart-tv-4k-amazon-vs-walmart-vs-liverpool': {
+        title: 'Dónde conviene comprar Smart TV 4K: Amazon vs Walmart vs Liverpool',
+        description: 'Compara dónde conviene comprar Smart TV 4K en México entre Amazon, Walmart y Liverpool según precio, garantía y promociones.',
+        keywords: 'smart tv 4k amazon vs walmart, donde comprar smart tv 4k mexico, smart tv liverpool vs amazon',
+        query: 'Smart TV 4K 55 pulgadas',
+        categorySlug: 'smart-tv-4k',
+        productName: 'Smart TV 4K',
+        stores: [
+            { name: 'Amazon MX', bestFor: 'variedad de modelos y envío', note: 'Conviene mucho cuando baja un modelo exacto o aparece promoción bancaria.' },
+            { name: 'Walmart', bestFor: 'ofertas puntuales y bundles', note: 'A veces compite fuerte en campañas masivas y con entregas locales.' },
+            { name: 'Liverpool', bestFor: 'respaldo, MSI y servicio', note: 'No siempre gana en precio, pero suele compensar con financiamiento y garantía.' }
+        ],
+        winnerTip: 'En televisiones, conviene comparar el modelo exacto y el costo final con envío, no solo la marca o el tamaño.',
+        faq: [
+            { q: '¿Dónde suele estar más barata una Smart TV 4K?', a: 'Depende del modelo, pero Amazon y Walmart suelen competir fuerte, mientras Liverpool destaca más por MSI y respaldo.' },
+            { q: '¿Qué revisar además del precio?', a: 'Garantía, modelo exacto, panel, sistema operativo y costo de envío.' }
+        ]
+    },
+    'macbook-air-m3-amazon-vs-ishop-vs-liverpool': {
+        title: 'Dónde conviene comprar MacBook Air M3: Amazon vs iShop vs Liverpool',
+        description: 'Compara dónde conviene comprar MacBook Air M3 en México entre Amazon, iShop y Liverpool según precio, garantía y financiamiento.',
+        keywords: 'macbook air m3 amazon vs ishop, donde comprar macbook air m3 mexico, macbook air liverpool vs amazon',
+        query: 'MacBook Air M3 16GB 512GB',
+        categorySlug: 'macbook-air-m3',
+        productName: 'MacBook Air M3',
+        stores: [
+            { name: 'Amazon MX', bestFor: 'precio agresivo y envíos', note: 'Suele convener cuando el vendedor es confiable y hay promoción puntual.' },
+            { name: 'iShop', bestFor: 'experiencia Apple y respaldo', note: 'Tiende a ofrecer más certeza, aunque no siempre es la opción más barata.' },
+            { name: 'Liverpool', bestFor: 'MSI y compra institucional', note: 'Puede convenir si buscas facturación y promociones bancarias.' }
+        ],
+        winnerTip: 'En MacBook, una pequeña diferencia de precio puede valer la pena si obtienes mejor garantía, MSI o soporte postventa.',
+        faq: [
+            { q: '¿Amazon o iShop para una MacBook Air M3?', a: 'Amazon puede ganar en precio; iShop suele dar más confianza para compradores que priorizan canal oficial.' },
+            { q: '¿Liverpool conviene para MacBook?', a: 'Sí, especialmente si aprovechas meses sin intereses o beneficios bancarios.' }
+        ]
+    },
+    'samsung-galaxy-s25-amazon-vs-mercado-libre-vs-samsung-store': {
+        title: 'Dónde conviene comprar Samsung Galaxy S25: Amazon vs Mercado Libre vs Samsung Store',
+        description: 'Compara dónde conviene comprar Samsung Galaxy S25 en México entre Amazon, Mercado Libre y Samsung Store según precio, promociones y garantía.',
+        keywords: 'samsung s25 amazon vs mercado libre, donde comprar samsung galaxy s25 mexico, samsung store vs amazon s25',
+        query: 'Samsung Galaxy S25 Ultra 256GB',
+        categorySlug: 'samsung-galaxy-s25',
+        productName: 'Samsung Galaxy S25',
+        stores: [
+            { name: 'Amazon MX', bestFor: 'descuentos y entrega rápida', note: 'Puede ser gran opción cuando aparece oferta directa o con banco.' },
+            { name: 'Mercado Libre', bestFor: 'precio competitivo', note: 'Conviene validar reputación, garantía y si es tienda oficial.' },
+            { name: 'Samsung Store', bestFor: 'promos oficiales y trade-in', note: 'A veces no gana en precio base, pero sí en regalos, cashback o canje.' }
+        ],
+        winnerTip: 'En Samsung premium, el mejor trato suele venir por promociones oficiales, bundles o cashback, no solo por precio de lista.',
+        faq: [
+            { q: '¿Dónde conviene más comprar un Galaxy S25?', a: 'Depende de la promoción activa: Samsung Store puede ganar con bundles, mientras Amazon o Mercado Libre pueden ganar en precio directo.' },
+            { q: '¿Qué revisar en marketplaces?', a: 'Garantía válida en México, reputación del vendedor y si el equipo es versión nacional.' }
+        ]
+    },
+    'laptop-gamer-amazon-vs-mercado-libre-vs-cyberpuerta': {
+        title: 'Dónde conviene comprar laptop gamer: Amazon vs Mercado Libre vs CyberPuerta',
+        description: 'Compara dónde conviene comprar laptop gamer en México entre Amazon, Mercado Libre y CyberPuerta según configuración, precio y garantía.',
+        keywords: 'laptop gamer amazon vs cyberpuerta, donde comprar laptop gamer mexico, laptop gamer mercado libre vs amazon',
+        query: 'Laptop gamer RTX 4060',
+        categorySlug: 'laptop-gamer',
+        productName: 'Laptop gamer',
+        stores: [
+            { name: 'Amazon MX', bestFor: 'envío y promociones rápidas', note: 'Útil cuando aparece un modelo específico con descuento fuerte.' },
+            { name: 'Mercado Libre', bestFor: 'variedad y precio', note: 'Puede tener precio agresivo, pero conviene filtrar por vendedores confiables.' },
+            { name: 'CyberPuerta', bestFor: 'equipos de cómputo y configuraciones', note: 'Suele ser referencia fuerte en componentes y laptops de rendimiento.' }
+        ],
+        winnerTip: 'En laptops gamer, lo más importante es comparar la configuración exacta; un precio más bajo con peor GPU o panel puede salir caro.',
+        faq: [
+            { q: '¿CyberPuerta conviene para laptop gamer?', a: 'Sí, suele ser una referencia fuerte para equipos de cómputo y configuración técnica.' },
+            { q: '¿Qué comparar primero?', a: 'GPU, RAM, SSD, pantalla, garantía y precio final con envío.' }
         ]
     }
 };
@@ -355,6 +558,54 @@ const CATEGORIES = {
         faq: [
             { q: '¿Cuánto cuesta una PlayStation 5 en México?', a: 'La PS5 Slim y la edición digital suelen estar entre $8,500 y $14,000 MXN según bundle, tienda y promociones. Las diferencias importantes suelen venir por juegos incluidos o meses sin intereses.' },
             { q: '¿Dónde conviene comprar la PS5?', a: 'Amazon MX, Walmart, Liverpool, Sam’s y MercadoLibre con vendedores bien calificados suelen concentrar las mejores ofertas. Lumu te ayuda a comparar el precio real del bundle.' }
+        ]
+    },
+    'macbook-air-m3': {
+        title: 'MacBook Air M3',
+        description: 'Compara precios de MacBook Air M3 en México. Encuentra configuraciones 8GB, 16GB y 512GB al mejor precio en Amazon, iShop, Liverpool y más.',
+        keywords: 'macbook air m3 precio mexico, macbook air m3 barata, donde comprar macbook air m3',
+        query: 'MacBook Air M3 16GB 512GB',
+        emoji: '💻',
+        h1: 'MacBook Air M3 al Mejor Precio en México',
+        faq: [
+            { q: '¿Cuánto cuesta una MacBook Air M3 en México?', a: 'Dependiendo de la configuración, una MacBook Air M3 puede ir de $21,000 a $34,000 MXN.' },
+            { q: '¿Dónde conviene comprar MacBook Air M3?', a: 'Amazon MX, iShop, MacStore y Liverpool suelen ser buenos puntos para comparar precio final, garantía y MSI.' }
+        ]
+    },
+    'nintendo-switch-oled': {
+        title: 'Nintendo Switch OLED',
+        description: 'Compara precios de Nintendo Switch OLED en México. Consola, bundles y accesorios al mejor precio en Amazon, Walmart, Liverpool y más.',
+        keywords: 'nintendo switch oled precio mexico, switch oled barata, donde comprar nintendo switch oled',
+        query: 'Nintendo Switch OLED',
+        emoji: '🎮',
+        h1: 'Nintendo Switch OLED al Mejor Precio en México',
+        faq: [
+            { q: '¿Cuánto cuesta una Nintendo Switch OLED en México?', a: 'La Nintendo Switch OLED suele moverse entre $5,500 y $9,500 MXN según bundle, color y promociones.' },
+            { q: '¿Dónde conviene comprar Nintendo Switch OLED?', a: 'Amazon MX, Walmart, Liverpool, Sam’s y MercadoLibre con vendedores bien calificados suelen ser buenas referencias.' }
+        ]
+    },
+    'freidora-de-aire': {
+        title: 'Freidora de Aire',
+        description: 'Compara precios de freidora de aire en México. Ninja, Gourmia, Oster, Cosori y más al mejor precio.',
+        keywords: 'freidora de aire precio mexico, air fryer barata, donde comprar freidora de aire',
+        query: 'freidora de aire air fryer',
+        emoji: '🍟',
+        h1: 'Freidora de Aire al Mejor Precio en México',
+        faq: [
+            { q: '¿Cuánto cuesta una freidora de aire en México?', a: 'Las freidoras de aire suelen costar entre $800 y $5,000 MXN según capacidad y marca.' },
+            { q: '¿Qué freidora de aire conviene comprar?', a: 'Ninja, Gourmia, Oster y Cosori suelen ser las marcas más comparadas por calidad-precio.' }
+        ]
+    },
+    'samsung-galaxy-s25': {
+        title: 'Samsung Galaxy S25',
+        description: 'Compara precios de Samsung Galaxy S25 en México. Modelos base, Plus y Ultra al mejor precio en Amazon, Samsung Store, Liverpool y más.',
+        keywords: 'samsung galaxy s25 precio mexico, galaxy s25 ultra barato, donde comprar galaxy s25',
+        query: 'Samsung Galaxy S25 Ultra 256GB',
+        emoji: '📱',
+        h1: 'Samsung Galaxy S25 al Mejor Precio en México',
+        faq: [
+            { q: '¿Cuánto cuesta el Samsung Galaxy S25 en México?', a: 'La familia Galaxy S25 puede variar mucho, pero los modelos más buscados suelen ir de $18,000 a $35,000 MXN.' },
+            { q: '¿Dónde conviene comprar Galaxy S25?', a: 'Amazon MX, Samsung Store, Liverpool y algunos vendedores confiables de marketplaces son buenos puntos para comparar.' }
         ]
     },
     'tenis-adidas': {
@@ -731,9 +982,14 @@ function buildFaqJsonLd(faq = []) {
     };
 }
 
+function getEditorialLinks(limit = 6) {
+    return EDITORIAL_LINKS.slice(0, limit).map(link => `<a href="${link.href}">${esc(link.label)}</a>`).join('');
+}
+
 function generatePricePageHTML(slug, page) {
     const url = `${SITE_URL}/precio-hoy/${slug}`;
     const category = CATEGORIES[page.categorySlug];
+    const comparisonSlug = PRICE_TO_COMPARISON_SLUG[slug];
     const bodyContent = `
     <header>
         <h1>${esc(page.title)}</h1>
@@ -763,10 +1019,14 @@ function generatePricePageHTML(slug, page) {
         <section class="section">
             <h2>Explora más</h2>
             <div class="link-grid">
-                <a href="/comparativas/${slug.replace('-mexico', '')}${page.productName.toLowerCase().includes('iphone') ? '-amazon-vs-mercado-libre-vs-liverpool' : page.productName.toLowerCase().includes('playstation') ? '-amazon-vs-walmart-vs-liverpool' : '-amazon-vs-liverpool-vs-macstore'}">Ver comparativa de tiendas</a>
+                ${comparisonSlug ? `<a href="/comparativas/${comparisonSlug}">Ver comparativa de tiendas</a>` : ''}
                 ${category ? `<a href="/buscar/${page.categorySlug}">Ir a ${esc(category.title)}</a>` : ''}
                 <a href="/buscar">Ver más categorías</a>
             </div>
+        </section>
+        <section class="section">
+            <h2>Guías relacionadas</h2>
+            <div class="link-grid">${getEditorialLinks()}</div>
         </section>
     </div>`;
 
@@ -788,6 +1048,7 @@ function generatePricePageHTML(slug, page) {
 function generateComparisonPageHTML(slug, page) {
     const url = `${SITE_URL}/comparativas/${slug}`;
     const category = CATEGORIES[page.categorySlug];
+    const priceSlug = COMPARISON_TO_PRICE_SLUG[slug];
     const bodyContent = `
     <header>
         <h1>${esc(page.title)}</h1>
@@ -811,10 +1072,14 @@ function generateComparisonPageHTML(slug, page) {
         <section class="section">
             <h2>Explora más</h2>
             <div class="link-grid">
-                <a href="/precio-hoy/${page.productName.toLowerCase().includes('iphone') ? 'iphone-16-pro-max-mexico' : page.productName.toLowerCase().includes('playstation') ? 'playstation-5-mexico' : 'airpods-pro-2-mexico'}">Ver precio hoy</a>
+                ${priceSlug ? `<a href="/precio-hoy/${priceSlug}">Ver precio hoy</a>` : ''}
                 ${category ? `<a href="/buscar/${page.categorySlug}">Ir a ${esc(category.title)}</a>` : ''}
                 <a href="/buscar">Ver más categorías</a>
             </div>
+        </section>
+        <section class="section">
+            <h2>Guías relacionadas</h2>
+            <div class="link-grid">${getEditorialLinks()}</div>
         </section>
     </div>`;
 
@@ -991,6 +1256,13 @@ function generateCategoryHTML(slug, cat) {
                     .slice(0, 8)
                     .map(([s, c]) => `<a href="/buscar/${s}" class="cat-link">${c.emoji} ${esc(c.title)}</a>`)
                     .join('')}
+            </div>
+        </section>
+
+        <section class="section">
+            <h2>Guías y artículos relacionados</h2>
+            <div class="categories-grid">
+                ${EDITORIAL_LINKS.slice(0, 8).map(link => `<a href="${link.href}" class="cat-link">📝 ${esc(link.label)}</a>`).join('')}
             </div>
         </section>
     </div>
