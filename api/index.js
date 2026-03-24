@@ -8,13 +8,18 @@ require('dotenv').config();
     if (!process.env[v]) console.warn(`⚠️ WARNING: ${v} is not set. Auth, caching, and rate limiting will use fallbacks.`);
 });
 
-const Sentry = require('@sentry/node');
+let Sentry = null;
+try {
+    Sentry = require('@sentry/node');
+} catch (error) {
+    console.warn(`⚠️ WARNING: @sentry/node is not available. Sentry monitoring disabled for this runtime. ${error.message}`);
+}
 const express = require('express');
 const helmet = require('helmet');
 const cors = require('cors');
 const cacheService = require('../src/services/cacheService');
 
-if (process.env.SENTRY_DSN) {
+if (process.env.SENTRY_DSN && Sentry) {
     Sentry.init({
         dsn: process.env.SENTRY_DSN,
         environment: process.env.SENTRY_ENVIRONMENT || process.env.VERCEL_ENV || process.env.NODE_ENV || 'development',
@@ -36,6 +41,8 @@ const PORT = process.env.PORT || 3000;
 
 const searchRoutes = require('../src/routes/api');
 
+const CANONICAL_HOST = 'www.lumu.dev';
+
 const allowedOrigins = (process.env.FRONTEND_ORIGINS || 'https://lumu.dev,https://www.lumu.dev')
     .split(',')
     .map(origin => origin.trim())
@@ -55,8 +62,30 @@ app.disable('x-powered-by');
 app.set('trust proxy', 1);
 
 app.use((req, res, next) => {
+    if (process.env.NODE_ENV !== 'production') return next();
+    if (!['GET', 'HEAD'].includes(req.method)) return next();
+    if (req.path.startsWith('/api/')) return next();
+
+    const forwardedHost = String(req.headers['x-forwarded-host'] || '').split(',')[0].trim().toLowerCase();
+    const requestHost = (forwardedHost || req.hostname || '').trim().toLowerCase();
+
+    if (!requestHost || requestHost === CANONICAL_HOST || requestHost.includes('localhost') || requestHost.includes('127.0.0.1')) {
+        return next();
+    }
+
+    if (requestHost === 'lumu.dev') {
+        return res.redirect(301, `https://${CANONICAL_HOST}${req.originalUrl || req.url || '/'}`);
+    }
+
+    return next();
+});
+
+app.use((req, res, next) => {
     req.sentryTraceId = null;
     if (process.env.SENTRY_DSN) {
+        if (!Sentry) {
+            return next();
+        }
         Sentry.withScope((scope) => {
             const forwardedHost = String(req.headers['x-forwarded-host'] || '').split(',')[0].trim();
             const requestHost = (forwardedHost || req.hostname || '').trim().toLowerCase();
@@ -354,14 +383,14 @@ if (require.main === module) {
 
 process.on('unhandledRejection', (reason) => {
     console.error('[Process] Unhandled rejection:', reason);
-    if (process.env.SENTRY_DSN) {
+    if (process.env.SENTRY_DSN && Sentry) {
         Sentry.captureException(reason instanceof Error ? reason : new Error(String(reason)));
     }
 });
 
 process.on('uncaughtException', (error) => {
     console.error('[Process] Uncaught exception:', error);
-    if (process.env.SENTRY_DSN) {
+    if (process.env.SENTRY_DSN && Sentry) {
         Sentry.captureException(error);
     }
 });

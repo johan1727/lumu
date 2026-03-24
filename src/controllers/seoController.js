@@ -21,6 +21,18 @@ const CATEGORIES = {
             { q: '¿Qué audífonos bluetooth recomiendan?', a: 'Las marcas más populares son Sony, JBL, Samsung y Xiaomi. Usa Lumu para comparar modelos y precios en tiempo real.' }
         ]
     },
+    'airpods-pro': {
+        title: 'AirPods Pro',
+        description: 'Compara precios de AirPods Pro en México. Encuentra AirPods Pro 2 originales al mejor precio en Amazon, MercadoLibre, Walmart, Liverpool y más.',
+        keywords: 'airpods pro precio mexico, airpods pro 2 baratos, airpods pro originales, donde comprar airpods pro mexico',
+        query: 'AirPods Pro 2 originales',
+        emoji: '🎧',
+        h1: 'AirPods Pro al Mejor Precio en México',
+        faq: [
+            { q: '¿Cuánto cuestan los AirPods Pro en México?', a: 'Los AirPods Pro 2 normalmente van de $3,800 a $6,500 MXN según la tienda, promociones y si incluyen AppleCare o meses sin intereses.' },
+            { q: '¿Dónde conviene comprar AirPods Pro originales?', a: 'Amazon MX, Liverpool, iShop, MercadoLibre con vendedores oficiales y algunas tiendas departamentales suelen tener buenas ofertas. Lumu te ayuda a comparar el precio final.' }
+        ]
+    },
     'celulares-baratos': {
         title: 'Celulares Baratos',
         description: 'Encuentra celulares baratos en México. Compara precios de smartphones en Amazon, MercadoLibre, Coppel y Walmart con IA.',
@@ -43,6 +55,18 @@ const CATEGORIES = {
         faq: [
             { q: '¿Cuánto cuesta una laptop buena en México?', a: 'Una laptop para uso general cuesta entre $8,000 y $15,000 MXN. Para gaming o trabajo profesional, desde $15,000. Lumu compara en todas las tiendas.' },
             { q: '¿Qué laptop comprar para estudiantes?', a: 'Para estudiantes las mejores opciones son Lenovo IdeaPad, HP 14, o Acer Aspire. Usa Lumu para encontrar la oferta más baja.' }
+        ]
+    },
+    'laptop-gamer': {
+        title: 'Laptop Gamer',
+        description: 'Compara precios de laptop gamer en México. ASUS ROG, Lenovo LOQ, MSI, Acer Nitro, HP Victus y más al mejor precio.',
+        keywords: 'laptop gamer barata, laptop gamer mexico, asus rog precio, lenovo loq, acer nitro, hp victus',
+        query: 'laptop gamer RTX',
+        emoji: '💻',
+        h1: 'Laptop Gamer al Mejor Precio en México',
+        faq: [
+            { q: '¿Cuánto cuesta una laptop gamer buena en México?', a: 'Una laptop gamer decente suele costar entre $15,000 y $35,000 MXN. Modelos con RTX 4050 o 4060 son los más buscados por su balance entre precio y rendimiento.' },
+            { q: '¿Qué laptop gamer conviene comprar?', a: 'Lenovo LOQ, HP Victus, ASUS TUF y Acer Nitro suelen ofrecer buena relación calidad-precio. Compara RAM, tarjeta gráfica, almacenamiento y precio final antes de decidir.' }
         ]
     },
     'tenis-nike': {
@@ -129,6 +153,18 @@ const CATEGORIES = {
             { q: '¿Qué televisión comprar en 2026?', a: 'Para la mejor relación calidad-precio busca Hisense o TCL en 50-55 pulgadas. Usa Lumu para comparar en todas las tiendas.' }
         ]
     },
+    'smart-tv-4k': {
+        title: 'Smart TV 4K',
+        description: 'Compara precios de Smart TV 4K en México. Samsung, LG, Hisense, TCL y Sony al mejor precio en Amazon, Walmart, Liverpool y más.',
+        keywords: 'smart tv 4k barata, tv 4k mexico, television 4k precio, smart tv hisense, smart tv samsung',
+        query: 'Smart TV 4K 55 pulgadas',
+        emoji: '📺',
+        h1: 'Smart TV 4K al Mejor Precio en México',
+        faq: [
+            { q: '¿Cuánto cuesta una Smart TV 4K en México?', a: 'Una Smart TV 4K de 50 a 55 pulgadas suele costar entre $5,000 y $14,000 MXN. Las mejores promociones aparecen en Hot Sale, Buen Fin y campañas bancarias.' },
+            { q: '¿Qué marca de Smart TV 4K conviene más?', a: 'Hisense y TCL destacan en calidad-precio. Samsung y LG suelen costar más, pero ofrecen mejor sistema operativo, panel y soporte en algunos modelos.' }
+        ]
+    },
     'iphone': {
         title: 'iPhone',
         description: 'Compara precios de iPhone en México. iPhone 16, 15, SE y más al mejor precio en Amazon, MercadoLibre, iShop y Liverpool.',
@@ -139,6 +175,18 @@ const CATEGORIES = {
         faq: [
             { q: '¿Cuánto cuesta un iPhone en México?', a: 'El iPhone 16 va de $18,000 a $35,000 MXN. El iPhone 15 desde $14,000 y el SE desde $8,000. Lumu compara todas las tiendas para el mejor precio.' },
             { q: '¿Dónde comprar iPhone barato y original?', a: 'Amazon MX, MercadoLibre (vendedores oficiales), iShop, Liverpool y Costco suelen tener los mejores precios. Compara con Lumu.' }
+        ]
+    },
+    'iphone-16-pro-max': {
+        title: 'iPhone 16 Pro Max',
+        description: 'Compara precios de iPhone 16 Pro Max en México. Encuentra el mejor precio en Amazon, MercadoLibre, iShop, Liverpool, MacStore y más.',
+        keywords: 'iphone 16 pro max precio mexico, iphone 16 pro max barato, donde comprar iphone 16 pro max',
+        query: 'iPhone 16 Pro Max original',
+        emoji: '📱',
+        h1: 'iPhone 16 Pro Max al Mejor Precio en México',
+        faq: [
+            { q: '¿Cuánto cuesta el iPhone 16 Pro Max en México?', a: 'Dependiendo de la capacidad, el iPhone 16 Pro Max suele moverse entre $28,000 y $42,000 MXN. Las promociones reales suelen venir con cashback, MSI o descuento bancario.' },
+            { q: '¿Dónde conviene comprar iPhone 16 Pro Max original?', a: 'Amazon MX, iShop, MacStore, Liverpool y MercadoLibre con vendedores oficiales son los puntos más comunes para comparar. Lumu te ayuda a detectar el mejor costo total.' }
         ]
     },
     'aspiradoras-robot': {
@@ -175,6 +223,18 @@ const CATEGORIES = {
         faq: [
             { q: '¿Cuáles son los mejores audífonos gamer baratos?', a: 'HyperX Cloud Stinger y Logitech G335 son excelentes opciones desde $600 MXN. Para premium, el HyperX Cloud II desde $1,200.' },
             { q: '¿Qué audífonos gamer usan los pros?', a: 'Los profesionales usan HyperX Cloud II, SteelSeries Arctis y Logitech G Pro X. Compara precios en Lumu.' }
+        ]
+    },
+    'playstation-5': {
+        title: 'PlayStation 5',
+        description: 'Compara precios de PlayStation 5 en México. PS5 Slim, PS5 Digital, bundles y accesorios al mejor precio en Amazon, Walmart, Liverpool y más.',
+        keywords: 'playstation 5 precio mexico, ps5 barata, ps5 slim mexico, donde comprar ps5',
+        query: 'PlayStation 5 Slim',
+        emoji: '🎮',
+        h1: 'PlayStation 5 al Mejor Precio en México',
+        faq: [
+            { q: '¿Cuánto cuesta una PlayStation 5 en México?', a: 'La PS5 Slim y la edición digital suelen estar entre $8,500 y $14,000 MXN según bundle, tienda y promociones. Las diferencias importantes suelen venir por juegos incluidos o meses sin intereses.' },
+            { q: '¿Dónde conviene comprar la PS5?', a: 'Amazon MX, Walmart, Liverpool, Sam’s y MercadoLibre con vendedores bien calificados suelen concentrar las mejores ofertas. Lumu te ayuda a comparar el precio real del bundle.' }
         ]
     },
     'tenis-adidas': {
