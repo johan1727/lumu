@@ -794,7 +794,7 @@ exports.searchProduct = async (req, res) => {
             } else {
                 // x-vercel-forwarded-for is authoritative on Vercel (can't be spoofed by client)
                 const ip = req.headers['x-vercel-forwarded-for']?.split(',')[0]?.trim() || req.headers['x-real-ip'] || req.headers['x-forwarded-for']?.split(',').pop()?.trim() || req.ip || 'unknown';
-                const ANON_DAILY_LIMIT = 3;
+                const ANON_DAILY_LIMIT = 1;
 
             if (supabase) {
                 try {
@@ -809,8 +809,9 @@ exports.searchProduct = async (req, res) => {
 
                     if (!error && count >= ANON_DAILY_LIMIT) {
                         return res.status(402).json({
-                            error: `Límite diario de ${ANON_DAILY_LIMIT} búsquedas gratuitas alcanzado. Inicia sesión o hazte VIP para más búsquedas.`,
-                            paywall: true
+                            error: 'Inicia sesión para seguir buscando gratis.',
+                            paywall: false,
+                            login_required: true
                         });
                     }
                     // Log this anonymous search (fire & forget)
@@ -826,8 +827,9 @@ exports.searchProduct = async (req, res) => {
                 global._anonSearchLog[ipKey] = (global._anonSearchLog[ipKey] || 0) + 1;
                 if (global._anonSearchLog[ipKey] > ANON_DAILY_LIMIT) {
                     return res.status(402).json({
-                        error: `Límite diario de ${ANON_DAILY_LIMIT} búsquedas gratuitas alcanzado. Inicia sesión o hazte VIP para más búsquedas.`,
-                        paywall: true
+                        error: 'Inicia sesión para seguir buscando gratis.',
+                        paywall: false,
+                        login_required: true
                     });
                 }
             }
@@ -838,8 +840,8 @@ exports.searchProduct = async (req, res) => {
         if (userId && supabase) {
             const { data: profile } = await supabase.from('profiles').select('plan, is_premium, vip_temp_unlocked_at').eq('id', userId).single();
             if (profile) {
-                let reqLimit = 3;
-                let isDaily = true;
+                let reqLimit = 10;
+                let isDaily = false;
                 let planName = 'Gratis';
 
                 // SEC-3: Check if user has active temporary VIP from Lumu Coins (1 hour window)
@@ -848,7 +850,7 @@ exports.searchProduct = async (req, res) => {
                     (Date.now() - new Date(profile.vip_temp_unlocked_at).getTime()) < VIP_TEMP_DURATION_MS;
 
                 if (profile.plan === 'b2b' || profile.plan === 'b2b_annual') {
-                    reqLimit = 250;
+                    reqLimit = 200;
                     isDaily = false;
                     planName = profile.plan === 'b2b_annual' ? 'Revendedor B2B Anual' : 'Revendedor B2B';
                 } else if (profile.is_premium || profile.plan === 'personal_vip' || profile.plan === 'personal_vip_annual') {
@@ -864,9 +866,11 @@ exports.searchProduct = async (req, res) => {
                 let queryDate = new Date();
                 if (isDaily) {
                     queryDate.setHours(0, 0, 0, 0);
-                } else {
+                } else if (profile.plan === 'b2b' || profile.plan === 'b2b_annual' || profile.is_premium || profile.plan === 'personal_vip' || profile.plan === 'personal_vip_annual') {
                     queryDate.setDate(1); // Inicio de mes
                     queryDate.setHours(0, 0, 0, 0);
+                } else {
+                    queryDate = new Date('2000-01-01T00:00:00.000Z');
                 }
 
                 const { count, error } = await supabase.from('searches')
@@ -891,7 +895,9 @@ exports.searchProduct = async (req, res) => {
                     if (effectiveUsed >= reqLimit) {
                         const errorMsg = isDaily
                             ? 'Límite diario de búsquedas gratuitas alcanzado. Mejora a VIP para búsquedas sin límites.'
-                            : `Tu capacidad de uso mensual para el plan ${planName} ya se utilizó en este ciclo. Por favor espera a tu siguiente ciclo o contacta a soporte.`;
+                            : (planName === 'Gratis'
+                                ? 'Has agotado tus 10 búsquedas gratuitas. Elige un plan para seguir buscando.'
+                                : `Tu capacidad de uso mensual para el plan ${planName} ya se utilizó en este ciclo. Por favor espera a tu siguiente ciclo o contacta a soporte.`);
                         return res.status(402).json({
                             error: errorMsg,
                             paywall: !profile.is_premium && !hasTempVIP,
@@ -901,9 +907,13 @@ exports.searchProduct = async (req, res) => {
 
                     // Generar Warning si está cerca del límite
                     if (!isDaily && effectiveUsed >= reqLimit * 0.9) {
-                        usageWarning = '⚠️ Te estás acercando a la capacidad de uso de tu ciclo actual.';
+                        usageWarning = planName === 'Gratis'
+                            ? `⚠️ Te quedan ${Math.max(0, reqLimit - effectiveUsed)} búsquedas gratuitas en tu cuenta.`
+                            : '⚠️ Te estás acercando a la capacidad de uso de tu ciclo actual.';
                     } else if (isDaily && effectiveUsed === reqLimit - 1) {
                         usageWarning = `âš ï¸ Te queda 1 búsqueda gratuita hoy.`;
+                    } else if (planName === 'Gratis' && effectiveUsed >= Math.max(0, reqLimit - 3)) {
+                        usageWarning = `⚠️ Te quedan ${Math.max(0, reqLimit - effectiveUsed)} búsquedas gratuitas en tu cuenta.`;
                     }
                 }
             }
@@ -2036,6 +2046,7 @@ exports.searchProduct = async (req, res) => {
         clearTimeout(timeoutId);
 
         // 6. Devolver respuesta estandarizada al frontend
+        const estimatedCostUsd = estimateSearchCostUsd(costMetrics);
         logSearchCostMetrics('search.results', costMetrics, {
             query: searchQuery,
             userId: Boolean(userId),
@@ -2060,7 +2071,8 @@ exports.searchProduct = async (req, res) => {
                 needs_disambiguation: llmAnalysis.needsDisambiguation,
                 disambiguation_options: llmAnalysis.disambiguationOptions,
                 commercial_readiness: llmAnalysis.commercialReadiness,
-                reasoning: llmAnalysis.reasoning || null
+                reasoning: llmAnalysis.reasoning || null,
+                estimatedCostUsd
             },
             best_buy_summary: finalProductsConCupones[0]
                 ? {
@@ -2120,12 +2132,12 @@ exports.bulkSearch = async (req, res) => {
             return res.status(503).json({ error: 'Base de datos no disponible' });
         }
         const { data: profile } = await supabase.from('profiles').select('plan, is_premium').eq('id', userId).single();
-        if (!profile || (!profile.is_premium && profile.plan !== 'b2b')) {
+        if (!profile || (!profile.is_premium && profile.plan !== 'b2b' && profile.plan !== 'b2b_annual')) {
             return res.status(402).json({ error: 'Esta función es exclusiva del Plan Revendedor VIP ($199 MXN/mes). Actualiza tu cuenta para acceder.', upgrade_required: true });
         }
 
         // --- Verificación de Límite Mensual B2B ---
-        let reqLimit = 500;
+        let reqLimit = 200;
         let queryDate = new Date();
         queryDate.setDate(1);
         queryDate.setHours(0, 0, 0, 0);

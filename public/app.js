@@ -3367,7 +3367,7 @@ async function initApp() {
             if (searchesLeft) {
                 searchesLeft.textContent = isVIP
                     ? ui.profile.searchesLeftUnlimited
-                    : ui.profile.searchesLeft.replace('{count}', Math.max(0, 5 - searchData.count));
+                    : ui.profile.searchesLeft.replace('{count}', Math.max(0, 10 - searchData.count));
             }
 
             profileModal.classList.remove('invisible', 'opacity-0');
@@ -4181,6 +4181,14 @@ async function initApp() {
                     }
                     if (response.status === 402) {
                         removeTypingIndicator();
+                        if (data.login_required) {
+                            addChatBubble('ai', `🔐 ${data.error || getLocalizedText('Inicia sesión para seguir buscando gratis.', 'Sign in to keep searching for free.')}`, [], false);
+                            if (typeof openModal === 'function') {
+                                openModal();
+                            }
+                            resultsWrapper.classList.add('hidden');
+                            return;
+                        }
                         const isPaywall = data.paywall;
                         const vipLink = stripePaymentLink || '#';
                         const vipUrl = vipLink !== '#' && currentUser ? `${vipLink}?client_reference_id=${encodeURIComponent(currentUser.id)}` : vipLink;
