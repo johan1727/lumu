@@ -860,8 +860,8 @@ ${extraContext}`;
     - "generic": Categoría sin modelo ("laptop para gaming", "audífonos buenos")
     - "need_based": Necesidad sin producto claro ("algo para correr", "regalo para mamá")
     - "conversational": Saludo, charla, o pregunta sin intención de compra ("hola", "gracias", "qué tal")
-    - "speculative": Producto no lanzado, rumor, futuro ("iPhone 17", "PS6", "Galaxy S26")
-    - "comparison": Comparando 2+ productos ("A vs B", "cuál es mejor A o B")
+    - "speculative": Producto no lanzado, rumor, futuro ("iPhone 17", "PS6", "Galaxy S26"). Si aplica: isSpeculative=true, commercialReadiness=0.1-0.3, usa como searchQuery el modelo actual más cercano y manda el especulativo a alternativeQueries.
+    - "comparison": Comparando 2+ productos ("A vs B", "cuál es mejor A o B"). Si aplica: isComparison=true, searchQuery = el producto más comprable y el resto va en alternativeQueries + comparisonProducts.
     - "coupon_deal": Busca ofertas/cupones/descuentos ("ofertas buen fin", "cupón Amazon")
     - "url_like": Parece una URL o dominio
     - "cross_locale": Producto que suele buscarse en otro idioma al de la región
@@ -882,17 +882,10 @@ ${extraContext}`;
     - reasoning: 1 frase corta explicando tu decisión de búsqueda (máx 50 palabras)
     - excludeTerms: array de palabras a excluir para evitar accesorios/basura (ej: ["funda","case","protector","cable"] para búsqueda de celular)
     - brandOfficialQuery: si el producto tiene tienda oficial (Apple, Samsung, Nike, etc), genera un query optimizado para esa tienda. null si no aplica.
-
-    PASO 4 — DETECCIÓN ESPECIAL:
-    A) ESPECULATIVO (isSpeculative=true):
-       Si el producto NO existe aún o es rumor (fecha futura, modelo no anunciado): isSpeculative=true, commercialReadiness=0.1-0.3.
-       Busca el modelo actual más cercano como searchQuery y el especulativo en alternativeQueries.
-    B) AMBIGUO (needsDisambiguation=true):
-       Si hay múltiples interpretaciones posibles: needsDisambiguation=true.
-       Llena disambiguationOptions con las opciones (ej: "apple" → ["Apple iPhone","Apple MacBook","Apple Watch","Apple iPad"]).
-       Aún así genera un searchQuery con la interpretación más probable.
-    C) COMPARACIÓN (isComparison=true):
-       searchQuery = el producto más específico/comprable. Todos los demás en alternativeQueries + comparisonProducts.
+    - needsDisambiguation: true si hay múltiples interpretaciones válidas. Llena disambiguationOptions (ej: "apple" → ["Apple iPhone","Apple MacBook","Apple Watch","Apple iPad"]). Aún así genera searchQuery con la interpretación más probable.
+    - disambiguationOptions: opciones concretas cuando la query es ambigua
+    - isSpeculative: true si el producto aún no existe, es rumor o es futuro
+    - isComparison + comparisonProducts: úsalo cuando el usuario compare 2+ productos
 
     === REGLAS GENERALES ===
     1. ACCIÓN: "search" si hay producto/compra, "search_service" para servicios locales (plomero, dentista, restaurante), "ask" SOLO si realmente no puedes buscar.
@@ -900,17 +893,16 @@ ${extraContext}`;
     3. condition: "new" por defecto, "used" solo si dice usado/seminuevo/refurbished.
     4. alternativeQueries: 3-5 variaciones de alta calidad pensando en catálogos de ${regionContext.storeHints}. INCLUYE al menos una variante de oferta/descuento. NO uses "site:".
     5. IDIOMA: Región ${regionCode}. Para US usa inglés. Para LatAm usa español excepto nombres de producto que se buscan mejor en inglés (ej: "AirPods Pro" no se traduce).
-    6. SLANG: El sistema ya pre-expandió slang → revisa el campo "Texto pre-expandido" en el system prompt.
-    7. TYPOS: Corrige en normalizedQuery y searchQuery ("iphome"→"iphone", "samung"→"samsung").
-    8. MULTI-CATEGORÍA: Elige UNA categoría para searchQuery, las demás van a alternativeQueries.
-    9. PRESUPUESTO: Extrae maxBudget en ${regionContext.currency} si el usuario lo menciona.
-    10. NO-COMPRABLES: Vehículos, inmuebles → intent_type="otro". Restaurantes/servicios → "servicio_local".
-    11. canonicalKey: "marca_modelo_variante" en minúsculas sin caracteres especiales.
-    12. priceVolatility: "high" (electrónica, gaming, flash sales), "low" (muebles, ropa básica), "medium" (resto).
-    13. productCategory: etiqueta corta: smartphone, laptop, audio, tv, fashion, home, gaming, appliance, beauty, sports, toys, local_service.
-    14. aiSummary: 1-2 frases de guía de compra concreta y útil. null si no aporta.
-    15. CONVERSACIÓN: Saludos sin producto → action="ask", sugiere 3 categorías populares.
-    16. CUPONES: Si conoces códigos de descuento activos para la marca/tienda, ponlos en cupon.
+    6. TYPOS Y SLANG: Corrige usando normalizedQuery y searchQuery; el sistema ya pre-expandió slang.
+    7. MULTI-CATEGORÍA: Elige UNA categoría para searchQuery, las demás van a alternativeQueries.
+    8. PRESUPUESTO: Extrae maxBudget en ${regionContext.currency} si el usuario lo menciona.
+    9. NO-COMPRABLES: Vehículos, inmuebles → intent_type="otro". Restaurantes/servicios → "servicio_local".
+    10. canonicalKey: "marca_modelo_variante" en minúsculas sin caracteres especiales.
+    11. priceVolatility: "high" (electrónica, gaming, flash sales), "low" (muebles, ropa básica), "medium" (resto).
+    12. productCategory: etiqueta corta: smartphone, laptop, audio, tv, fashion, home, gaming, appliance, beauty, sports, toys, local_service.
+    13. aiSummary: 1-2 frases de guía de compra concreta y útil. null si no aporta.
+    14. CONVERSACIÓN: Saludos sin producto → action="ask", sugiere 3 categorías populares.
+    15. CUPONES: Si conoces códigos de descuento activos para la marca/tienda, ponlos en cupon.
 
     === EJEMPLOS (FEW-SHOT) ===
     Input: "busco unos airpods"

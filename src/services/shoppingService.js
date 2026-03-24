@@ -438,6 +438,8 @@ exports.searchGoogleShopping = async (query, radius, lat, lng, intentType, abort
         alternativeQueries
     });
     const shouldQueryOfficialWeb = !isSpecificProduct && shouldRunOfficialWebQuery(webQuery, brandOfficialQuery, countryCode);
+    const shouldQueryMlAmazon = !isSpecificProduct;
+    const shouldQueryMlPriority = !isSpecificProduct && preferredStoreKeys.length === 0;
     const shouldRunDirectScrapers = !isService
         && intentType !== 'mayoreo_perecedero'
         && (!isLocalFastMode || isBroadExploration || ['smartphone', 'laptop', 'audio', 'tv', 'fashion', 'home', 'appliance'].includes(String(productCategory || '').toLowerCase()));
@@ -528,7 +530,7 @@ exports.searchGoogleShopping = async (query, radius, lat, lng, intentType, abort
                 headers: { 'X-API-KEY': apiKey, 'Content-Type': 'application/json' },
                 data: JSON.stringify({
                     q: regionConfigService.buildBroadWebSearchQuery(query, countryCode),
-                    gl: regionCfg.gl, hl: regionCfg.hl, num: countryCode === 'US' ? 20 : 15
+                    gl: regionCfg.gl, hl: regionCfg.hl, num: 10
                 }),
                 timeout: serperTimeout,
                 signal: abortSignal
@@ -562,20 +564,22 @@ exports.searchGoogleShopping = async (query, radius, lat, lng, intentType, abort
                         : countryCode === 'PE'
                             ? 'site:mercadolibre.com.pe OR site:amazon.com'
                             : 'site:mercadolibre.com.mx OR site:amazon.com.mx';
-        const mlAmazonPromise = fetchWithRetry({
-            method: 'post',
-            url: 'https://google.serper.dev/search',
-            headers: { 'X-API-KEY': apiKey, 'Content-Type': 'application/json' },
-            data: JSON.stringify({
-                q: `${webQuery} ${mlAmazonDomains}`,
-                gl: regionCfg.gl, hl: regionCfg.hl, num: 20
-            }),
-            timeout: serperTimeout,
-            signal: abortSignal
-        }, serperRetries).catch(err => { console.error('Error Serper ML+Amazon:', err.message); return null; });
+        const mlAmazonPromise = shouldQueryMlAmazon
+            ? fetchWithRetry({
+                method: 'post',
+                url: 'https://google.serper.dev/search',
+                headers: { 'X-API-KEY': apiKey, 'Content-Type': 'application/json' },
+                data: JSON.stringify({
+                    q: `${webQuery} ${mlAmazonDomains}`,
+                    gl: regionCfg.gl, hl: regionCfg.hl, num: 10
+                }),
+                timeout: serperTimeout,
+                signal: abortSignal
+            }, serperRetries).catch(err => { console.error('Error Serper ML+Amazon:', err.message); return null; })
+            : Promise.resolve(null);
 
         const mercadoLibreDomain = getMercadoLibreDomain(countryCode);
-        const mlPriorityPromise = isSpecificProduct
+        const mlPriorityPromise = !shouldQueryMlPriority
             ? Promise.resolve(null)
             : fetchWithRetry({
                 method: 'post',

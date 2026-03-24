@@ -698,7 +698,9 @@ function bumpProviderCostMetrics(metrics, { intentType, radius, lat, lng }) {
         || alternativeQueries.length >= 2
         || ['fashion', 'home', 'appliance'].includes(productCategory));
     const shouldQueryOfficialWeb = !isSpecificProduct && Boolean(String(brandOfficialQuery || '').trim());
-    const shouldQueryMlPriority = !isSpecificProduct;
+    const preferredStoreKeys = Array.isArray(arguments[1]?.preferredStoreKeys) ? arguments[1].preferredStoreKeys.filter(Boolean) : [];
+    const shouldQueryMlAmazon = !isSpecificProduct;
+    const shouldQueryMlPriority = !isSpecificProduct && preferredStoreKeys.length === 0;
     const isLocalFastMode = process.env.NODE_ENV !== 'production' && process.env.FORCE_FULL_SEARCH !== 'true';
     const serperAltQueryCount = isSpecificProduct ? 0 : (isLocalFastMode
         ? 1
@@ -709,7 +711,7 @@ function bumpProviderCostMetrics(metrics, { intentType, radius, lat, lng }) {
     );
 
     metrics.serperShoppingCalls += 1 + altShoppingCalls;
-    metrics.serperWebCalls += 2 + (shouldQueryBroadWeb ? 1 : 0) + (shouldQueryOfficialWeb ? 1 : 0) + (shouldQueryMlPriority ? 1 : 0);
+    metrics.serperWebCalls += 1 + (shouldQueryBroadWeb ? 1 : 0) + (shouldQueryOfficialWeb ? 1 : 0) + (shouldQueryMlAmazon ? 1 : 0) + (shouldQueryMlPriority ? 1 : 0);
 
     if (hasLocation) {
         metrics.serperPlacesCalls += 1;
