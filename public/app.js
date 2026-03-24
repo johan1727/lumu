@@ -1131,6 +1131,7 @@ function applyOnboardingPreference(preference = '') {
 function buildWelcomeOnboardingModal() {
     const existing = document.getElementById('welcome-onboarding-modal');
     if (existing) return existing;
+    const _onbEs = /^es\b/i.test(navigator.language || '');
 
     const overlay = document.createElement('div');
     overlay.id = 'welcome-onboarding-modal';
@@ -1141,9 +1142,9 @@ function buildWelcomeOnboardingModal() {
                 <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M6 18L18 6M6 6l12 12"></path></svg>
             </button>
             <div class="bg-gradient-to-br from-emerald-500 via-teal-500 to-cyan-500 px-6 py-8 text-white md:px-8">
-                <div class="inline-flex items-center rounded-full bg-white/15 px-3 py-1 text-[11px] font-black uppercase tracking-[0.25em]">Welcome to Lumu</div>
-                <h2 id="welcome-onboarding-title" class="mt-4 text-3xl font-black leading-tight">Where are you shopping from?</h2>
-                <p id="welcome-onboarding-copy" class="mt-2 max-w-xl text-sm font-medium text-emerald-50/90">Pick your country so we can show the right stores, prices and currency from the start.</p>
+                <div class="inline-flex items-center rounded-full bg-white/15 px-3 py-1 text-[11px] font-black uppercase tracking-[0.25em]">${_onbEs ? 'Bienvenido a Lumu' : 'Welcome to Lumu'}</div>
+                <h2 id="welcome-onboarding-title" class="mt-4 text-3xl font-black leading-tight">${_onbEs ? '¿Desde dónde compras?' : 'Where are you shopping from?'}</h2>
+                <p id="welcome-onboarding-copy" class="mt-2 max-w-xl text-sm font-medium text-emerald-50/90">${_onbEs ? 'Elige tu país para mostrarte las tiendas, precios y moneda correctos.' : 'Pick your country so we can show the right stores, prices and currency from the start.'}</p>
             </div>
             <div class="px-6 py-6 md:px-8 md:py-8">
                 <div id="welcome-onboarding-step-1" class="space-y-4">
@@ -1158,16 +1159,16 @@ function buildWelcomeOnboardingModal() {
                 </div>
                 <div id="welcome-onboarding-step-2" class="hidden space-y-4">
                     <div class="grid gap-3">
-                        <button type="button" data-pref-choice="cheapest" class="welcome-pref-option rounded-2xl border border-slate-200 px-4 py-4 text-left transition hover:border-emerald-300 hover:bg-emerald-50"><div class="text-sm font-black text-slate-900">💰 Cheapest price</div><div class="mt-1 text-xs font-medium text-slate-500">We prioritize lower prices first.</div></button>
-                        <button type="button" data-pref-choice="best_value" class="welcome-pref-option rounded-2xl border border-slate-200 px-4 py-4 text-left transition hover:border-emerald-300 hover:bg-emerald-50"><div class="text-sm font-black text-slate-900">⭐ Best value</div><div class="mt-1 text-xs font-medium text-slate-500">Balance price, trust and product quality.</div></button>
-                        <button type="button" data-pref-choice="trusted" class="welcome-pref-option rounded-2xl border border-slate-200 px-4 py-4 text-left transition hover:border-emerald-300 hover:bg-emerald-50"><div class="text-sm font-black text-slate-900">🏪 Trusted stores only</div><div class="mt-1 text-xs font-medium text-slate-500">Start with safer stores and official sellers.</div></button>
+                        <button type="button" data-pref-choice="cheapest" class="welcome-pref-option rounded-2xl border border-slate-200 px-4 py-4 text-left transition hover:border-emerald-300 hover:bg-emerald-50"><div class="text-sm font-black text-slate-900">${_onbEs ? '💰 Precio más bajo' : '💰 Cheapest price'}</div><div class="mt-1 text-xs font-medium text-slate-500">${_onbEs ? 'Priorizamos los precios más bajos primero.' : 'We prioritize lower prices first.'}</div></button>
+                        <button type="button" data-pref-choice="best_value" class="welcome-pref-option rounded-2xl border border-slate-200 px-4 py-4 text-left transition hover:border-emerald-300 hover:bg-emerald-50"><div class="text-sm font-black text-slate-900">${_onbEs ? '⭐ Mejor relación calidad-precio' : '⭐ Best value'}</div><div class="mt-1 text-xs font-medium text-slate-500">${_onbEs ? 'Equilibrio entre precio, confianza y calidad.' : 'Balance price, trust and product quality.'}</div></button>
+                        <button type="button" data-pref-choice="trusted" class="welcome-pref-option rounded-2xl border border-slate-200 px-4 py-4 text-left transition hover:border-emerald-300 hover:bg-emerald-50"><div class="text-sm font-black text-slate-900">${_onbEs ? '🏪 Solo tiendas seguras' : '🏪 Trusted stores only'}</div><div class="mt-1 text-xs font-medium text-slate-500">${_onbEs ? 'Empezar con tiendas oficiales y vendedores verificados.' : 'Start with safer stores and official sellers.'}</div></button>
                     </div>
                 </div>
                 <div class="mt-6 flex items-center justify-between gap-3 border-t border-slate-100 pt-4">
-                    <button id="welcome-onboarding-back" type="button" class="hidden rounded-2xl border border-slate-200 px-4 py-2 text-sm font-bold text-slate-600 transition hover:bg-slate-50">Back</button>
+                    <button id="welcome-onboarding-back" type="button" class="hidden rounded-2xl border border-slate-200 px-4 py-2 text-sm font-bold text-slate-600 transition hover:bg-slate-50">${_onbEs ? 'Atrás' : 'Back'}</button>
                     <div class="ml-auto flex items-center gap-2">
-                        <button id="welcome-onboarding-skip" type="button" class="rounded-2xl border border-slate-200 px-4 py-2 text-sm font-bold text-slate-500 transition hover:bg-slate-50">Skip</button>
-                        <button id="welcome-onboarding-next" type="button" class="rounded-2xl bg-slate-900 px-5 py-2.5 text-sm font-black text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-50" disabled>Continue</button>
+                        <button id="welcome-onboarding-skip" type="button" class="rounded-2xl border border-slate-200 px-4 py-2 text-sm font-bold text-slate-500 transition hover:bg-slate-50">${_onbEs ? 'Saltar' : 'Skip'}</button>
+                        <button id="welcome-onboarding-next" type="button" class="rounded-2xl bg-slate-900 px-5 py-2.5 text-sm font-black text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-50" disabled>${_onbEs ? 'Continuar' : 'Continue'}</button>
                     </div>
                 </div>
             </div>
@@ -1213,11 +1214,16 @@ function initWelcomeOnboarding() {
         step1.classList.toggle('hidden', !isStepOne);
         step2.classList.toggle('hidden', isStepOne);
         backBtn.classList.toggle('hidden', isStepOne);
-        title.textContent = isStepOne ? 'Where are you shopping from?' : 'What matters most to you?';
+        const _sEs = /^es\b/i.test(navigator.language || '');
+        title.textContent = isStepOne
+            ? (_sEs ? '¿Desde dónde compras?' : 'Where are you shopping from?')
+            : (_sEs ? '¿Qué es lo más importante para ti?' : 'What matters most to you?');
         copy.textContent = isStepOne
-            ? 'Pick your country so we can show the right stores, prices and currency from the start.'
-            : 'Choose a default shopping style. You can still change filters any time.';
-        nextBtn.textContent = isStepOne ? 'Continue' : 'Start using Lumu';
+            ? (_sEs ? 'Elige tu país para mostrarte las tiendas, precios y moneda correctos.' : 'Pick your country so we can show the right stores, prices and currency from the start.')
+            : (_sEs ? 'Elige un estilo de búsqueda. Puedes cambiar los filtros cuando quieras.' : 'Choose a default shopping style. You can still change filters any time.');
+        nextBtn.textContent = isStepOne
+            ? (_sEs ? 'Continuar' : 'Continue')
+            : (_sEs ? 'Empezar a usar Lumu' : 'Start using Lumu');
         nextBtn.disabled = isStepOne ? !selectedRegion : !selectedPreference;
     };
 
