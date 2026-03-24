@@ -55,6 +55,13 @@ const feedbackSchema = z.object({
     user_email: z.string().email('user_email debe ser email válido').nullable().optional()
 });
 
+const priceAlertSchema = z.object({
+    product_name: z.string().trim().min(2, 'Nombre de producto inválido.').max(200),
+    target_price: z.coerce.number().positive('Precio meta debe ser mayor a 0.'),
+    product_url: z.string().url('URL de producto inválida.').max(2000).nullable().optional(),
+    store_name: z.string().trim().max(100).nullable().optional()
+});
+
 const trackEventSchema = z.object({
     event_type: z.enum(['click', 'ad_view', 'ad_skip', 'search', 'favorite', 'favorite_remove', 'alert_create', 'compare', 'history_open', 'feedback_positive', 'feedback_negative', 'zero_results', 'bounce', 'auth_modal_open', 'auth_modal_dismiss', 'signup_complete', 'signup_bonus', 'page_view', 'pricing_view', 'checkout_click', 'purchase'], {
         errorMap: () => ({ message: 'event_type inválido para tracking' })
@@ -85,5 +92,6 @@ module.exports = {
     visionSchema,
     memorySchema,
     feedbackSchema,
+    priceAlertSchema,
     trackEventSchema
 };

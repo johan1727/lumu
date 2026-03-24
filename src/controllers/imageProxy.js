@@ -1,5 +1,18 @@
 const axios = require('axios');
 
+function isBlockedHostname(hostname = '') {
+    const normalized = String(hostname || '').trim().toLowerCase();
+    if (!normalized) return true;
+    if (normalized === 'localhost' || normalized.endsWith('.localhost')) return true;
+    if (normalized === '0.0.0.0' || normalized === '::1' || normalized === '[::1]') return true;
+    if (/^127\./.test(normalized)) return true;
+    if (/^10\./.test(normalized)) return true;
+    if (/^192\.168\./.test(normalized)) return true;
+    if (/^169\.254\./.test(normalized)) return true;
+    if (/^172\.(1[6-9]|2\d|3[0-1])\./.test(normalized)) return true;
+    return false;
+}
+
 exports.proxyImage = async (req, res) => {
     try {
         const { url } = req.query;
@@ -10,6 +23,9 @@ exports.proxyImage = async (req, res) => {
         // Validate basic URL structure
         const parsedUrl = new URL(url);
         if (parsedUrl.protocol !== 'http:' && parsedUrl.protocol !== 'https:') {
+            return res.status(400).send('URL inválida');
+        }
+        if (parsedUrl.username || parsedUrl.password || isBlockedHostname(parsedUrl.hostname)) {
             return res.status(400).send('URL inválida');
         }
 
@@ -26,9 +42,10 @@ exports.proxyImage = async (req, res) => {
 
         // Copy content type from source image
         const contentType = response.headers['content-type'];
-        if (contentType) {
-            res.setHeader('Content-Type', contentType);
+        if (!contentType || !String(contentType).toLowerCase().startsWith('image/')) {
+            return res.status(400).send('Recurso inválido');
         }
+        res.setHeader('Content-Type', contentType);
 
         // Add caching headers so the browser doesn't refetch the same image constantly
         res.setHeader('Cache-Control', 'public, max-age=86400'); // Cache for 24 hours

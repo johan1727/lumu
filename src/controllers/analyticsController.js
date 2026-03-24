@@ -8,6 +8,16 @@ function clampNumber(value, { min = 0, max = Number.MAX_SAFE_INTEGER } = {}) {
     return Math.max(min, Math.min(max, parsed));
 }
 
+function startOfDay(date = new Date()) {
+    const value = new Date(date);
+    value.setHours(0, 0, 0, 0);
+    return value;
+}
+
+function isoDay(date = new Date()) {
+    return startOfDay(date).toISOString().split('T')[0];
+}
+
 function normalizeText(value, maxLen = 200) {
     const normalized = String(value || '').trim();
     return normalized ? normalized.slice(0, maxLen) : null;
@@ -421,4 +431,129 @@ async function getScraperHealth(req, res) {
     }
 }
 
-module.exports = { trackEvent, getAnalytics, getLLMLogs, getScraperHealth };
+async function getBusinessStats(req, res) {
+    try {
+        if (!supabase) return res.status(503).json({ error: 'Base de datos no disponible' });
+
+        const now = new Date();
+        const todayStart = startOfDay(now);
+        const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+        const sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+
+        const [
+            searchesTodayResult,
+            searches30dResult,
+            profilesResult,
+            subscriptionsResult,
+            purchases30dResult,
+            affiliateClicks30dResult,
+            searchesForRetentionResult,
+            clickEvents7dResult
+        ] = await Promise.all([
+            supabase.from('searches').select('*', { count: 'exact', head: true }).gte('created_at', todayStart.toISOString()),
+            supabase.from('searches').select('*', { count: 'exact', head: true }).gte('created_at', thirtyDaysAgo.toISOString()),
+            supabase.from('profiles').select('id, created_at, plan, is_premium').gte('created_at', thirtyDaysAgo.toISOString()),
+            supabase.from('subscriptions').select('user_id, plan, status, amount_paid, currency, created_at').order('created_at', { ascending: false }).limit(5000),
+            supabase.from('click_events').select('price, created_at, action_context, brand').eq('event_type', 'purchase').gte('created_at', thirtyDaysAgo.toISOString()).limit(5000),
+            supabase.from('click_events').select('id, created_at').eq('event_type', 'click').eq('is_affiliate', true).gte('created_at', thirtyDaysAgo.toISOString()).limit(5000),
+            supabase.from('searches').select('user_id, created_at').gte('created_at', thirtyDaysAgo.toISOString()).limit(10000),
+            supabase.from('click_events').select('event_type, created_at').gte('created_at', sevenDaysAgo.toISOString()).limit(10000)
+        ]);
+
+        if (searchesTodayResult.error) throw searchesTodayResult.error;
+        if (searches30dResult.error) throw searches30dResult.error;
+        if (profilesResult.error) throw profilesResult.error;
+        if (subscriptionsResult.error) throw subscriptionsResult.error;
+        if (purchases30dResult.error) throw purchases30dResult.error;
+        if (affiliateClicks30dResult.error) throw affiliateClicks30dResult.error;
+        if (searchesForRetentionResult.error) throw searchesForRetentionResult.error;
+        if (clickEvents7dResult.error) throw clickEvents7dResult.error;
+
+        const profiles = profilesResult.data || [];
+        const subscriptions = subscriptionsResult.data || [];
+        const purchases30d = purchases30dResult.data || [];
+        const affiliateClicks30d = affiliateClicks30dResult.data || [];
+        const searchesForRetention = searchesForRetentionResult.data || [];
+        const clickEvents7d = clickEvents7dResult.data || [];
+
+        const activePaidSubscriptions = subscriptions.filter(item => ['active', 'trialing', 'paid', 'complete'].includes(String(item.status || '').toLowerCase()));
+        const vipActive = activePaidSubscriptions.filter(item => ['personal_vip', 'personal_vip_annual', 'vip'].includes(String(item.plan || '').toLowerCase())).length;
+        const b2bActive = activePaidSubscriptions.filter(item => ['b2b', 'b2b_annual'].includes(String(item.plan || '').toLowerCase())).length;
+
+        const registrationsToday = profiles.filter(item => item.created_at && item.created_at >= todayStart.toISOString()).length;
+        const registrations30d = profiles.length;
+        const totalRevenue30d = purchases30d.reduce((acc, item) => acc + Number(item.price || 0), 0);
+        const affiliateClicksCount30d = affiliateClicks30d.length;
+        const searchesToday = searchesTodayResult.count || 0;
+        const searches30d = searches30dResult.count || 0;
+        const vipConversionRate30d = registrations30d > 0 ? Number(((vipActive / registrations30d) * 100).toFixed(2)) : 0;
+        const b2bConversionRate30d = registrations30d > 0 ? Number(((b2bActive / registrations30d) * 100).toFixed(2)) : 0;
+        const avgRevenuePerPurchase30d = purchases30d.length > 0 ? Number((totalRevenue30d / purchases30d.length).toFixed(2)) : 0;
+
+        const retentionBuckets = new Map();
+        searchesForRetention.forEach(item => {
+            const userId = item.user_id;
+            if (!userId) return;
+            const createdAt = item.created_at ? new Date(item.created_at).getTime() : 0;
+            if (!createdAt) return;
+            const current = retentionBuckets.get(userId) || { first: createdAt, last: createdAt, count: 0 };
+            current.first = Math.min(current.first, createdAt);
+            current.last = Math.max(current.last, createdAt);
+            current.count += 1;
+            retentionBuckets.set(userId, current);
+        });
+
+        const retainedUsers30d = Array.from(retentionBuckets.values()).filter(item => item.count >= 2 && (item.last - item.first) >= (7 * 24 * 60 * 60 * 1000)).length;
+        const searchedUsers30d = retentionBuckets.size;
+        const retentionRate30d = searchedUsers30d > 0 ? Number(((retainedUsers30d / searchedUsers30d) * 100).toFixed(2)) : 0;
+
+        const dailyMap = new Map();
+        for (let i = 6; i >= 0; i--) {
+            const date = new Date(now.getTime() - i * 24 * 60 * 60 * 1000);
+            dailyMap.set(isoDay(date), { date: isoDay(date), searches: 0, pageViews: 0, purchases: 0 });
+        }
+
+        clickEvents7d.forEach(item => {
+            if (!item.created_at) return;
+            const key = String(item.created_at).split('T')[0];
+            const current = dailyMap.get(key);
+            if (!current) return;
+            if (item.event_type === 'search') current.searches += 1;
+            if (item.event_type === 'page_view') current.pageViews += 1;
+            if (item.event_type === 'purchase') current.purchases += 1;
+        });
+
+        const estimatedCostPerSearchUsd = 0;
+        const estimatedSearchCost30dUsd = Number((searches30d * estimatedCostPerSearchUsd).toFixed(2));
+
+        res.json({
+            summary: {
+                searchesToday,
+                searches30d,
+                registrationsToday,
+                registrations30d,
+                vipActive,
+                b2bActive,
+                vipConversionRate30d,
+                b2bConversionRate30d,
+                affiliateClicks30d: affiliateClicksCount30d,
+                purchaseCount30d: purchases30d.length,
+                revenue30d: Number(totalRevenue30d.toFixed(2)),
+                avgRevenuePerPurchase30d,
+                retentionRate30d,
+                estimatedCostPerSearchUsd,
+                estimatedSearchCost30dUsd
+            },
+            dailyTrend7d: Array.from(dailyMap.values()),
+            notes: {
+                estimatedCostPerSearchUsd: 'Configura una fuente persistente basada en logs [Search Cost] para reemplazar este valor.',
+                retention: 'Retención 30d calculada como usuarios con al menos 2 búsquedas separadas por 7+ días dentro de la ventana.'
+            }
+        });
+    } catch (err) {
+        console.error('[Analytics] getBusinessStats error:', err);
+        res.status(500).json({ error: 'Error al obtener business stats' });
+    }
+}
+
+module.exports = { trackEvent, getAnalytics, getLLMLogs, getScraperHealth, getBusinessStats };

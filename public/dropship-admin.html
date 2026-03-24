@@ -97,6 +97,7 @@
                 <button class="tab-btn tab-active pb-3 text-sm font-semibold" data-tab="dashboard" onclick="switchTab('dashboard')">📊 Dashboard</button>
                 <button class="tab-btn pb-3 text-sm font-semibold text-slate-400 hover:text-slate-600" data-tab="products" onclick="switchTab('products')">📦 Productos</button>
                 <button class="tab-btn pb-3 text-sm font-semibold text-slate-400 hover:text-slate-600" data-tab="orders" onclick="switchTab('orders')">🛒 Pedidos</button>
+                <button class="tab-btn pb-3 text-sm font-semibold text-slate-400 hover:text-slate-600" data-tab="business" onclick="switchTab('business')">💼 Negocio</button>
                 <button class="tab-btn pb-3 text-sm font-semibold text-slate-400 hover:text-slate-600" data-tab="analytics" onclick="switchTab('analytics')">📈 Conversiones</button>
                 <button class="tab-btn pb-3 text-sm font-semibold text-slate-400 hover:text-slate-600" data-tab="suppliers" onclick="switchTab('suppliers')">🔍 Proveedores</button>
             </div>
@@ -221,6 +222,104 @@
                         <tr><td colspan="7" class="px-4 py-8 text-center text-slate-400">Cargando pedidos...</td></tr>
                     </tbody>
                 </table>
+            </div>
+        </section>
+
+        <section id="tab-business" class="tab-content hidden max-w-7xl mx-auto px-4 py-8 fade-in">
+            <div class="flex items-center justify-between mb-6 gap-4 flex-wrap">
+                <div>
+                    <h2 class="text-xl font-bold text-slate-800">Dashboard de Negocio</h2>
+                    <p class="text-sm text-slate-500 mt-1">Vista ejecutiva de crecimiento, ingresos y retención</p>
+                </div>
+                <button onclick="loadBusinessStats()" class="bg-slate-100 text-slate-700 px-4 py-2.5 rounded-xl font-bold text-sm hover:bg-slate-200 transition-colors">Actualizar</button>
+            </div>
+
+            <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
+                <div class="stat-card bg-white rounded-2xl p-5 border border-slate-200">
+                    <p class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Búsquedas hoy</p>
+                    <p id="biz-searches-today" class="text-2xl font-extrabold text-slate-800">0</p>
+                </div>
+                <div class="stat-card bg-white rounded-2xl p-5 border border-slate-200">
+                    <p class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Búsquedas 30d</p>
+                    <p id="biz-searches-30d" class="text-2xl font-extrabold text-blue-600">0</p>
+                </div>
+                <div class="stat-card bg-white rounded-2xl p-5 border border-slate-200">
+                    <p class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Registros hoy</p>
+                    <p id="biz-registrations-today" class="text-2xl font-extrabold text-violet-600">0</p>
+                </div>
+                <div class="stat-card bg-white rounded-2xl p-5 border border-slate-200">
+                    <p class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Registros 30d</p>
+                    <p id="biz-registrations-30d" class="text-2xl font-extrabold text-emerald-600">0</p>
+                </div>
+            </div>
+
+            <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
+                <div class="bg-white rounded-xl p-4 border border-slate-100">
+                    <p class="text-xs text-slate-400 mb-1">VIP activos</p>
+                    <p id="biz-vip-active" class="text-lg font-bold">0</p>
+                </div>
+                <div class="bg-white rounded-xl p-4 border border-slate-100">
+                    <p class="text-xs text-slate-400 mb-1">B2B activos</p>
+                    <p id="biz-b2b-active" class="text-lg font-bold">0</p>
+                </div>
+                <div class="bg-white rounded-xl p-4 border border-slate-100">
+                    <p class="text-xs text-slate-400 mb-1">Conv. VIP 30d</p>
+                    <p id="biz-vip-conversion" class="text-lg font-bold">0%</p>
+                </div>
+                <div class="bg-white rounded-xl p-4 border border-slate-100">
+                    <p class="text-xs text-slate-400 mb-1">Conv. B2B 30d</p>
+                    <p id="biz-b2b-conversion" class="text-lg font-bold">0%</p>
+                </div>
+            </div>
+
+            <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
+                <div class="bg-white rounded-xl p-4 border border-slate-100">
+                    <p class="text-xs text-slate-400 mb-1">Ingresos 30d</p>
+                    <p id="biz-revenue-30d" class="text-lg font-bold text-emerald-600">$0</p>
+                </div>
+                <div class="bg-white rounded-xl p-4 border border-slate-100">
+                    <p class="text-xs text-slate-400 mb-1">Compras 30d</p>
+                    <p id="biz-purchases-30d" class="text-lg font-bold">0</p>
+                </div>
+                <div class="bg-white rounded-xl p-4 border border-slate-100">
+                    <p class="text-xs text-slate-400 mb-1">Ticket prom. 30d</p>
+                    <p id="biz-avg-revenue" class="text-lg font-bold">$0</p>
+                </div>
+                <div class="bg-white rounded-xl p-4 border border-slate-100">
+                    <p class="text-xs text-slate-400 mb-1">Clicks afiliado 30d</p>
+                    <p id="biz-affiliate-clicks" class="text-lg font-bold">0</p>
+                </div>
+            </div>
+
+            <div class="grid md:grid-cols-3 gap-6 mb-8">
+                <div class="bg-white rounded-2xl p-6 border border-slate-200">
+                    <h3 class="font-bold text-slate-800 mb-4">Retención</h3>
+                    <div class="flex items-end justify-between gap-4">
+                        <div>
+                            <p class="text-xs text-slate-400 mb-1">Retención 30d</p>
+                            <p id="biz-retention" class="text-3xl font-extrabold text-slate-800">0%</p>
+                        </div>
+                        <div class="w-24 h-24 rounded-full border-8 border-emerald-100 flex items-center justify-center text-emerald-600 font-extrabold text-lg" id="biz-retention-ring">0%</div>
+                    </div>
+                </div>
+                <div class="bg-white rounded-2xl p-6 border border-slate-200">
+                    <h3 class="font-bold text-slate-800 mb-4">Costo estimado</h3>
+                    <p class="text-xs text-slate-400 mb-1">Costo por búsqueda (USD)</p>
+                    <p id="biz-cost-per-search" class="text-2xl font-extrabold text-amber-600">0</p>
+                    <p class="text-xs text-slate-400 mt-4 mb-1">Costo búsquedas 30d (USD)</p>
+                    <p id="biz-cost-30d" class="text-xl font-bold text-slate-700">0</p>
+                </div>
+                <div class="bg-white rounded-2xl p-6 border border-slate-200">
+                    <h3 class="font-bold text-slate-800 mb-4">Notas</h3>
+                    <div id="biz-notes" class="space-y-3 text-sm text-slate-600">
+                        <p class="text-slate-400 text-sm">Cargando...</p>
+                    </div>
+                </div>
+            </div>
+
+            <div class="bg-white rounded-2xl p-6 border border-slate-200">
+                <h3 class="font-bold text-slate-800 mb-4">Tendencia diaria 7d</h3>
+                <div id="biz-daily" class="flex gap-2 items-end h-40"></div>
             </div>
         </section>
 
@@ -674,6 +773,7 @@ function loadAll() {
     loadStats();
     loadProducts();
     loadOrders();
+    loadBusinessStats();
     loadAnalytics();
     renderNotifications();
     requestNotifPermission();
@@ -1501,6 +1601,68 @@ async function loadAnalytics() {
         }
     } catch (err) {
         console.error('Analytics load error:', err);
+    }
+}
+
+async function loadBusinessStats() {
+    try {
+        const res = await fetch('/api/admin/business-stats', {
+            headers: { 'x-admin-key': ADMIN_KEY }
+        });
+        const data = await res.json();
+        if (!data.summary) return;
+
+        const s = data.summary;
+        document.getElementById('biz-searches-today').textContent = formatNum(s.searchesToday || 0);
+        document.getElementById('biz-searches-30d').textContent = formatNum(s.searches30d || 0);
+        document.getElementById('biz-registrations-today').textContent = formatNum(s.registrationsToday || 0);
+        document.getElementById('biz-registrations-30d').textContent = formatNum(s.registrations30d || 0);
+        document.getElementById('biz-vip-active').textContent = formatNum(s.vipActive || 0);
+        document.getElementById('biz-b2b-active').textContent = formatNum(s.b2bActive || 0);
+        document.getElementById('biz-vip-conversion').textContent = `${s.vipConversionRate30d || 0}%`;
+        document.getElementById('biz-b2b-conversion').textContent = `${s.b2bConversionRate30d || 0}%`;
+        document.getElementById('biz-revenue-30d').textContent = `$${formatNum(s.revenue30d || 0)}`;
+        document.getElementById('biz-purchases-30d').textContent = formatNum(s.purchaseCount30d || 0);
+        document.getElementById('biz-avg-revenue').textContent = `$${formatNum(s.avgRevenuePerPurchase30d || 0)}`;
+        document.getElementById('biz-affiliate-clicks').textContent = formatNum(s.affiliateClicks30d || 0);
+        document.getElementById('biz-retention').textContent = `${s.retentionRate30d || 0}%`;
+        document.getElementById('biz-retention-ring').textContent = `${s.retentionRate30d || 0}%`;
+        document.getElementById('biz-cost-per-search').textContent = formatNum(s.estimatedCostPerSearchUsd || 0);
+        document.getElementById('biz-cost-30d').textContent = formatNum(s.estimatedSearchCost30dUsd || 0);
+
+        const notesEl = document.getElementById('biz-notes');
+        const notes = data.notes || {};
+        notesEl.innerHTML = Object.entries(notes).length > 0
+            ? Object.entries(notes).map(([key, value]) => `
+                <div class="rounded-xl bg-slate-50 px-3 py-2 border border-slate-100">
+                    <p class="text-xs font-bold uppercase tracking-wide text-slate-400 mb-1">${esc(key)}</p>
+                    <p>${esc(value)}</p>
+                </div>
+            `).join('')
+            : '<p class="text-slate-400 text-sm">Sin notas</p>';
+
+        const dailyEl = document.getElementById('biz-daily');
+        if (data.dailyTrend7d && data.dailyTrend7d.length > 0) {
+            const maxVal = Math.max(...data.dailyTrend7d.map(d => Math.max(d.searches || 0, d.pageViews || 0, d.purchases || 0)), 1);
+            dailyEl.innerHTML = data.dailyTrend7d.map(d => {
+                const searchHeight = Math.max(((d.searches || 0) / maxVal) * 110, 4);
+                const pageHeight = Math.max(((d.pageViews || 0) / maxVal) * 110, 4);
+                const purchaseHeight = Math.max(((d.purchases || 0) / maxVal) * 110, 4);
+                const dayLabel = String(d.date || '').slice(5);
+                return `<div class="flex flex-col items-center gap-2 flex-1 min-w-0">
+                    <div class="flex gap-1 items-end h-28">
+                        <div class="w-3 bg-slate-300 rounded-t" style="height:${pageHeight}px" title="${d.pageViews || 0} page views"></div>
+                        <div class="w-3 bg-blue-500 rounded-t" style="height:${searchHeight}px" title="${d.searches || 0} búsquedas"></div>
+                        <div class="w-3 bg-emerald-500 rounded-t" style="height:${purchaseHeight}px" title="${d.purchases || 0} compras"></div>
+                    </div>
+                    <span class="text-[10px] text-slate-400">${esc(dayLabel)}</span>
+                </div>`;
+            }).join('');
+        } else {
+            dailyEl.innerHTML = '<p class="text-slate-400 text-sm">Sin datos</p>';
+        }
+    } catch (err) {
+        console.error('Business stats load error:', err);
     }
 }
 </script>

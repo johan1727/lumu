@@ -4,7 +4,7 @@ const searchController = require('../controllers/searchController');
 const { validateBody } = require('../middleware/validateRequest');
 const authMiddleware = require('../middleware/authMiddleware');
 const { requireAuth } = require('../middleware/authMiddleware');
-const { searchProductSchema, bulkSearchSchema, visionSchema, memorySchema, feedbackSchema, trackEventSchema } = require('../schemas/searchSchemas');
+const { searchProductSchema, bulkSearchSchema, visionSchema, memorySchema, feedbackSchema, priceAlertSchema, trackEventSchema } = require('../schemas/searchSchemas');
 const imageProxy = require('../controllers/imageProxy');
 
 const memoryController = require('../controllers/memoryController');
@@ -105,10 +105,10 @@ router.get('/price-history', priceHistoryController.getPriceHistory);
 router.post('/buscar', burstRateLimiter, authMiddleware, validateBody(searchProductSchema), searchController.searchProduct);
 
 // POST /api/vision (IA identifica producto de una imagen)
-router.post('/vision', validateBody(visionSchema), searchController.analyzeImage);
+router.post('/vision', burstRateLimiter, validateBody(visionSchema), searchController.analyzeImage);
 
 // GET /api/autocomplete (Fase 6: Auto-completar inteligente)
-router.get('/autocomplete', autocompleteController.getSuggestions);
+router.get('/autocomplete', burstRateLimiter, autocompleteController.getSuggestions);
 
 // POST /api/bulk-search (B2B Plan Revendedor)
 router.post('/bulk-search', burstRateLimiter, authMiddleware, requireAuth, validateBody(bulkSearchSchema), searchController.bulkSearch);
@@ -117,18 +117,18 @@ router.post('/bulk-search', burstRateLimiter, authMiddleware, requireAuth, valid
 router.post('/memory', authMiddleware, requireAuth, validateBody(memorySchema), memoryController.saveMemory);
 
 // POST /api/feedback (requires auth)
-router.post('/feedback', authMiddleware, requireAuth, validateBody(feedbackSchema), feedbackController.submitFeedback);
+router.post('/feedback', burstRateLimiter, authMiddleware, requireAuth, validateBody(feedbackSchema), feedbackController.submitFeedback);
 
 // Price Alerts (requires auth)
 router.get('/price-alerts', authMiddleware, requireAuth, priceAlertController.listAlerts);
-router.post('/price-alerts', authMiddleware, requireAuth, priceAlertController.createAlert);
+router.post('/price-alerts', authMiddleware, requireAuth, validateBody(priceAlertSchema), priceAlertController.createAlert);
 router.delete('/price-alerts/:id', authMiddleware, requireAuth, priceAlertController.deleteAlert);
 
 // Push notification subscription (requires auth)
 router.post('/push-subscribe', authMiddleware, requireAuth, priceAlertController.savePushSubscription);
 
 // Rewarded Ads: Claim bonus searches
-router.post('/claim-reward', authMiddleware, requireFrontendRequest, searchController.claimReward);
+router.post('/claim-reward', authMiddleware, requireAuth, requireFrontendRequest, searchController.claimReward);
 router.post('/signup-bonus', authMiddleware, requireFrontendRequest, searchController.claimSignupBonus);
 
 // GET /api/config
@@ -233,6 +233,7 @@ router.get('/admin/dropship/stats', requireAdmin, dropshipController.getStats);
 
 // Conversion Analytics (admin only)
 router.get('/admin/analytics', requireAdmin, analyticsController.getAnalytics);
+router.get('/admin/business-stats', requireAdmin, analyticsController.getBusinessStats);
 router.get('/admin/llm-logs', requireAdmin, analyticsController.getLLMLogs);
 router.get('/admin/scraper-health', requireAdmin, analyticsController.getScraperHealth);
 

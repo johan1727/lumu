@@ -2291,13 +2291,16 @@ exports.claimReward = async (req, res) => {
             return res.status(409).json({ error: 'Las búsquedas extra por anuncio no están disponibles actualmente.' });
         }
 
+        if (!userId) {
+            return res.status(401).json({ error: 'Inicia sesión para reclamar búsquedas extra.' });
+        }
+
         if (!supabase) {
             return res.json({ success: true, bonus: BONUS_SEARCHES, msg: 'Modo local (sin Supabase)' });
         }
 
         // SECURITY FIX SEC-1: Rate-limit claims to 1 per hour per user/IP
-        const ip = req.headers['x-vercel-forwarded-for']?.split(',')[0]?.trim() || req.headers['x-real-ip'] || req.headers['x-forwarded-for']?.split(',').pop()?.trim() || req.ip || 'unknown';
-        const claimKey = userId ? `claim:user:${userId}` : `claim:ip:${ip}`;
+        const claimKey = `claim:user:${userId}`;
         const oneHourAgo = new Date(Date.now() - CLAIM_COOLDOWN_MS).toISOString();
 
         try {
@@ -2320,34 +2323,11 @@ exports.claimReward = async (req, res) => {
         // Log this claim (fire & forget)
         supabase.from('rate_limits').insert({ ip: claimKey, created_at: new Date().toISOString() }).then(() => {}).catch(() => {});
 
-        if (userId) {
-            // BUG FIX: Instead of deleting from 'searches' (which reduces Lumu Coins),
-            // insert bonus credit entries into rate_limits that the rate limiter can count.
-            // The searchProduct rate limiter will subtract these credits from the used count.
-            const creditEntries = [];
-            for (let i = 0; i < BONUS_SEARCHES; i++) {
-                creditEntries.push({ ip: `bonus:user:${userId}`, created_at: new Date().toISOString() });
-            }
-            await supabase.from('rate_limits').insert(creditEntries);
-        } else {
-            // Anonymous user
-            const searchIpKey = `search:${ip}`;
-            const todayStart = new Date();
-            todayStart.setHours(0, 0, 0, 0);
-
-            const { data: recentLimits } = await supabase
-                .from('rate_limits')
-                .select('id')
-                .eq('ip', searchIpKey)
-                .gte('created_at', todayStart.toISOString())
-                .order('created_at', { ascending: false })
-                .limit(BONUS_SEARCHES);
-
-            if (recentLimits && recentLimits.length > 0) {
-                const idsToDelete = recentLimits.map(s => s.id);
-                await supabase.from('rate_limits').delete().in('id', idsToDelete);
-            }
+        const creditEntries = [];
+        for (let i = 0; i < BONUS_SEARCHES; i++) {
+            creditEntries.push({ ip: `bonus:user:${userId}`, created_at: new Date().toISOString() });
         }
+        await supabase.from('rate_limits').insert(creditEntries);
 
         return res.json({ success: true, bonus: BONUS_SEARCHES });
     } catch (err) {
@@ -2361,6 +2341,7 @@ exports.claimSignupBonus = async (req, res) => {
     try {
         const userId = req.userId || null;
         const BONUS_SEARCHES = 2;
+        const MAX_SIGNUP_BONUS_ACCOUNT_AGE_MS = 7 * 24 * 60 * 60 * 1000;
 
         if (!userId) {
             return res.status(401).json({ error: 'Inicia sesión para reclamar el bono de bienvenida.' });
@@ -2378,6 +2359,25 @@ exports.claimSignupBonus = async (req, res) => {
 
         if (!bonusCheckErr && count > 0) {
             return res.json({ success: true, bonus: 0, already_claimed: true });
+        }
+
+        const { data: profile, error: profileErr } = await supabase
+            .from('profiles')
+            .select('created_at')
+            .eq('id', userId)
+            .maybeSingle();
+
+        if (profileErr) {
+            throw profileErr;
+        }
+
+        const createdAtMs = profile?.created_at ? new Date(profile.created_at).getTime() : 0;
+        if (!createdAtMs || Number.isNaN(createdAtMs)) {
+            return res.status(403).json({ error: 'No se pudo validar la antigüedad de tu cuenta para este bono.' });
+        }
+
+        if ((Date.now() - createdAtMs) > MAX_SIGNUP_BONUS_ACCOUNT_AGE_MS) {
+            return res.status(403).json({ error: 'El bono de bienvenida solo está disponible para cuentas recientes.' });
         }
 
         await supabase.from('rate_limits').insert({ ip: bonusKey, created_at: new Date().toISOString() });
