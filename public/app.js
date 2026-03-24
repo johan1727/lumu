@@ -4212,7 +4212,7 @@ async function initApp() {
                                 : `🔒 **${getLocalizedText('Límite de búsquedas gratuitas alcanzado.', 'Free search limit reached.')}** ${getLocalizedText('Hazte VIP para obtener mayor capacidad de búsqueda.', 'Upgrade to VIP for more searches.')}`, [], false);
                             const signupButton = !currentUser ? `
                                         <button onclick="window.openSignupPrompt();" class="w-full bg-slate-900 hover:bg-slate-800 text-white px-8 py-3.5 rounded-2xl font-bold transition-all">
-                                            ${getLocalizedText('Crear cuenta gratis (+10 búsquedas)', 'Create free account (+10 searches)')}
+                                            ${getLocalizedText('Crear cuenta gratis con búsquedas bonus', 'Create free account with bonus searches')}
                                         </button>` : '';
                             resultsContainer.innerHTML = `
                                 <div class="col-span-full flex flex-col items-center text-center py-12 px-6 bg-gradient-to-br from-amber-50 to-orange-50 rounded-3xl border border-amber-200">
@@ -5279,6 +5279,8 @@ async function initApp() {
 
             const countEl = document.getElementById('results-count');
             if (countEl) countEl.textContent = `${filteredProducts.length} ${getRegionConfig().resultsFound}`;
+            const resultsSummaryEl = document.getElementById('search-results-summary');
+            if (resultsSummaryEl) resultsSummaryEl.textContent = `${filteredProducts.length} ${getRegionConfig().resultsFound}`;
 
             const localSearchData = JSON.parse(localStorage.getItem('lumu_searches_data') || '{"count":0}');
             updateCoinsProgress(localSearchData.count || 0);
