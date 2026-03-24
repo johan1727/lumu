@@ -4199,13 +4199,13 @@ async function initApp() {
                                 : `🔒 **${getLocalizedText('Límite de búsquedas gratuitas alcanzado.', 'Free search limit reached.')}** ${getLocalizedText('Hazte VIP para obtener mayor capacidad de búsqueda.', 'Upgrade to VIP for more searches.')}`, [], false);
                             const signupButton = !currentUser ? `
                                         <button onclick="window.openSignupPrompt();" class="w-full bg-slate-900 hover:bg-slate-800 text-white px-8 py-3.5 rounded-2xl font-bold transition-all">
-                                            ${getLocalizedText('Crear cuenta gratis (+5 búsquedas)', 'Create free account (+5 searches)')}
+                                            ${getLocalizedText('Crear cuenta gratis (+10 búsquedas)', 'Create free account (+10 searches)')}
                                         </button>` : '';
                             resultsContainer.innerHTML = `
                                 <div class="col-span-full flex flex-col items-center text-center py-12 px-6 bg-gradient-to-br from-amber-50 to-orange-50 rounded-3xl border border-amber-200">
                                     <div class="text-5xl mb-4">⚡</div>
                                     <h3 class="text-xl font-black text-slate-800 mb-2">${getLocalizedText('Límite Alcanzado', 'Limit Reached')}</h3>
-                                    <p class="text-slate-600 font-medium mb-6 max-w-sm">${rewardAvailable ? getLocalizedText('Desbloquea una mayor capacidad de búsqueda con VIP o gana 3 búsquedas hoy patrocinadas por anuncios.', 'Unlock more searches with VIP or earn 3 free searches today by watching an ad.') : getLocalizedText('Desbloquea una mayor capacidad de búsqueda con VIP para seguir buscando sin esperar al próximo reinicio diario.', 'Unlock more searches with VIP to keep searching without waiting for the next daily reset.')}</p>
+                                    <p class="text-slate-600 font-medium mb-6 max-w-sm">${rewardAvailable ? getLocalizedText('Desbloquea búsquedas ilimitadas con VIP o gana 3 búsquedas extra viendo un anuncio.', 'Unlock unlimited searches with VIP or earn 3 extra searches by watching an ad.') : getLocalizedText('Desbloquea búsquedas ilimitadas con VIP para seguir encontrando las mejores ofertas.', 'Unlock unlimited searches with VIP to keep finding the best deals.')}</p>
                                     <div class="flex flex-col gap-3 w-full max-w-xs">
                                         ${signupButton}
                                         <a href="${sanitize(vipUrl)}" target="_blank" class="w-full bg-amber-500 hover:bg-amber-600 text-white px-8 py-3.5 rounded-2xl font-bold transition-all shadow-lg shadow-amber-500/20">${getLocalizedText('Obtener VIP - $39 MXN/mes', 'Get VIP - $39 MXN/mo')}</a>

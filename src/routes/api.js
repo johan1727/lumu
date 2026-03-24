@@ -16,6 +16,42 @@ const priceHistoryController = require('../controllers/priceHistoryController');
 const autocompleteController = require('../controllers/autocompleteController');
 const supplierChecker = require('../services/supplierChecker');
 
+// --- Anti-burst rate limiter por IP (in-memory, serverless-safe) ---
+// Bloquea IPs que envían más de BURST_MAX requests en BURST_WINDOW_MS a /api/buscar
+const BURST_MAX = 20;           // max requests per window
+const BURST_WINDOW_MS = 60000;  // 1 minute
+const _burstLog = new Map();
+
+function burstRateLimiter(req, res, next) {
+    if (process.env.NODE_ENV !== 'production') return next();
+    const ip = req.headers['x-vercel-forwarded-for']?.split(',')[0]?.trim()
+        || req.headers['x-real-ip']
+        || req.headers['x-forwarded-for']?.split(',').pop()?.trim()
+        || req.ip || 'unknown';
+    const now = Date.now();
+    let entry = _burstLog.get(ip);
+    if (!entry || now - entry.windowStart > BURST_WINDOW_MS) {
+        entry = { windowStart: now, count: 0 };
+        _burstLog.set(ip, entry);
+    }
+    entry.count++;
+    if (entry.count > BURST_MAX) {
+        const retryAfter = Math.ceil((entry.windowStart + BURST_WINDOW_MS - now) / 1000);
+        console.warn(`[Burst Limiter] IP ${ip} blocked: ${entry.count} reqs in window`);
+        return res.status(429).json({
+            error: 'Demasiadas solicitudes. Por favor espera un momento.',
+            retry_after: retryAfter
+        });
+    }
+    // Periodic cleanup (1% chance per request)
+    if (Math.random() < 0.01) {
+        for (const [k, v] of _burstLog.entries()) {
+            if (now - v.windowStart > BURST_WINDOW_MS * 2) _burstLog.delete(k);
+        }
+    }
+    next();
+}
+
 function isAllowedFrontendRequest(req, options = {}) {
     const origin = req.headers.origin || '';
     const referer = req.headers.referer || '';
@@ -66,7 +102,7 @@ router.post('/track', authMiddleware, validateBody(trackEventSchema), analyticsC
 router.get('/price-history', priceHistoryController.getPriceHistory);
 
 // POST /api/buscar — authMiddleware verifies JWT and sets req.userId
-router.post('/buscar', authMiddleware, validateBody(searchProductSchema), searchController.searchProduct);
+router.post('/buscar', burstRateLimiter, authMiddleware, validateBody(searchProductSchema), searchController.searchProduct);
 
 // POST /api/vision (IA identifica producto de una imagen)
 router.post('/vision', validateBody(visionSchema), searchController.analyzeImage);
@@ -75,7 +111,7 @@ router.post('/vision', validateBody(visionSchema), searchController.analyzeImage
 router.get('/autocomplete', autocompleteController.getSuggestions);
 
 // POST /api/bulk-search (B2B Plan Revendedor)
-router.post('/bulk-search', authMiddleware, requireAuth, validateBody(bulkSearchSchema), searchController.bulkSearch);
+router.post('/bulk-search', burstRateLimiter, authMiddleware, requireAuth, validateBody(bulkSearchSchema), searchController.bulkSearch);
 
 // POST /api/memory (requires auth to prevent RAG poisoning)
 router.post('/memory', authMiddleware, requireAuth, validateBody(memorySchema), memoryController.saveMemory);

@@ -81,8 +81,8 @@ const normalizeProductUrl = (url) => {
  * Max 500 entries, auto-evicts oldest. Persists across requests in same serverless instance.
  * FIX: Agregar límite por instancia serverless y TTL más agresivo
  */
-const RAM_CACHE_MAX = 500;
-const RAM_CACHE_TTL_MS = 15 * 60 * 1000; // 15 minutos
+const RAM_CACHE_MAX = 1000;
+const RAM_CACHE_TTL_MS = 30 * 60 * 1000; // 30 minutos
 const _ramCache = new Map();
 const _ramCacheAccessTimes = new Map(); // Para LRU tracking
 
@@ -224,7 +224,7 @@ async function persistCacheKey(queryKey, results, priceVolatility = 'medium') {
 
     if (redisClient) {
         try {
-            await redisClient.set(`lumu:search:${queryKey}`, JSON.stringify(results), 'EX', 21600);
+            await redisClient.set(`lumu:search:${queryKey}`, JSON.stringify(results), 'EX', 43200);
         } catch(e) {
             console.error('[Redis Set Error]:', e.message);
         }

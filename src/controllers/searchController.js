@@ -1278,6 +1278,7 @@ exports.searchProduct = async (req, res) => {
                 return true;
             });
             costMetrics.cacheHit = true;
+            const cacheEstimatedCostUsd = estimateSearchCostUsd(costMetrics);
             logSearchCostMetrics('search.cache_hit', costMetrics, {
                 query: searchQuery,
                 userId: Boolean(userId),
@@ -1303,7 +1304,8 @@ exports.searchProduct = async (req, res) => {
                     needs_disambiguation: llmAnalysis.needsDisambiguation,
                     disambiguation_options: llmAnalysis.disambiguationOptions,
                     commercial_readiness: llmAnalysis.commercialReadiness,
-                    reasoning: llmAnalysis.reasoning || null
+                    reasoning: llmAnalysis.reasoning || null,
+                    estimatedCostUsd: cacheEstimatedCostUsd
                 },
                 region: {
                     country: countryCode,
