@@ -1074,6 +1074,31 @@ exports.searchProduct = async (req, res) => {
                 tipo_respuesta: 'conversacion',
                 pregunta_ia: llmAnalysis.question,
                 sugerencias: llmAnalysis.sugerencias || [],
+                region: {
+                    country: countryCode,
+                    currency: regionCfg.currency,
+                    locale: regionCfg.locale,
+                    label: regionCfg.regionLabel
+                },
+                intencion_detectada: {
+                    busqueda: query,
+                    condicion: llmAnalysis.condition || 'new',
+                    modo_condicion: conditionMode
+                },
+                search_metadata: {
+                    canonical_key: llmAnalysis.canonicalKey || '',
+                    product_category: llmAnalysis.productCategory || '',
+                    max_budget: llmAnalysis.maxBudget || null,
+                    ai_summary: llmAnalysis.aiSummary || null,
+                    is_comparison: llmAnalysis.isComparison || false,
+                    comparison_products: llmAnalysis.comparisonProducts || [],
+                    query_type: llmAnalysis.queryType || 'generic',
+                    is_speculative: llmAnalysis.isSpeculative || false,
+                    needs_disambiguation: llmAnalysis.needsDisambiguation || false,
+                    disambiguation_options: llmAnalysis.disambiguationOptions || [],
+                    commercial_readiness: llmAnalysis.commercialReadiness || 0.5,
+                    reasoning: llmAnalysis.reasoning || null
+                },
                 advertencia_uso: usageWarning
             });
         }
