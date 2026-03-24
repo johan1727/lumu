@@ -168,6 +168,10 @@ app.use(express.static(path.join(__dirname, '../public')));
 const seoController = require('../src/controllers/seoController');
 app.get('/buscar', seoController.serveCategoryIndex);
 app.get('/buscar/:slug', seoController.serveCategoryPage);
+app.get('/precio-hoy', seoController.servePricePage);
+app.get('/precio-hoy/:slug', seoController.servePricePage);
+app.get('/comparativas', seoController.serveComparisonPage);
+app.get('/comparativas/:slug', seoController.serveComparisonPage);
 
 // ============================================
 // PROTECCIÓN PARA ESCALA: Rate Limiter propio
