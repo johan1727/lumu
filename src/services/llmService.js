@@ -218,6 +218,15 @@ function inferDisambiguation(text) {
             disambiguationOptions: ['Apple iPhone', 'Apple MacBook', 'Apple Watch', 'Apple iPad']
         };
     }
+    if (/\b(apple|samsung|xiaomi|motorola|sony|lg|nike|adidas)\b/.test(normalized)
+        && /\b(barato|barata|bueno|buena|mejor|econ[oó]mico|econ[oó]mica|daily|diario|daily use|para diario)\b/.test(normalized)
+        && !inferProductCategory(normalized)
+        && !/\b(iphone|ipad|macbook|watch|airpods|imac|galaxy|redmi|poco|moto g|tenis|zapatillas|playera|sudadera)\b/.test(normalized)) {
+        return {
+            needsDisambiguation: true,
+            disambiguationOptions: ['celulares', 'laptops', 'audífonos', 'tienda oficial']
+        };
+    }
     if (/^(apple|samsung|xiaomi|motorola|sony|lg|nike|adidas)$/i.test(normalized)) {
         return {
             needsDisambiguation: true,
@@ -619,9 +628,18 @@ function repairAnalysis(rawAnalysis, originalText) {
         : buildAlternativeQueries(searchQuery, fallbackText, productCategory, searchLanguage);
     const brandOfficialQuery = analysis.brandOfficialQuery || inferOfficialQuery(searchQuery, productCategory);
     const universalQueryDomain = analysis.universalQueryDomain || inferUniversalQueryDomain(searchQuery);
+    const universalReply = buildUniversalAssistantReply(searchQuery, universalQueryDomain, productCategory);
+    const forceAskForAmbiguity = Boolean(disambiguation.needsDisambiguation && !productCategory);
 
     return {
         ...analysis,
+        action: forceAskForAmbiguity ? 'ask' : analysis.action,
+        question: forceAskForAmbiguity
+            ? (analysis.question || universalReply.message || 'Necesito un poco más de detalle para encontrar exactamente lo que buscas.')
+            : analysis.question,
+        sugerencias: forceAskForAmbiguity
+            ? ((Array.isArray(analysis.sugerencias) && analysis.sugerencias.length > 0 ? analysis.sugerencias : disambiguation.disambiguationOptions).slice(0, 4))
+            : analysis.sugerencias,
         searchQuery,
         normalizedQuery,
         canonicalKey: analysis.canonicalKey || slugifyCanonicalKey(normalizedQuery || searchQuery),

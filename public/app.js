@@ -4241,16 +4241,17 @@ async function initApp() {
 
                 resultsContainer.innerHTML = '';
 
-                if (data.tipo_respuesta === 'conversacion') {
-                    chatHistory.push({ role: 'assistant', content: data.pregunta_ia });
+                if (data.tipo_respuesta === 'conversacion' || data.tipo_respuesta === 'pregunta') {
+                    const clarificationMessage = data.pregunta_ia || data.mensaje || getLocalizedText('Necesito un poco más de detalle para ayudarte mejor.', 'I need a bit more detail to help you better.');
+                    chatHistory.push({ role: 'assistant', content: clarificationMessage });
                     chatContainer.classList.remove('hidden');
-                    addChatBubble('ai', data.pregunta_ia, data.sugerencias);
+                    addChatBubble('ai', clarificationMessage, data.sugerencias || data.search_metadata?.disambiguation_options || []);
                     if (data.advertencia_uso) {
                         setTimeout(() => addChatBubble('ai', data.advertencia_uso, [], false), 500);
                     }
                     resultsWrapper.classList.remove('hidden'); // Fix: chat lives inside results so this must be visible
                     resultsGrid.innerHTML = '';
-                    document.getElementById('results-title').innerHTML = `${getLocalizedText('Conversación con', 'Chat with')} <span class="text-emerald-500">Lumu AI</span>`;
+                    document.getElementById('results-title').innerHTML = `${getLocalizedText('Aclaremos tu búsqueda con', 'Let’s clarify your search with')} <span class="text-emerald-500">Lumu AI</span>`;
                     searchInput.value = '';
                     // Reset height
                     searchInput.style.height = '56px';
