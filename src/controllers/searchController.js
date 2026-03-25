@@ -8,19 +8,31 @@ const couponService = require('../services/couponService');
 const storeTrustService = require('../services/storeTrustService');
 const regionConfigService = require('../services/regionConfigService');
 
-function buildFallbackSuggestions(baseQuery, altQueries = []) {
+function buildFallbackSuggestions(baseQuery, altQueries = [], countryCode = 'MX') {
     const cleanBase = String(baseQuery || '').trim();
+    const isUS = countryCode === 'US';
     const baseSuggestions = cleanBase
-        ? [
-            `${cleanBase} precio`,
-            `${cleanBase} ofertas`,
-            `${cleanBase} descuento`,
-            `${cleanBase} tienda local`,
-            `${cleanBase} mercado libre`,
-            `${cleanBase} amazon`,
-            `${cleanBase} walmart`,
-            `${cleanBase} liverpool`
-        ]
+        ? isUS
+            ? [
+                `${cleanBase} price`,
+                `${cleanBase} deals`,
+                `${cleanBase} discount`,
+                `${cleanBase} local store`,
+                `${cleanBase} amazon`,
+                `${cleanBase} walmart`,
+                `${cleanBase} target`,
+                `${cleanBase} best buy`
+            ]
+            : [
+                `${cleanBase} precio`,
+                `${cleanBase} ofertas`,
+                `${cleanBase} descuento`,
+                `${cleanBase} tienda local`,
+                `${cleanBase} mercado libre`,
+                `${cleanBase} amazon`,
+                `${cleanBase} walmart`,
+                `${cleanBase} liverpool`
+            ]
         : [];
 
     return [...new Set([...(altQueries || []), ...baseSuggestions])]
@@ -30,27 +42,38 @@ function buildFallbackSuggestions(baseQuery, altQueries = []) {
 
 function buildClarifyingSuggestions(query = '', productCategory = '', countryCode = 'MX') {
     const normalized = String(query || '').trim().toLowerCase();
+    const isUS = countryCode === 'US';
     const generic = [
-        countryCode === 'US' ? 'under 300 dollars' : 'menos de 5000 pesos',
-        countryCode === 'US' ? 'official stores only' : 'solo tiendas oficiales',
-        countryCode === 'US' ? 'best value' : 'mejor calidad-precio',
-        countryCode === 'US' ? 'fast shipping' : 'envío rápido'
+        isUS ? 'under 300 dollars' : 'menos de 5000 pesos',
+        isUS ? 'official stores only' : 'solo tiendas oficiales',
+        isUS ? 'best value' : 'mejor calidad-precio',
+        isUS ? 'fast shipping' : 'envío rápido'
     ];
 
     if (productCategory === 'smartphone' || /iphone|celular|smartphone|galaxy|xiaomi|motorola/.test(normalized)) {
-        return ['menos de 7000 pesos', 'solo samsung o xiaomi', '256gb', 'mejor cámara'];
+        return isUS 
+            ? ['under 500 dollars', 'samsung or xiaomi only', '256gb', 'best camera']
+            : ['menos de 7000 pesos', 'solo samsung o xiaomi', '256gb', 'mejor cámara'];
     }
     if (productCategory === 'laptop' || /laptop|notebook|macbook|computadora/.test(normalized)) {
-        return ['para estudiar', 'para gaming', '16gb ram', 'menos de 15000 pesos'];
+        return isUS
+            ? ['for studying', 'for gaming', '16gb ram', 'under 1000 dollars']
+            : ['para estudiar', 'para gaming', '16gb ram', 'menos de 15000 pesos'];
     }
     if (productCategory === 'audio' || /aud[ií]fonos|earbuds|airpods|bocina/.test(normalized)) {
-        return ['bluetooth', 'noise cancelling', 'menos de 2000 pesos', 'mejor batería'];
+        return isUS
+            ? ['bluetooth', 'noise cancelling', 'under 150 dollars', 'best battery']
+            : ['bluetooth', 'noise cancelling', 'menos de 2000 pesos', 'mejor batería'];
     }
     if (productCategory === 'fashion' || /tenis|ropa|zapatos|calzado/.test(normalized)) {
-        return ['nike o adidas', 'hombre', 'mujer', 'running'];
+        return isUS
+            ? ['nike or adidas', 'men', 'women', 'running']
+            : ['nike o adidas', 'hombre', 'mujer', 'running'];
     }
     if (productCategory === 'home' || productCategory === 'appliance' || /hogar|electrodom[eé]sticos|cafetera|freidora|aspiradora/.test(normalized)) {
-        return ['menos de 3000 pesos', 'para cocina', 'mejor valor', 'envío rápido'];
+        return isUS
+            ? ['under 200 dollars', 'for kitchen', 'best value', 'fast shipping']
+            : ['menos de 3000 pesos', 'para cocina', 'mejor valor', 'envío rápido'];
     }
 
     return generic;
@@ -281,12 +304,20 @@ function createSearchCostMetrics() {
     return {
         llmGenerateCalls: 0,
         llmEmbeddingCalls: 0,
+        llmCacheHits: 0,
         serperShoppingCalls: 0,
         serperWebCalls: 0,
         serperPlacesCalls: 0,
+        serperBroadWebCalls: 0,
+        serperOfficialWebCalls: 0,
+        serperMlAmazonCalls: 0,
+        serperMlPriorityCalls: 0,
+        serperMlPrioritySkipped: 0,
         cacheHit: false,
         retrySearches: 0,
-        altQueryDirectCalls: 0
+        altQueryDirectCalls: 0,
+        directScraperCalls: 0,
+        supabaseQueries: 0
     };
 }
 
@@ -296,14 +327,52 @@ function parseUsdRate(envName) {
 }
 
 function estimateSearchCostUsd(metrics = {}) {
-    const total =
-        (metrics.llmGenerateCalls || 0) * parseUsdRate('EST_COST_GEMINI_GENERATE_USD') +
-        (metrics.llmEmbeddingCalls || 0) * parseUsdRate('EST_COST_GEMINI_EMBED_USD') +
-        (metrics.serperShoppingCalls || 0) * parseUsdRate('EST_COST_SERPER_SHOPPING_USD') +
-        (metrics.serperWebCalls || 0) * parseUsdRate('EST_COST_SERPER_WEB_USD') +
-        (metrics.serperPlacesCalls || 0) * parseUsdRate('EST_COST_SERPER_PLACES_USD');
-
+    const geminiCost = (metrics.llmGenerateCalls || 0) * parseUsdRate('EST_COST_GEMINI_GENERATE_USD');
+    const embeddingCost = (metrics.llmEmbeddingCalls || 0) * parseUsdRate('EST_COST_GEMINI_EMBED_USD');
+    const serperShoppingCost = (metrics.serperShoppingCalls || 0) * parseUsdRate('EST_COST_SERPER_SHOPPING_USD');
+    const serperWebCost = (
+        (metrics.serperWebCalls || 0) +
+        (metrics.serperBroadWebCalls || 0) +
+        (metrics.serperOfficialWebCalls || 0) +
+        (metrics.serperMlAmazonCalls || 0) +
+        (metrics.serperMlPriorityCalls || 0)
+    ) * parseUsdRate('EST_COST_SERPER_WEB_USD');
+    const serperPlacesCost = (metrics.serperPlacesCalls || 0) * parseUsdRate('EST_COST_SERPER_PLACES_USD');
+    
+    const total = geminiCost + embeddingCost + serperShoppingCost + serperWebCost + serperPlacesCost;
+    
     return Number(total.toFixed(6));
+}
+
+function buildCostBreakdown(metrics = {}) {
+    const geminiCost = (metrics.llmGenerateCalls || 0) * parseUsdRate('EST_COST_GEMINI_GENERATE_USD');
+    const embeddingCost = (metrics.llmEmbeddingCalls || 0) * parseUsdRate('EST_COST_GEMINI_EMBED_USD');
+    const serperShoppingCost = (metrics.serperShoppingCalls || 0) * parseUsdRate('EST_COST_SERPER_SHOPPING_USD');
+    const serperWebCost = (
+        (metrics.serperWebCalls || 0) +
+        (metrics.serperBroadWebCalls || 0) +
+        (metrics.serperOfficialWebCalls || 0) +
+        (metrics.serperMlAmazonCalls || 0) +
+        (metrics.serperMlPriorityCalls || 0)
+    ) * parseUsdRate('EST_COST_SERPER_WEB_USD');
+    const serperPlacesCost = (metrics.serperPlacesCalls || 0) * parseUsdRate('EST_COST_SERPER_PLACES_USD');
+    
+    return {
+        gemini: Number(geminiCost.toFixed(6)),
+        embedding: Number(embeddingCost.toFixed(6)),
+        serperShopping: Number(serperShoppingCost.toFixed(6)),
+        serperWeb: Number(serperWebCost.toFixed(6)),
+        serperPlaces: Number(serperPlacesCost.toFixed(6)),
+        total: Number((geminiCost + embeddingCost + serperShoppingCost + serperWebCost + serperPlacesCost).toFixed(6)),
+        savings: {
+            llmCacheHits: metrics.llmCacheHits || 0,
+            mlPrioritySkipped: metrics.serperMlPrioritySkipped || 0,
+            estimatedSavedUsd: Number((
+                (metrics.llmCacheHits || 0) * parseUsdRate('EST_COST_GEMINI_GENERATE_USD') +
+                (metrics.serperMlPrioritySkipped || 0) * parseUsdRate('EST_COST_SERPER_WEB_USD')
+            ).toFixed(6))
+        }
+    };
 }
 
 function tokenizeSearchText(value = '') {
@@ -489,20 +558,21 @@ function getAffiliatePriorityMeta(item = {}, countryCode = 'MX') {
     const text = `${item.source || ''} ${item.url || ''}`.toLowerCase();
     const normalizedCountry = String(countryCode || 'MX').toUpperCase();
     if (/mercadolibre\./.test(text) || /mercado\s*libre/.test(text)) {
-        return normalizedCountry === 'MX'
-            ? { rank: 0, boost: -320, capBoost: 4 }
-            : { rank: 1, boost: -260, capBoost: 4 };
+        return { rank: 0, boost: -320, capBoost: 4 };
     }
     if (/amazon\./.test(text) || /\bamazon\b/.test(text)) {
         if (normalizedCountry === 'MX') {
             if (/amazon\.com\.mx/.test(text)) {
-                return { rank: 1, boost: -120, capBoost: 3 };
+                return { rank: 1, boost: -140, capBoost: 3 };
             }
             if (/amazon\.com(\/|\?|$)/.test(text) || /\bamazon\b/.test(String(item.source || '').toLowerCase())) {
                 return { rank: 1, boost: -190, capBoost: 4 };
             }
         }
-        return { rank: 0, boost: -320, capBoost: 4 };
+        return { rank: 1, boost: -260, capBoost: 4 };
+    }
+    if (/aliexpress\./.test(text) || /\baliexpress\b/.test(text)) {
+        return { rank: 2, boost: -170, capBoost: 3 };
     }
     return { rank: 9, boost: 0, capBoost: 0 };
 }
@@ -711,6 +781,8 @@ function bumpProviderCostMetrics(metrics, { intentType, radius, lat, lng }) {
     );
 
     metrics.serperShoppingCalls += 1 + altShoppingCalls;
+    // Note: mlPriority is pre-counted here but may be skipped in shoppingService
+    // The actual skip is tracked via serperMlPrioritySkipped metric
     metrics.serperWebCalls += 1 + (shouldQueryBroadWeb ? 1 : 0) + (shouldQueryOfficialWeb ? 1 : 0) + (shouldQueryMlAmazon ? 1 : 0) + (shouldQueryMlPriority ? 1 : 0);
 
     if (hasLocation) {
@@ -718,14 +790,29 @@ function bumpProviderCostMetrics(metrics, { intentType, radius, lat, lng }) {
     }
 }
 
-function logSearchCostMetrics(context, metrics, extra = {}) {
-    const estimatedCostUsd = estimateSearchCostUsd(metrics);
-    console.log('[Search Cost]', JSON.stringify({
-        context,
-        ...metrics,
-        estimatedCostUsd,
-        ...extra
-    }));
+function logSearchCostMetrics(eventName, metrics = {}, context = {}) {
+    const breakdown = buildCostBreakdown(metrics);
+    const serperTotal = (metrics.serperShoppingCalls || 0) + 
+                       (metrics.serperWebCalls || 0) + 
+                       (metrics.serperBroadWebCalls || 0) + 
+                       (metrics.serperOfficialWebCalls || 0) + 
+                       (metrics.serperMlAmazonCalls || 0) + 
+                       (metrics.serperMlPriorityCalls || 0) + 
+                       (metrics.serperPlacesCalls || 0);
+    
+    console.log(`[Cost Metrics] ${eventName}`);
+    console.log(`  Total: $${breakdown.total} | Saved: $${breakdown.savings.estimatedSavedUsd}`);
+    console.log(`  Gemini: $${breakdown.gemini} (${metrics.llmGenerateCalls || 0} calls, ${metrics.llmCacheHits || 0} cached)`);
+    console.log(`  Serper: $${breakdown.serperShopping + breakdown.serperWeb + breakdown.serperPlaces} (${serperTotal} calls)`);
+    console.log(`    - Shopping: ${metrics.serperShoppingCalls || 0}`);
+    console.log(`    - Web: ${metrics.serperWebCalls || 0}`);
+    console.log(`    - BroadWeb: ${metrics.serperBroadWebCalls || 0}`);
+    console.log(`    - OfficialWeb: ${metrics.serperOfficialWebCalls || 0}`);
+    console.log(`    - ML+Amazon: ${metrics.serperMlAmazonCalls || 0}`);
+    console.log(`    - MLPriority: ${metrics.serperMlPriorityCalls || 0} (skipped: ${metrics.serperMlPrioritySkipped || 0})`);
+    console.log(`    - Places: ${metrics.serperPlacesCalls || 0}`);
+    console.log(`  Cache: ${metrics.cacheHit ? 'HIT' : 'MISS'} | Scrapers: ${metrics.directScraperCalls || 0} | DB: ${metrics.supabaseQueries || 0}`);
+    console.log(`  Query: "${String(context.query || '').slice(0, 50)}" | User: ${context.userId ? 'auth' : 'anon'} | Results: ${context.resultCount || 0}`);
 }
 
 exports.analyzeImage = async (req, res) => {
@@ -987,6 +1074,15 @@ exports.searchProduct = async (req, res) => {
                 countryCode,
                 abortSignal: abortController.signal
             });
+            
+            // Track cache hit if LLM response came from cache
+            if (llmAnalysis._cacheHit) {
+                costMetrics.llmCacheHits += 1;
+                costMetrics.llmGenerateCalls -= 1; // Don't count as API call
+                if (supabase) costMetrics.llmEmbeddingCalls -= 1;
+                delete llmAnalysis._cacheHit; // Remove internal flag
+            }
+            
             console.log('Análisis LLM:', llmAnalysis);
         }
 
@@ -1174,7 +1270,7 @@ exports.searchProduct = async (req, res) => {
                     : buildClarifyingSuggestions(rawIntentQuery, llmAnalysis.productCategory, countryCode))
                 : (llmAnalysis.needsDisambiguation
                     ? buildClarifyingSuggestions(rawIntentQuery, llmAnalysis.productCategory, countryCode)
-                    : buildFallbackSuggestions(rawIntentQuery, llmAnalysis.alternativeQueries));
+                    : buildFallbackSuggestions(rawIntentQuery, llmAnalysis.alternativeQueries, countryCode));
             return res.json({
                 tipo_respuesta: 'pregunta',
                 mensaje: llmAnalysis.question || 'Necesito un poco más de detalle para darte resultados mejor comparados y adaptados a tu compra.',
@@ -1299,7 +1395,6 @@ exports.searchProduct = async (req, res) => {
         if (cachedResults) {
             const filteredCachedResults = cachedResults.filter(item => {
                 const sourceText = `${item?.tienda || item?.source || ''} ${item?.urlOriginal || item?.url || ''}`.toLowerCase();
-                if (/aliexpress\./.test(sourceText) || /\baliexpress\b/.test(sourceText)) return false;
                 if (countryCode === 'MX' && /apple\.com\/(us-edu|ca|us-es)\//i.test(sourceText)) return false;
                 if (countryCode === 'MX' && (/apple\.com\/.+\/newsroom\//i.test(sourceText) || /apple\.com\/newsroom\//i.test(sourceText))) return false;
                 return true;
@@ -1351,6 +1446,9 @@ exports.searchProduct = async (req, res) => {
             return res.status(504).json({ error: 'La búsqueda fue cancelada por timeout.' });
         }
 
+        // Extract preferred store keys from intent memory for adaptive site: operators
+        const preferredStoreKeys = Object.keys(intentBoostMap).filter(k => intentBoostMap[k] < 0).slice(0, 4);
+
         bumpProviderCostMetrics(costMetrics, {
             intentType: llmAnalysis.intent_type,
             radius,
@@ -1360,12 +1458,11 @@ exports.searchProduct = async (req, res) => {
             brandOfficialQuery: effectiveBrandOfficialQuery,
             alternativeQueries: cleanAlternativeQueries,
             productCategory: llmAnalysis.productCategory || '',
+            preferredStoreKeys,
             queryType: llmAnalysis.queryType || 'generic'
         });
 
         console.log(`[Search Pipeline] Buscando: "${searchQuery}" | radius=${radius} | lat=${lat} | lng=${lng} | intent=${llmAnalysis.intent_type}`);
-        // Extract preferred store keys from intent memory for adaptive site: operators
-        const preferredStoreKeys = Object.keys(intentBoostMap).filter(k => intentBoostMap[k] < 0).slice(0, 4);
         const shoppingResults = await shoppingService.searchGoogleShopping(
             shoppingBaseQuery,
             radius,
@@ -1385,9 +1482,17 @@ exports.searchProduct = async (req, res) => {
                 queryType: llmAnalysis.queryType || 'generic'
             }
         );
-        console.log(`[Search Pipeline] Resultados de shoppingService: ${shoppingResults.length}`);
-
-        console.log(`[Search Pipeline] Total resultados(con alt queries): ${shoppingResults.length} `);
+        
+        // Extract optimization metadata and update cost metrics
+        if (shoppingResults._optimizationMeta) {
+            if (shoppingResults._optimizationMeta.mlPrioritySkipped) {
+                costMetrics.serperMlPrioritySkipped += 1;
+            }
+            if (shoppingResults._optimizationMeta.directScraperCalls) {
+                costMetrics.directScraperCalls += shoppingResults._optimizationMeta.directScraperCalls;
+            }
+            delete shoppingResults._optimizationMeta; // Clean up metadata
+        }
 
         const hasStrongPrimaryResultSet = shoppingResults.length >= 6;
         const hasAlternativeSignals = cleanAlternativeQueries.length > 0 || Boolean(effectiveBrandOfficialQuery);
@@ -1519,7 +1624,7 @@ exports.searchProduct = async (req, res) => {
                         label: regionCfg.regionLabel
                     },
                     top_5_baratos: [],
-                    sugerencias: buildFallbackSuggestions(searchQuery, llmAnalysis.alternativeQueries),
+                    sugerencias: buildFallbackSuggestions(searchQuery, llmAnalysis.alternativeQueries, countryCode),
                     advertencia_uso: usageWarning
                 });
             }
@@ -1534,7 +1639,6 @@ exports.searchProduct = async (req, res) => {
             item.shippingText = sanitizeShippingText(item.snippet);
             const sourceText = `${item.source || ''} ${item.url || ''}`.toLowerCase();
             item.isManufacturerDirectStore = /(?:^|\s)(apple|samsung|sony|nintendo|playstation|google store|microsoft)(?:\s|$)|apple\.com|samsung\.com|sony\.com|playstation\.com|store\.google\.com|microsoft\.com/i.test(sourceText);
-            if (/aliexpress\./.test(sourceText) || /\baliexpress\b/.test(sourceText)) return false;
             if (countryCode === 'MX' && /apple\.com\/(us-edu|ca|us-es)\//i.test(sourceText)) return false;
             if (countryCode === 'MX' && (/apple\.com\/.+\/newsroom\//i.test(sourceText) || /apple\.com\/newsroom\//i.test(sourceText))) return false;
             const preFilterSignals = buildMatchSignals(query, item.title || '');
@@ -2120,7 +2224,7 @@ exports.searchProduct = async (req, res) => {
                 label: regionCfg.regionLabel
             },
             top_5_baratos: finalProductsConCupones,
-            sugerencias: buildFallbackSuggestions(searchQuery, llmAnalysis.alternativeQueries),
+            sugerencias: buildFallbackSuggestions(searchQuery, llmAnalysis.alternativeQueries, countryCode),
             advertencia_uso: usageWarning,
             lumu_coins_awarded: (userId && finalProductsConCupones.length > 2) ? 1 : 0
         });
@@ -2203,6 +2307,13 @@ exports.bulkSearch = async (req, res) => {
                     bulkCostMetrics.llmGenerateCalls += 1;
                     if (supabase) bulkCostMetrics.llmEmbeddingCalls += 1;
                     const llmAnalysis = await llmService.analyzeMessage(q, []);
+                    
+                    // Track LLM cache hits
+                    if (llmAnalysis._cacheHit) {
+                        bulkCostMetrics.llmCacheHits += 1;
+                        bulkCostMetrics.llmGenerateCalls -= 1;
+                        if (supabase) bulkCostMetrics.llmEmbeddingCalls -= 1;
+                    }
                     const searchQuery = llmAnalysis.searchQuery || q;
 
                     // Cache check first

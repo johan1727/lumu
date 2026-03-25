@@ -1,9 +1,17 @@
 const ML_AFFILIATE_CAMPAIGN = process.env.ML_AFFILIATE_CAMPAIGN || '';
 const AMAZON_AFFILIATE_TAG = (process.env.AMAZON_AFFILIATE_TAG || '').trim();
+const ALIEXPRESS_TRACKING_ID = (process.env.ALIEXPRESS_TRACKING_ID || '').trim();
+const LIVERPOOL_AFFILIATE_ID = (process.env.LIVERPOOL_AFFILIATE_ID || '').trim();
+const WALMART_AFFILIATE_ID = (process.env.WALMART_AFFILIATE_ID || '').trim();
+const COPPEL_AFFILIATE_ID = (process.env.COPPEL_AFFILIATE_ID || '').trim();
 
 const missingAffiliateConfigs = [];
 if (!ML_AFFILIATE_CAMPAIGN) missingAffiliateConfigs.push('ML_AFFILIATE_CAMPAIGN');
 if (!AMAZON_AFFILIATE_TAG) missingAffiliateConfigs.push('AMAZON_AFFILIATE_TAG');
+if (!ALIEXPRESS_TRACKING_ID) missingAffiliateConfigs.push('ALIEXPRESS_TRACKING_ID');
+if (!LIVERPOOL_AFFILIATE_ID) missingAffiliateConfigs.push('LIVERPOOL_AFFILIATE_ID (pending)');
+if (!WALMART_AFFILIATE_ID) missingAffiliateConfigs.push('WALMART_AFFILIATE_ID (pending)');
+if (!COPPEL_AFFILIATE_ID) missingAffiliateConfigs.push('COPPEL_AFFILIATE_ID (pending)');
 if (missingAffiliateConfigs.length > 0) {
     console.warn(`[Affiliate] Variables faltantes: ${missingAffiliateConfigs.join(', ')}. Se usarán enlaces sin afiliado en esas tiendas.`);
 }
@@ -149,7 +157,35 @@ exports.generateAffiliateLink = (originalUrl, source) => {
             return urlObj.toString();
         }
 
-        // 3. Loss Leader: Dejar intacto para otras tiendas (Liverpool, Walmart, Coppel, etc.)
+        // 3. Inyectar afiliado de AliExpress
+        // AliExpress affiliate removed - no active account
+        // if (host.includes('aliexpress.com') && ALIEXPRESS_TRACKING_ID) {
+        //     urlObj.searchParams.set('aff_trace_key', ALIEXPRESS_TRACKING_ID);
+        //     return urlObj.toString();
+        // }
+
+        // 4. Inyectar afiliado de Liverpool (preparado para CJ Affiliate o programa directo)
+        if (host.includes('liverpool.com.mx') && LIVERPOOL_AFFILIATE_ID) {
+            // TODO: Configurar parámetro correcto cuando se apruebe cuenta CJ Affiliate
+            urlObj.searchParams.set('aff_id', LIVERPOOL_AFFILIATE_ID);
+            return urlObj.toString();
+        }
+
+        // 5. Inyectar afiliado de Walmart MX (preparado para Impact o programa directo)
+        if (host.includes('walmart.com.mx') && WALMART_AFFILIATE_ID) {
+            // TODO: Configurar parámetro correcto cuando se apruebe cuenta de afiliados
+            urlObj.searchParams.set('aff_id', WALMART_AFFILIATE_ID);
+            return urlObj.toString();
+        }
+
+        // 6. Inyectar afiliado de Coppel (preparado para programa directo)
+        if (host.includes('coppel.com') && COPPEL_AFFILIATE_ID) {
+            // TODO: Configurar parámetro correcto cuando se apruebe cuenta de afiliados
+            urlObj.searchParams.set('aff_id', COPPEL_AFFILIATE_ID);
+            return urlObj.toString();
+        }
+
+        // 7. Loss Leader: Dejar intacto para otras tiendas sin programa de afiliados
         return urlObj.toString();
 
     } catch (error) {

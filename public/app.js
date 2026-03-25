@@ -658,7 +658,7 @@ const REGION_UI_COPY = {
         pricing: {
             badge: 'More value for less',
             title: 'Want more search capacity?',
-            copyHtml: 'Starting at <strong class="text-emerald-600">$39 USD/month</strong> — ad-free, with price alerts and tools to find the best deals faster.',
+            copyHtml: 'Starting at <strong class="text-emerald-600">$39 MXN/month</strong> — ad-free, with price alerts and tools to find the best deals faster.',
             chipAds: 'No ads',
             chipAlerts: 'Price alerts',
             chipCoupons: 'Exclusive coupons',
@@ -770,7 +770,7 @@ const REGION_UI_COPY = {
         },
         cookies: {
             title: 'Lumu Privacy',
-            copyHtml: 'We use essential cookies for session, favorites, and security. With your permission, we enable analytics to improve recommendations and measure performance. <a href="/privacidad.html" class="text-emerald-700 hover:text-emerald-800 underline font-bold">View policy</a>.',
+            copyHtml: 'We use essential cookies for session, favorites, and security. With your permission, we enable analytics to improve recommendations and measure performance. <a href="/privacy.html" class="text-emerald-700 hover:text-emerald-800 underline font-bold">View policy</a>.',
             reject: 'Essential only',
             accept: 'Accept and continue',
             backToTop: 'Back to top',
@@ -2381,6 +2381,7 @@ function openProductHistoryModal(product = {}) {
     const priceTrend = product.priceTrend || {};
     const history = Array.isArray(priceTrend.history) ? [...priceTrend.history].reverse() : [];
     const currentPrice = Number(product.precio);
+    const hasTrackedHistory = history.length > 0;
     const points = history
         .map((entry) => Number(entry.price))
         .filter((value) => Number.isFinite(value) && value > 0);
@@ -2390,9 +2391,22 @@ function openProductHistoryModal(product = {}) {
     }
 
     if (points.length === 0) {
+        if (titleEl) titleEl.textContent = safeTitle;
+        if (copyEl) {
+            copyEl.textContent = currentRegion === 'US'
+                ? 'We still do not have enough tracked prices for this product.'
+                : 'Todavía no tenemos suficientes precios rastreados para este producto.';
+        }
         historyList.innerHTML = `<div class="bg-white rounded-2xl border border-slate-200 p-5 text-sm font-medium text-slate-500">${currentRegion === 'US' ? 'No tracked price history for this product yet.' : 'Aún no hay historial de precio rastreado para este producto.'}</div>`;
         openHistoryModal();
         return;
+    }
+
+    if (titleEl) titleEl.textContent = safeTitle;
+    if (copyEl) {
+        copyEl.textContent = hasTrackedHistory
+            ? (currentRegion === 'US' ? 'Historical snapshots and current price comparison.' : 'Snapshots históricos y comparación con el precio actual.')
+            : (currentRegion === 'US' ? 'Current price snapshot ready. We will show more history as we track this product.' : 'Ya tenemos el precio actual. Mostraremos más historial conforme rastreemos este producto.');
     }
 
     const minP = Math.min(...points);
@@ -5409,6 +5423,7 @@ async function initApp() {
                 const heartColor = isAlreadyFav ? 'text-red-500' : 'text-slate-300';
                 const tiendaLower = (product.tienda || product.fuente || '').toLowerCase();
                 const preferredClickTarget = product.urlOriginal || product.urlMonetizada || '';
+                const hasPriceHistory = Array.isArray(product.priceTrend?.history) && product.priceTrend.history.length > 0;
 
                 const card = document.createElement('div');
                 card.className = 'group product-card bg-white dark:bg-slate-800 rounded-[20px] md:rounded-[24px] hover:shadow-xl transition-all duration-200 overflow-hidden flex flex-col relative h-full fade-in border border-slate-200 dark:border-slate-700 shadow-sm cursor-pointer';
@@ -5445,9 +5460,10 @@ async function initApp() {
                 let trendHtml = '';
                 if (product.priceTrend && product.priceTrend.direction) {
                     const trend = product.priceTrend;
+                    const hasHistory = Array.isArray(trend.history) && trend.history.length > 0;
                     let sparklineHtml = '';
                     
-                    if (trend.history && trend.history.length > 0) {
+                    if (hasHistory) {
                         try {
                             const dps = trend.history.map(h => h.price).reverse(); // oldest to newest
                             dps.push(precioNumerico); // add current price
@@ -5486,6 +5502,9 @@ async function initApp() {
                         trendHtml = `<div class="mt-1 flex items-center justify-between w-full"><div class="inline-flex items-center gap-1 px-2 py-1 rounded-lg bg-rose-50 text-rose-700 text-[11px] font-bold">↑ ${getLocalizedText('Subió', 'Up')} ${formatCurrencyByRegion(trend.delta || 0)} (${trend.percent || 0}%)</div>${sparklineHtml}</div>`;
                     } else {
                         trendHtml = `<div class="mt-1 flex items-center justify-between w-full"><div class="inline-flex items-center gap-1 px-2 py-1 rounded-lg bg-slate-100 text-slate-600 text-[11px] font-bold">→ ${getLocalizedText('Precio estable', 'Stable price')}</div>${sparklineHtml}</div>`;
+                    }
+                    if (hasHistory) {
+                        trendHtml += `<div class="mt-2 text-[11px] font-bold text-slate-500">${getLocalizedText('Historial de precio disponible', 'Price history available')}</div>`;
                     }
                 }
 
@@ -5724,7 +5743,7 @@ async function initApp() {
                                 </button>
                                 <button class="btn-view-history col-span-2 sm:col-span-1 flex-1 min-h-[42px] py-2 flex justify-center items-center gap-1.5 bg-white text-slate-600 hover:text-emerald-700 hover:bg-emerald-50 rounded-xl border border-slate-200 hover:border-emerald-300 transition-all text-xs font-bold shadow-sm" title="${isUS ? 'Price history' : 'Historial de precio'}">
                                     <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M3 3v18h18M7 14l3-3 3 2 4-5"></path></svg>
-                                    <span>${isUS ? 'History' : 'Historial'}</span>
+                                    <span>${hasPriceHistory ? (isUS ? 'History' : 'Historial') : (isUS ? 'No history yet' : 'Sin historial aún')}</span>
                                 </button>
                             </div>` : ''}
                             
@@ -5851,9 +5870,19 @@ async function initApp() {
                     });
                 }
                 if (btnViewHistory) {
+                    if (!hasPriceHistory) {
+                        btnViewHistory.classList.remove('hover:text-emerald-700', 'hover:bg-emerald-50', 'hover:border-emerald-300');
+                        btnViewHistory.classList.add('text-slate-400', 'bg-slate-50', 'cursor-default');
+                    }
                     btnViewHistory.addEventListener('click', (e) => {
                         e.preventDefault();
                         e.stopPropagation();
+                        if (!hasPriceHistory) {
+                            if (typeof showGlobalFeedback === 'function') {
+                                showGlobalFeedback(getLocalizedText('Aún no hay suficiente historial para este producto.', 'There is not enough history for this product yet.'), 'info');
+                            }
+                            return;
+                        }
                         _trackEvent('history_open', {
                             ...trackingBase,
                             action_context: 'price_history_modal'
