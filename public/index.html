@@ -192,12 +192,6 @@
             "name": "Lumu AI",
             "url": "https://www.lumu.dev",
             "logo": "https://www.lumu.dev/images/og-cover-v2.png"
-        },
-        "aggregateRating": {
-            "@type": "AggregateRating",
-            "ratingValue": "4.8",
-            "ratingCount": "120",
-            "bestRating": "5"
         }
     }
     </script>
@@ -1212,9 +1206,34 @@
             transition: max-height 0.3s ease, opacity 0.25s ease, margin 0.25s ease;
         }
 
+        #search-input,
+        #search-input:hover,
+        #search-input:focus,
+        #search-input:focus-visible,
+        #search-input:active {
+            border: 0 !important;
+            outline: 0 !important;
+            box-shadow: none !important;
+            -webkit-appearance: none;
+            appearance: none;
+            background-color: transparent;
+        }
+
         @media (max-width: 639px) {
+            #filters-wrapper {
+                position: static;
+                inset: auto;
+                z-index: auto;
+                margin-top: 0.75rem !important;
+                padding: 0 0.15rem;
+            }
+
             .filters-shell {
                 border-radius: 1.5rem;
+                height: auto;
+                padding: 0.9rem 0.9rem 1rem;
+                background: linear-gradient(180deg, rgba(255, 255, 255, 0.985) 0%, rgba(248, 250, 252, 0.99) 100%);
+                box-shadow: 0 14px 30px rgba(15, 23, 42, 0.08);
             }
 
             .filter-chip-base,
@@ -1232,11 +1251,7 @@
             }
 
             .filters-mobile-overlay {
-                position: fixed;
-                inset: 0;
-                background: rgba(15, 23, 42, 0.48);
-                backdrop-filter: blur(6px);
-                z-index: 70;
+                display: none;
                 opacity: 0;
                 pointer-events: none;
                 transition: opacity 0.25s ease;
@@ -1248,19 +1263,17 @@
             }
 
             .filters-collapsible {
-                position: fixed;
-                left: 0;
-                right: 0;
-                bottom: 0;
-                z-index: 80;
-                max-height: min(82vh, 720px);
+                position: relative;
+                inset: auto;
+                z-index: 1;
+                height: auto;
+                max-height: none;
                 margin-top: 0 !important;
-                padding: 1rem 1rem calc(1rem + env(safe-area-inset-bottom, 0px));
-                border-top-left-radius: 1.75rem;
-                border-top-right-radius: 1.75rem;
-                background: linear-gradient(180deg, rgba(255, 255, 255, 0.98) 0%, rgba(248, 250, 252, 0.98) 100%);
-                box-shadow: 0 -20px 50px rgba(15, 23, 42, 0.20);
-                overflow-y: auto;
+                padding: 0.2rem 0.1rem 0.15rem;
+                border-radius: 1.25rem;
+                background: transparent;
+                box-shadow: none;
+                overflow: visible;
                 transform: translateY(0);
                 transition: transform 0.28s ease, opacity 0.25s ease;
             }
@@ -1268,11 +1281,41 @@
             .filters-collapsible::before {
                 content: "";
                 display: block;
-                width: 56px;
-                height: 5px;
+                width: 46px;
+                height: 4px;
                 border-radius: 999px;
-                background: rgba(148, 163, 184, 0.65);
-                margin: 0 auto 0.85rem auto;
+                background: rgba(148, 163, 184, 0.55);
+                margin: 0 auto 0.55rem auto;
+            }
+
+            #filters-collapsible > .space-y-4 {
+                gap: 0.75rem;
+            }
+
+            #filters-collapsible .filter-section-label {
+                margin-bottom: 0.35rem;
+            }
+
+            #filters-collapsible .space-y-4 > div {
+                padding-inline: 0.15rem;
+            }
+
+            #guided-search-copy {
+                font-size: 13px;
+                line-height: 1.35;
+            }
+
+            #condition-filter-bar,
+            #search-location-filters,
+            #filters-collapsible .flex.flex-wrap.items-center.justify-center.gap-2\.5,
+            #search-prompt-bar {
+                justify-content: flex-start;
+            }
+
+            #detected-region-pill {
+                min-height: 40px;
+                border-color: rgba(167, 243, 208, 0.95);
+                box-shadow: 0 6px 16px rgba(16, 185, 129, 0.08);
             }
         }
 
@@ -1285,8 +1328,8 @@
 
         @media (max-width: 639px) {
             .filters-collapsible.filters-collapsed {
-                max-height: min(82vh, 720px);
-                transform: translateY(110%);
+                max-height: 0;
+                transform: none;
             }
         }
 
@@ -1419,18 +1462,16 @@
     </style>
 
     <body
-        class="bg-[#effcf5] font-sans text-slate-800 antialiased min-h-screen flex flex-col relative selection:bg-emerald-200 selection:text-emerald-900 safe-bottom">
-
-        <div class="mesh-page-bg fade-in"></div>
+        class="bg-slate-50 font-sans text-slate-800 antialiased min-h-screen flex flex-col relative selection:bg-emerald-200 selection:text-emerald-900 safe-bottom">
 
         <!-- Header Premium Full-Width -->
         <header
             class="w-full bg-white/72 backdrop-blur-xl border-b border-emerald-100/80 sticky top-0 z-50 transition-all shadow-[0_10px_35px_rgba(16,185,129,0.06)]">
-            <div class="w-full px-4 sm:px-6 lg:px-8 h-[72px] flex items-center justify-between relative z-10">
+            <div class="w-full px-4 sm:px-6 lg:px-8 h-14 md:h-[72px] flex items-center justify-between relative z-10">
                 <div class="flex items-center gap-2">
                     <a href="/" id="home-logo-link" class="flex items-center gap-3 group" aria-label="Lumu HOME">
                         <!-- Logo SVG inline: 100% transparente en cualquier fondo - Color Lumu Verde -->
-                        <svg class="h-10 w-auto group-hover:scale-105 transition-transform duration-200" viewBox="0 0 48 48"
+                        <svg class="h-8 md:h-10 w-auto group-hover:scale-105 transition-transform duration-200" viewBox="0 0 48 48"
                             fill="none" xmlns="http://www.w3.org/2000/svg">
                             <!-- Bolsa -->
                             <path d="M10 18h28l-3 22H13L10 18z" stroke="#00C853" stroke-width="2.5" stroke-linejoin="round"
@@ -1459,8 +1500,8 @@
                     </svg>
                 </button>
                 <nav class="hidden md:flex gap-2 text-sm font-semibold text-slate-600 items-center rounded-full border border-emerald-100/80 bg-white/75 px-2 py-1 shadow-[0_10px_28px_rgba(15,23,42,0.07)] backdrop-blur-xl">
-                    <a href="#product-showcase" id="nav-ofertas"
-                        class="nav-link hover:text-[#00C853] transition-colors text-slate-600">Inspiración</a>
+                    <a href="#flash-deals-section" id="nav-ofertas"
+                        class="nav-link hover:text-[#00C853] transition-colors text-slate-600">Ofertas</a>
                     <a href="#tendencias-section" id="nav-tendencias"
                         class="nav-link hover:text-[#00C853] transition-colors text-slate-600">Tendencias</a>
                     <a href="/precios.html" id="nav-precios"
@@ -1549,40 +1590,28 @@
         </header>
 
         <!-- Área Principal -->
-        <main class="flex-grow w-full mx-auto px-4 sm:px-6 lg:px-8 py-10 md:py-16 flex flex-col items-center relative z-10">
+        <main class="flex-grow w-full mx-auto px-4 sm:px-6 lg:px-8 py-6 md:py-12 flex flex-col items-center relative z-10">
 
-            <!-- Hero Titles (Restored) -->
-            <div class="text-center max-w-3xl mx-auto mb-8 md:mb-12 relative z-20">
-                <h1 id="hero-title" class="font-display text-5xl md:text-6xl lg:text-[72px] font-black text-slate-900 tracking-[-0.04em] leading-[1.05] mb-5">
-                    Pídeme lo que quieres comprar,<br/>
-                    <span class="text-transparent bg-clip-text bg-gradient-to-r from-emerald-500 to-teal-400">yo encuentro dónde conviene.</span>
+            <!-- Hero Titles -->
+            <div class="text-center max-w-3xl mx-auto mb-5 md:mb-8 relative z-20">
+                <h1 id="hero-title" class="font-display text-3xl md:text-5xl lg:text-6xl font-black text-slate-900 tracking-[-0.04em] leading-[1.08] mb-3">
+                    Compara precios con IA,
+                    <span class="text-transparent bg-clip-text bg-gradient-to-r from-emerald-500 to-teal-400">encuentra dónde conviene.</span>
                 </h1>
-                <p id="hero-subtitle" class="text-lg md:text-xl text-slate-500 font-medium max-w-2xl mx-auto leading-relaxed">
-                    Describe tu compra con lenguaje natural y Lumu compara precios, tiendas confiables y opciones cerca de ti.
+                <p id="hero-subtitle" class="text-base md:text-lg text-slate-500 font-medium max-w-xl mx-auto leading-relaxed">
+                    Busca cualquier producto y Lumu compara precios en Amazon, Mercado Libre y tiendas locales.
                 </p>
-                <div class="mt-5 flex flex-wrap items-center justify-center gap-2.5 text-left">
-                    <button type="button" onclick="document.getElementById('search-input').value='Encuéntrame la opción más barata de unos AirPods'; document.getElementById('search-form').dispatchEvent(new Event('submit', { cancelable: true, bubbles: true }));"
-                        class="search-prompt-chip rounded-full px-4 py-2 text-xs md:text-sm font-bold shadow-sm"> Encuéntrame lo más barato</button>
-                    <button type="button" onclick="document.getElementById('search-input').value='Compara iPhone 15 vs Galaxy S24 y dime cuál conviene'; document.getElementById('search-form').dispatchEvent(new Event('submit', { cancelable: true, bubbles: true }));"
-                        class="search-prompt-chip rounded-full px-4 py-2 text-xs md:text-sm font-bold shadow-sm"> Compárame dos opciones</button>
-                    <button type="button" onclick="document.getElementById('search-input').value='Quiero una laptop para estudiar por menos de 12000 pesos'; document.getElementById('search-form').dispatchEvent(new Event('submit', { cancelable: true, bubbles: true }));"
-                        class="search-prompt-chip rounded-full px-4 py-2 text-xs md:text-sm font-bold shadow-sm"> Tengo presupuesto</button>
-                    <button type="button" onclick="document.getElementById('search-input').value='Solo tiendas confiables para Nintendo Switch OLED'; document.getElementById('search-form').dispatchEvent(new Event('submit', { cancelable: true, bubbles: true }));"
-                        class="search-prompt-chip rounded-full px-4 py-2 text-xs md:text-sm font-bold shadow-sm"> Solo tiendas seguras</button>
-                </div>
             </div>
 
             <!-- Search Form -->
-            <form id="search-form" class="relative fade-in mx-auto w-full max-w-4xl mb-8">
-                <div class="pointer-events-none absolute inset-x-10 -top-4 h-20 rounded-full bg-[radial-gradient(circle_at_center,rgba(16,185,129,0.16),rgba(45,212,191,0.08)_35%,rgba(255,255,255,0)_74%)] blur-2xl"></div>
-                <div class="pointer-events-none absolute inset-x-0 bottom-[-1.5rem] mx-auto h-24 w-[58%] rounded-full bg-[radial-gradient(circle_at_center,rgba(16,185,129,0.12),rgba(110,231,183,0.08)_35%,rgba(244,255,249,0)_74%)] blur-3xl"></div>
+            <form id="search-form" class="relative fade-in mx-auto w-full max-w-4xl mb-5 md:mb-8 sticky top-[64px] md:top-auto z-40">
                 <div id="search-shell"
-                    class="bg-white/90 border border-white filter drop-shadow-xl text-slate-800 rounded-[32px] focus-within:ring-[3px] focus-within:ring-emerald-400/20 focus-within:border-emerald-300 transition-all duration-300 p-2.5 md:p-3 flex flex-col relative z-20 backdrop-blur-xl">
+                    class="bg-white/95 border border-white filter drop-shadow-xl text-slate-800 rounded-[24px] md:rounded-[32px] focus-within:ring-[3px] focus-within:ring-emerald-400/20 focus-within:border-emerald-300 transition-all duration-300 p-2 md:p-3 flex flex-col relative z-20 backdrop-blur-xl shadow-[0_16px_40px_rgba(15,23,42,0.08)]">
                     <textarea id="search-input" rows="1"
-                        class="block w-full min-h-[60px] max-h-36 py-4 px-4 text-base md:text-[17px] bg-transparent border-0 focus:ring-0 font-semibold resize-none custom-scrollbar relative z-10 leading-relaxed text-slate-800 placeholder:text-slate-400 caret-emerald-500"
+                        class="block w-full min-h-[52px] md:min-h-[60px] max-h-36 py-3.5 md:py-4 px-4 text-base md:text-[17px] bg-transparent border-0 focus:ring-0 font-semibold resize-none custom-scrollbar relative z-10 leading-relaxed text-slate-800 placeholder:text-slate-400 caret-emerald-500"
                         placeholder="Dime qué estás buscando... Ej: iPhone 15 Pro Max" required
                         autocomplete="off"></textarea>
-                    <div id="search-assistant-copy" class="px-4 pb-1 text-[13px] text-slate-500 font-medium">
+                    <div id="search-assistant-copy" class="hidden md:block px-4 pb-1 text-[13px] text-slate-500 font-medium">
                         Escríbelo como si hablaras con un asistente: producto, presupuesto, uso o si quieres que compare por ti.
                     </div>
 
@@ -1629,7 +1658,7 @@
                             </button>
                         </div>
                         <button type="submit" id="search-button"
-                            class="flex min-w-[124px] items-center justify-center gap-2 bg-gradient-to-r from-emerald-400 to-emerald-500 hover:from-emerald-500 hover:to-emerald-600 text-white px-5 py-2.5 rounded-2xl text-sm font-black active:scale-95 transition-all duration-200 shadow-sm disabled:opacity-90 disabled:cursor-wait">
+                            class="flex min-w-[112px] md:min-w-[124px] items-center justify-center gap-2 bg-gradient-to-r from-emerald-400 to-emerald-500 hover:from-emerald-500 hover:to-emerald-600 text-white px-4 md:px-5 py-2.5 rounded-2xl text-sm font-black active:scale-95 transition-all duration-200 shadow-sm disabled:opacity-90 disabled:cursor-wait">
                             Enviar
                             <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24"
                                 fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"
@@ -1641,26 +1670,18 @@
                     </div>
                 </div>
 
-                <div class="mt-4 mx-auto max-w-3xl px-2">
-                    <div class="prompt-surface-card rounded-[28px] p-4 md:p-5">
-                        <div class="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
-                            <div>
-                                <p class="text-[11px] font-black uppercase tracking-[0.22em] text-emerald-700">Empieza rápido</p>
-                                <h2 class="text-lg md:text-xl font-black text-slate-900 tracking-tight">Haz una pregunta completa y Lumu se encarga del resto</h2>
-                                <p class="mt-1 text-sm text-slate-500 font-medium max-w-2xl">No necesitas ajustar todo antes de buscar. Si quieres, luego afinas región, condición o tiendas.</p>
-                            </div>
-                            <button type="button" id="btn-toggle-filters"
-                                class="self-start md:self-auto inline-flex items-center gap-2 rounded-full border border-emerald-100 bg-white/85 px-4 py-2 text-[11px] font-black uppercase tracking-[0.18em] text-slate-700 shadow-sm transition-all hover:border-emerald-200 hover:bg-emerald-50">
-                                <span id="toggle-filters-label">Refinar búsqueda</span>
-                                <svg id="toggle-filters-icon" class="w-4 h-4 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="m6 9 6 6 6-6" />
-                                </svg>
-                            </button>
-                        </div>
-                    </div>
+                <div class="mt-3 flex justify-center">
+                    <button type="button" id="btn-toggle-filters"
+                        class="inline-flex items-center gap-2 rounded-full border border-emerald-100 bg-white/85 px-4 py-2 text-[11px] font-black uppercase tracking-[0.18em] text-slate-700 shadow-sm transition-all hover:border-emerald-200 hover:bg-emerald-50">
+                        <svg class="w-4 h-4 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z"/></svg>
+                        <span id="toggle-filters-label">Filtros</span>
+                        <svg id="toggle-filters-icon" class="w-4 h-4 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="m6 9 6 6 6-6" />
+                        </svg>
+                    </button>
                 </div>
 
-                <div class="mt-5 max-w-4xl mx-auto px-2">
+                <div class="mt-3 max-w-4xl mx-auto px-2 hidden" id="filters-wrapper">
                     <div class="filters-shell relative isolate rounded-[2rem] p-3 md:p-4">
                         <div class="relative z-[180] flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
                             <div>
@@ -1777,7 +1798,7 @@
 
             <!-- BARRA DE CATEGORÍAS (Premium Pills) -->
             <div id="category-icon-bar"
-                class="w-full max-w-4xl mx-auto flex justify-start sm:justify-center gap-3 overflow-x-auto pb-3 custom-scrollbar no-scrollbar-at-md px-2 opacity-80">
+                class="w-full max-w-4xl mx-auto flex justify-start sm:justify-center gap-3 overflow-x-auto pb-3 custom-scrollbar no-scrollbar-at-md px-2 snap-x snap-mandatory">
 
                 <button data-macro-category="Tecnología celulares laptops audífonos gadgets"
                     class="flex items-center gap-2.5 px-4 py-2 bg-white border border-slate-200 rounded-full shadow-sm hover:shadow-md hover:border-emerald-300 hover:bg-emerald-50 transition-all flex-shrink-0 group">
@@ -1843,118 +1864,6 @@
                 </button>
             </div>
 
-            <section id="browse-hub-section" class="w-full max-w-6xl mx-auto mb-14 fade-in px-4 opacity-85">
-                <div class="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between mb-5">
-                    <div>
-                        <p class="text-[11px] font-black uppercase tracking-[0.22em] text-emerald-700">Explora sin escribir</p>
-                        <h2 class="text-2xl md:text-3xl font-display font-black text-slate-900 tracking-tight">Categorías fáciles de navegar</h2>
-                        <p class="text-sm md:text-base text-slate-500 font-medium max-w-2xl">Empieza por una categoría, entra a una búsqueda más clara y luego afina con filtros, como en un comparador tradicional.</p>
-                    </div>
-                    <div class="flex flex-wrap items-center gap-2 text-[11px] font-black uppercase tracking-[0.18em] text-slate-500">
-                        <span class="active-filter-pill rounded-full px-3 py-1.5">Browse</span>
-                        <span class="active-filter-pill rounded-full px-3 py-1.5">Filtros</span>
-                        <span class="active-filter-pill rounded-full px-3 py-1.5">Compara</span>
-                    </div>
-                </div>
-
-                <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4 md:gap-5">
-                    <button type="button" class="browse-hub-card p-5 text-left group" data-browse-category="smartphones" data-browse-query="iPhone Samsung Xiaomi celulares 5g">
-                        <div class="flex items-start justify-between gap-4">
-                            <div>
-                                <div class="text-3xl mb-3">📱</div>
-                                <h3 class="text-lg font-black text-slate-900 group-hover:text-emerald-700 transition-colors">Smartphones</h3>
-                                <p class="text-sm text-slate-500 font-medium mt-2">iPhone, Galaxy, Xiaomi, Google Pixel y modelos con mejor relación calidad/precio.</p>
-                            </div>
-                            <span class="text-emerald-600 text-sm font-black">→</span>
-                        </div>
-                        <div class="mt-4 flex flex-wrap gap-2">
-                            <span class="browse-mini-chip px-3 py-1.5 text-[11px] font-bold">iPhone</span>
-                            <span class="browse-mini-chip px-3 py-1.5 text-[11px] font-bold">Samsung</span>
-                            <span class="browse-mini-chip px-3 py-1.5 text-[11px] font-bold">Xiaomi</span>
-                        </div>
-                    </button>
-
-                    <button type="button" class="browse-hub-card p-5 text-left group" data-browse-category="laptops" data-browse-query="laptops macbook lenovo hp asus trabajo estudio">
-                        <div class="flex items-start justify-between gap-4">
-                            <div>
-                                <div class="text-3xl mb-3">💻</div>
-                                <h3 class="text-lg font-black text-slate-900 group-hover:text-emerald-700 transition-colors">Laptops</h3>
-                                <p class="text-sm text-slate-500 font-medium mt-2">Trabajo, estudio, gaming y modelos equilibrados por RAM, SSD y procesador.</p>
-                            </div>
-                            <span class="text-emerald-600 text-sm font-black">→</span>
-                        </div>
-                        <div class="mt-4 flex flex-wrap gap-2">
-                            <span class="browse-mini-chip px-3 py-1.5 text-[11px] font-bold">MacBook</span>
-                            <span class="browse-mini-chip px-3 py-1.5 text-[11px] font-bold">Lenovo</span>
-                            <span class="browse-mini-chip px-3 py-1.5 text-[11px] font-bold">HP</span>
-                        </div>
-                    </button>
-
-                    <button type="button" class="browse-hub-card p-5 text-left group" data-browse-category="gaming" data-browse-query="PS5 Xbox Nintendo Switch consolas videojuegos">
-                        <div class="flex items-start justify-between gap-4">
-                            <div>
-                                <div class="text-3xl mb-3">🎮</div>
-                                <h3 class="text-lg font-black text-slate-900 group-hover:text-emerald-700 transition-colors">Gaming</h3>
-                                <p class="text-sm text-slate-500 font-medium mt-2">Consolas, accesorios y bundles populares para comprar sin perderte entre variantes.</p>
-                            </div>
-                            <span class="text-emerald-600 text-sm font-black">→</span>
-                        </div>
-                        <div class="mt-4 flex flex-wrap gap-2">
-                            <span class="browse-mini-chip px-3 py-1.5 text-[11px] font-bold">PS5</span>
-                            <span class="browse-mini-chip px-3 py-1.5 text-[11px] font-bold">Xbox</span>
-                            <span class="browse-mini-chip px-3 py-1.5 text-[11px] font-bold">Switch</span>
-                        </div>
-                    </button>
-
-                    <button type="button" class="browse-hub-card p-5 text-left group" data-browse-category="audio" data-browse-query="audifonos airpods sony jbl bocinas bluetooth">
-                        <div class="flex items-start justify-between gap-4">
-                            <div>
-                                <div class="text-3xl mb-3">🎧</div>
-                                <h3 class="text-lg font-black text-slate-900 group-hover:text-emerald-700 transition-colors">Audio</h3>
-                                <p class="text-sm text-slate-500 font-medium mt-2">Audífonos, bocinas y modelos con cancelación de ruido o mejor sonido por precio.</p>
-                            </div>
-                            <span class="text-emerald-600 text-sm font-black">→</span>
-                        </div>
-                        <div class="mt-4 flex flex-wrap gap-2">
-                            <span class="browse-mini-chip px-3 py-1.5 text-[11px] font-bold">AirPods</span>
-                            <span class="browse-mini-chip px-3 py-1.5 text-[11px] font-bold">Sony</span>
-                            <span class="browse-mini-chip px-3 py-1.5 text-[11px] font-bold">JBL</span>
-                        </div>
-                    </button>
-
-                    <button type="button" class="browse-hub-card p-5 text-left group" data-browse-category="tv" data-browse-query="smart tv 4k oled qled 55 pulgadas samsung lg hisense">
-                        <div class="flex items-start justify-between gap-4">
-                            <div>
-                                <div class="text-3xl mb-3">📺</div>
-                                <h3 class="text-lg font-black text-slate-900 group-hover:text-emerald-700 transition-colors">TVs</h3>
-                                <p class="text-sm text-slate-500 font-medium mt-2">Smart TVs 4K, OLED y QLED listas para comparar por tamaño, panel y tienda.</p>
-                            </div>
-                            <span class="text-emerald-600 text-sm font-black">→</span>
-                        </div>
-                        <div class="mt-4 flex flex-wrap gap-2">
-                            <span class="browse-mini-chip px-3 py-1.5 text-[11px] font-bold">55 pulgadas</span>
-                            <span class="browse-mini-chip px-3 py-1.5 text-[11px] font-bold">OLED</span>
-                            <span class="browse-mini-chip px-3 py-1.5 text-[11px] font-bold">QLED</span>
-                        </div>
-                    </button>
-
-                    <button type="button" class="browse-hub-card p-5 text-left group" data-browse-category="home" data-browse-query="hogar freidora aire aspiradora robot refrigerador lavadora">
-                        <div class="flex items-start justify-between gap-4">
-                            <div>
-                                <div class="text-3xl mb-3">🏠</div>
-                                <h3 class="text-lg font-black text-slate-900 group-hover:text-emerald-700 transition-colors">Hogar</h3>
-                                <p class="text-sm text-slate-500 font-medium mt-2">Electrodomésticos y productos prácticos para casa con foco en valor y tiendas confiables.</p>
-                            </div>
-                            <span class="text-emerald-600 text-sm font-black">→</span>
-                        </div>
-                        <div class="mt-4 flex flex-wrap gap-2">
-                            <span class="browse-mini-chip px-3 py-1.5 text-[11px] font-bold">Freidoras</span>
-                            <span class="browse-mini-chip px-3 py-1.5 text-[11px] font-bold">Aspiradoras</span>
-                            <span class="browse-mini-chip px-3 py-1.5 text-[11px] font-bold">Refrigeradores</span>
-                        </div>
-                    </button>
-                </div>
-            </section>
         </div>
 
         <!-- Ofertas Relámpago (Estilo Mercado Libre/Amazon) -->
@@ -1966,9 +1875,9 @@
                 <button id="flash-deals-view-all" class="text-primary font-bold text-sm hover:underline hidden sm:block">Ver todas</button>
             </div>
 
-            <div class="grid grid-cols-2 lg:grid-cols-4 gap-6">
+            <div class="flex gap-4 overflow-x-auto pb-4 snap-x snap-mandatory -mx-4 px-4 sm:mx-0 sm:px-0 sm:grid sm:grid-cols-2 lg:grid-cols-4 sm:overflow-visible sm:pb-0">
                 <!-- Oferta 1 -->
-                <div class="bg-white rounded-2xl p-4 border border-slate-200 shadow-sm hover:shadow-xl hover:-translate-y-1 transition-all duration-300 cursor-pointer group"
+                <div class="w-64 flex-shrink-0 snap-start sm:w-auto sm:flex-shrink bg-white rounded-2xl p-4 border border-slate-200 shadow-sm hover:shadow-xl hover:-translate-y-1 transition-all duration-300 cursor-pointer group"
                     onclick="document.getElementById('search-input').value='iPhone 15 Pro 256GB'; document.getElementById('search-form').dispatchEvent(new Event('submit', { cancelable: true, bubbles: true }));">
                     <div
                         class="relative w-full aspect-[4/3] bg-slate-50/80 rounded-xl mb-4 flex items-center justify-center overflow-hidden p-4">
@@ -1994,7 +1903,7 @@
                 </div>
 
                 <!-- Oferta 2 -->
-                <div class="bg-white rounded-2xl p-4 border border-slate-200 shadow-sm hover:shadow-xl hover:-translate-y-1 transition-all duration-300 cursor-pointer group"
+                <div class="w-64 flex-shrink-0 snap-start sm:w-auto sm:flex-shrink bg-white rounded-2xl p-4 border border-slate-200 shadow-sm hover:shadow-xl hover:-translate-y-1 transition-all duration-300 cursor-pointer group"
                     onclick="document.getElementById('search-input').value='Nintendo Switch OLED'; document.getElementById('search-form').dispatchEvent(new Event('submit', { cancelable: true, bubbles: true }));">
                     <div
                         class="relative w-full aspect-[4/3] bg-slate-50/80 rounded-xl mb-4 flex items-center justify-center overflow-hidden p-4">
@@ -2019,7 +1928,7 @@
                 </div>
 
                 <!-- Oferta 3 -->
-                <div class="bg-white rounded-2xl p-4 border border-slate-200 shadow-sm hover:shadow-xl hover:-translate-y-1 transition-all duration-300 cursor-pointer group"
+                <div class="w-64 flex-shrink-0 snap-start sm:w-auto sm:flex-shrink bg-white rounded-2xl p-4 border border-slate-200 shadow-sm hover:shadow-xl hover:-translate-y-1 transition-all duration-300 cursor-pointer group"
                     onclick="document.getElementById('search-input').value='Audífonos Sony WH-1000XM5'; document.getElementById('search-form').dispatchEvent(new Event('submit', { cancelable: true, bubbles: true }));">
                     <div
                         class="relative w-full aspect-[4/3] bg-slate-50/80 rounded-xl mb-4 flex items-center justify-center overflow-hidden p-4">
@@ -2041,7 +1950,7 @@
                 </div>
 
                 <!-- Oferta 4 -->
-                <div class="bg-white rounded-2xl p-4 border border-slate-200 shadow-sm hover:shadow-xl hover:-translate-y-1 transition-all duration-300 cursor-pointer group"
+                <div class="w-64 flex-shrink-0 snap-start sm:w-auto sm:flex-shrink bg-white rounded-2xl p-4 border border-slate-200 shadow-sm hover:shadow-xl hover:-translate-y-1 transition-all duration-300 cursor-pointer group"
                     onclick="document.getElementById('search-input').value='Freidora de Aire Ninja'; document.getElementById('search-form').dispatchEvent(new Event('submit', { cancelable: true, bubbles: true }));">
                     <div
                         class="relative w-full aspect-[4/3] bg-slate-50/80 rounded-xl mb-4 flex items-center justify-center overflow-hidden p-4">
@@ -2067,9 +1976,6 @@
             </div>
         </div>
 
-        <!-- AdSense: Auto Ads maneja la colocación automáticamente -->
-
-        <!-- AdSense: Auto Ads maneja la colocación automáticamente -->
         <div id="results-wrapper" class="w-full hidden mt-4">
             <div id="chat-container" class="w-full flex-col gap-4 mb-6 custom-scrollbar overflow-y-auto hidden"
                 style="max-height: 600px;"></div>
@@ -2166,240 +2072,36 @@
         </div>
 
         <!-- Tendencias de Temporada (dinámico por JS) -->
-        <div id="tendencias-section" class="w-full max-w-4xl mx-auto mt-4 mb-10 fade-in px-4">
-            <h3 id="season-title" class="text-xl font-display font-bold text-slate-800 flex items-center gap-2 mb-4">
+        <div id="tendencias-section" class="w-full max-w-4xl mx-auto mt-2 mb-8 fade-in px-4">
+            <h3 id="season-title" class="text-lg md:text-xl font-display font-bold text-slate-800 flex items-center gap-2 mb-3">
                 <span class="text-amber-500 text-2xl drop-shadow-sm">🔥</span> Tendencias del Momento
             </h3>
-            <div class="flex gap-3 overflow-x-auto pb-4 custom-scrollbar -mx-4 px-4 sm:mx-0 sm:px-0">
+            <div class="flex gap-3 overflow-x-auto pb-2 custom-scrollbar -mx-4 px-4 sm:mx-0 sm:px-0 snap-x snap-mandatory">
                 <button id="trend-pill-1" data-emoji="🕶️" data-query-es="Lentes de Sol Ray-Ban polarizados" data-query-en="Polarized Ray-Ban sunglasses" onclick="quickSearch('Lentes de Sol Ray-Ban polarizados')"
-                    class="flex-shrink-0 bg-white border border-slate-200 px-5 py-2.5 rounded-full text-sm font-bold text-slate-700 hover:border-emerald-400 hover:text-emerald-700 hover:bg-emerald-50 transition-all shadow-sm">🕶️
+                    class="flex-shrink-0 snap-start bg-white border border-slate-200 px-4 py-2.5 rounded-full text-sm font-bold text-slate-700 hover:border-emerald-400 hover:text-emerald-700 hover:bg-emerald-50 transition-all shadow-sm">🕶️
                     Lentes de Sol</button>
                 <button id="trend-pill-2" data-emoji="👟" data-query-es="Tenis Nike Air Max 2025" data-query-en="Nike Air Max 2025 sneakers" onclick="quickSearch('Tenis Nike Air Max 2025')"
-                    class="flex-shrink-0 bg-white border border-slate-200 px-5 py-2.5 rounded-full text-sm font-bold text-slate-700 hover:border-emerald-400 hover:text-emerald-700 hover:bg-emerald-50 transition-all shadow-sm">👟
+                    class="flex-shrink-0 snap-start bg-white border border-slate-200 px-4 py-2.5 rounded-full text-sm font-bold text-slate-700 hover:border-emerald-400 hover:text-emerald-700 hover:bg-emerald-50 transition-all shadow-sm">👟
                     Tenis Nike</button>
                 <button id="trend-pill-3" data-emoji="🔊" data-query-es="Bocinas Bluetooth JBL contra agua" data-query-en="Waterproof JBL Bluetooth speakers" onclick="quickSearch('Bocinas Bluetooth JBL contra agua')"
-                    class="flex-shrink-0 bg-white border border-slate-200 px-5 py-2.5 rounded-full text-sm font-bold text-slate-700 hover:border-emerald-400 hover:text-emerald-700 hover:bg-emerald-50 transition-all shadow-sm">🔊
+                    class="flex-shrink-0 snap-start bg-white border border-slate-200 px-4 py-2.5 rounded-full text-sm font-bold text-slate-700 hover:border-emerald-400 hover:text-emerald-700 hover:bg-emerald-50 transition-all shadow-sm">🔊
                     Bocinas JBL</button>
                 <button id="trend-pill-4" data-emoji="🤖" data-query-es="Robot Aspiradora Roomba" data-query-en="Roomba robot vacuum" onclick="quickSearch('Robot Aspiradora Roomba')"
-                    class="flex-shrink-0 bg-white border border-slate-200 px-5 py-2.5 rounded-full text-sm font-bold text-slate-700 hover:border-emerald-400 hover:text-emerald-700 hover:bg-emerald-50 transition-all shadow-sm">🤖
+                    class="flex-shrink-0 snap-start bg-white border border-slate-200 px-4 py-2.5 rounded-full text-sm font-bold text-slate-700 hover:border-emerald-400 hover:text-emerald-700 hover:bg-emerald-50 transition-all shadow-sm">🤖
                     Robot Aspiradora</button>
                 <button id="trend-pill-5" data-emoji="🪑" data-query-es="Silla ergonómica gamer" data-query-en="Ergonomic gaming chair" onclick="quickSearch('Silla ergonómica gamer')"
-                    class="flex-shrink-0 bg-white border border-slate-200 px-5 py-2.5 rounded-full text-sm font-bold text-slate-700 hover:border-emerald-400 hover:text-emerald-700 hover:bg-emerald-50 transition-all shadow-sm">🪑
+                    class="flex-shrink-0 snap-start bg-white border border-slate-200 px-4 py-2.5 rounded-full text-sm font-bold text-slate-700 hover:border-emerald-400 hover:text-emerald-700 hover:bg-emerald-50 transition-all shadow-sm">🪑
                     Sillas Gamer</button>
                 <button id="trend-pill-6" data-emoji="📷" data-query-es="Cámaras Deportivas GoPro Hero" data-query-en="GoPro Hero action cameras" onclick="quickSearch('Cámaras Deportivas GoPro Hero')"
-                    class="flex-shrink-0 bg-white border border-slate-200 px-5 py-2.5 rounded-full text-sm font-bold text-slate-700 hover:border-emerald-400 hover:text-emerald-700 hover:bg-emerald-50 transition-all shadow-sm">📷
+                    class="flex-shrink-0 snap-start bg-white border border-slate-200 px-4 py-2.5 rounded-full text-sm font-bold text-slate-700 hover:border-emerald-400 hover:text-emerald-700 hover:bg-emerald-50 transition-all shadow-sm">📷
                     GoPro</button>
                 <button id="trend-pill-7" data-emoji="📺" data-query-es="Smart TV 55 pulgadas 4K" data-query-en="55 inch 4K Smart TV" onclick="quickSearch('Smart TV 55 pulgadas 4K')"
-                    class="flex-shrink-0 bg-white border border-slate-200 px-5 py-2.5 rounded-full text-sm font-bold text-slate-700 hover:border-emerald-400 hover:text-emerald-700 hover:bg-emerald-50 transition-all shadow-sm">📺
+                    class="flex-shrink-0 snap-start bg-white border border-slate-200 px-4 py-2.5 rounded-full text-sm font-bold text-slate-700 hover:border-emerald-400 hover:text-emerald-700 hover:bg-emerald-50 transition-all shadow-sm">📺
                     Smart TV 4K</button>
             </div>
         </div>
 
-        <!-- Showcase de Productos Frontal (Estilo Ecommerce) -->
-        <div id="product-showcase" class="w-full max-w-7xl mx-auto px-4 mt-8 mb-16 fade-in block">
-            <div class="flex items-center justify-between mb-6">
-                <h3 id="showcase-title" class="text-2xl font-display font-black text-slate-900 tracking-tight">Inspiración para ti</h3>
-                <a id="showcase-view-trends" href="#tendencias-section"
-                    class="text-primary font-bold text-sm hover:underline flex items-center gap-1 group">
-                    Ver tendencias <span class="group-hover:translate-x-1 transition-transform">→</span>
-                </a>
-            </div>
-
-            <div class="flex gap-6 overflow-x-auto pb-6 custom-scrollbar snap-x snap-mandatory">
-
-                <!-- Item 1 -->
-                <div class="w-72 sm:w-80 flex-shrink-0 snap-start bg-white rounded-2xl p-5 shadow-sm border border-slate-100 hover:shadow-lg hover:border-emerald-300 transition-all duration-200 group cursor-pointer relative overflow-hidden"
-                    onclick="document.getElementById('search-input').value='Nintendo Switch OLED'; document.getElementById('search-form').dispatchEvent(new Event('submit', { cancelable: true, bubbles: true }));">
-                    <div
-                        class="showcase-img-bg aspect-square bg-slate-50 rounded-xl mb-4 flex items-center justify-center p-6 relative">
-                        <img src="/images/switch.png" alt="Nintendo Switch" referrerpolicy="no-referrer" loading="lazy"
-                            class="showcase-img w-full h-full object-contain group-hover:scale-110 transition-transform duration-500 ease-out drop-shadow-md"
-                            onerror="this.onerror=null; this.src='/logo.png';">
-                    </div>
-                    <div id="showcase-cat-1" class="text-[10px] font-bold tracking-widest text-primary uppercase mb-1">Videojuegos</div>
-                    <h4 id="showcase-product-1" class="font-bold text-slate-800 leading-snug mb-2 line-clamp-2">Nintendo Switch OLED 64GB Color
-                        Blanco</h4>
-                    <div class="flex items-end gap-2 mt-auto">
-                        <span class="text-2xl font-black text-slate-900">$5,490</span>
-                        <span class="text-sm font-medium text-slate-400 line-through mb-1">$6,999</span>
-                    </div>
-                </div>
-
-                <!-- Item 2 -->
-                <div class="w-72 sm:w-80 flex-shrink-0 snap-start bg-white rounded-2xl p-5 shadow-sm border border-slate-100 hover:shadow-lg hover:border-emerald-300 transition-all duration-200 group cursor-pointer relative overflow-hidden"
-                    onclick="document.getElementById('search-input').value='Audífonos Sony WH-1000XM5'; document.getElementById('search-form').dispatchEvent(new Event('submit', { cancelable: true, bubbles: true }));">
-                    <div
-                        class="showcase-img-bg aspect-square bg-slate-50 rounded-xl mb-4 flex items-center justify-center p-6 relative">
-                        <img src="/images/sonywh.png" alt="Sony Headphones" referrerpolicy="no-referrer" loading="lazy"
-                            class="showcase-img w-full h-full object-contain group-hover:scale-110 transition-transform duration-500 ease-out drop-shadow-md"
-                            onerror="this.onerror=null; this.src='/logo.png';">
-                    </div>
-                    <div id="showcase-cat-2" class="text-[10px] font-bold tracking-widest text-primary uppercase mb-1">Audio Premium</div>
-                    <h4 id="showcase-product-2" class="font-bold text-slate-800 leading-snug mb-2 line-clamp-2">Audífonos inalámbricos Sony
-                        WH-1000XM5 Noise Cancelling</h4>
-                    <div class="flex items-end gap-2 mt-auto">
-                        <span class="text-2xl font-black text-slate-900">$5,399</span>
-                    </div>
-                </div>
-
-                <!-- Item 3 -->
-                <div class="w-72 sm:w-80 flex-shrink-0 snap-start bg-white rounded-2xl p-5 shadow-sm border border-slate-100 hover:shadow-lg hover:border-emerald-300 transition-all duration-200 group cursor-pointer relative overflow-hidden"
-                    onclick="document.getElementById('search-input').value='Apple Watch Series 9'; document.getElementById('search-form').dispatchEvent(new Event('submit', { cancelable: true, bubbles: true }));">
-                    <div
-                        class="showcase-img-bg aspect-square bg-slate-50 rounded-xl mb-4 flex items-center justify-center p-6 relative">
-                        <img src="/images/applewatch.png" alt="Apple Watch" referrerpolicy="no-referrer" loading="lazy"
-                            class="showcase-img w-full h-full object-contain group-hover:scale-110 transition-transform duration-500 ease-out drop-shadow-md"
-                            onerror="this.onerror=null; this.src='/logo.png';">
-                    </div>
-                    <div id="showcase-cat-3" class="text-[10px] font-bold tracking-widest text-primary uppercase mb-1">Smartwatches</div>
-                    <h4 id="showcase-product-3" class="font-bold text-slate-800 leading-snug mb-2 line-clamp-2">Apple Watch Series 9 (GPS, 45mm)
-                        Caja de Aluminio</h4>
-                    <div class="flex items-end gap-2 mt-auto">
-                        <span class="text-2xl font-black text-slate-900">$7,499</span>
-                        <span class="text-sm font-medium text-slate-400 line-through mb-1">$8,999</span>
-                    </div>
-                </div>
-
-                <!-- Item 4 -->
-                <div class="w-72 sm:w-80 flex-shrink-0 snap-start bg-white rounded-2xl p-5 shadow-sm border border-slate-100 hover:shadow-lg hover:border-emerald-300 transition-all duration-200 group cursor-pointer relative overflow-hidden"
-                    onclick="document.getElementById('search-input').value='Ninja Air Fryer AF101'; document.getElementById('search-form').dispatchEvent(new Event('submit', { cancelable: true, bubbles: true }));">
-                    <div
-                        class="showcase-img-bg aspect-square bg-slate-50 rounded-xl mb-4 flex items-center justify-center p-6 relative">
-                        <img src="/images/ninja.png" alt="Ninja Air Fryer" referrerpolicy="no-referrer" loading="lazy"
-                            class="showcase-img w-full h-full object-contain group-hover:scale-110 transition-transform duration-500 ease-out drop-shadow-md"
-                            onerror="this.onerror=null; this.src='/logo.png';">
-                    </div>
-                    <div id="showcase-cat-4" class="text-[10px] font-bold tracking-widest text-primary uppercase mb-1">Cocina</div>
-                    <h4 id="showcase-product-4" class="font-bold text-slate-800 leading-snug mb-2 line-clamp-2">Freidora de Aire Ninja AF101
-                        3.7L</h4>
-                    <div class="flex items-end gap-2 mt-auto">
-                        <span class="text-2xl font-black text-slate-900">$1,899</span>
-                        <span class="text-sm font-medium text-slate-400 line-through mb-1">$2,999</span>
-                    </div>
-                </div>
-
-            </div>
-        </div>
-
-        <!-- Secciones Extra: Ofertas, Tendencias, Categorías -->
-        <div id="extra-sections" class="w-full mt-16 grid grid-cols-1 md:grid-cols-3 gap-8 fade-in">
-            <!-- Categorías -->
-            <div class="glass-panel p-6 rounded-3xl">
-                <h3 id="extra-categories-title" class="text-xl font-display font-bold text-slate-900 mb-4 flex items-center gap-2">
-                    <svg class="w-5 h-5 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                            d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6z">
-                        </path>
-                    </svg>
-                    Categorías Populares
-                </h3>
-                <div class="flex flex-wrap gap-2">
-                    <button onclick="quickSearch('Smartphones')"
-                        class="px-3 py-1.5 bg-white border border-slate-200 rounded-full text-sm font-medium text-slate-600 hover:text-primary hover:border-primary/40 cursor-pointer transition-colors shadow-sm">📱
-                        <span id="extra-category-phones">Celulares</span></button>
-                    <button onclick="quickSearch('Laptops para trabajo y estudio')"
-                        class="px-3 py-1.5 bg-white border border-slate-200 rounded-full text-sm font-medium text-slate-600 hover:text-primary hover:border-primary/40 cursor-pointer transition-colors shadow-sm">💻
-                        <span id="extra-category-laptops">Laptops</span></button>
-                    <button onclick="quickSearch('Audífonos inalámbricos')"
-                        class="px-3 py-1.5 bg-white border border-slate-200 rounded-full text-sm font-medium text-slate-600 hover:text-primary hover:border-primary/40 cursor-pointer transition-colors shadow-sm">🎧
-                        <span id="extra-category-audio">Audio</span></button>
-                    <button onclick="quickSearch('Consolas de videojuegos')"
-                        class="px-3 py-1.5 bg-white border border-slate-200 rounded-full text-sm font-medium text-slate-600 hover:text-primary hover:border-primary/40 cursor-pointer transition-colors shadow-sm">🎮
-                        <span id="extra-category-consoles">Consolas</span></button>
-                    <button onclick="quickSearch('Tenis deportivos')"
-                        class="px-3 py-1.5 bg-white border border-slate-200 rounded-full text-sm font-medium text-slate-600 hover:text-primary hover:border-primary/40 cursor-pointer transition-colors shadow-sm">👟
-                        <span id="extra-category-shoes">Tenis</span></button>
-                    <button onclick="quickSearch('Electrodomésticos cocina')"
-                        class="px-3 py-1.5 bg-white border border-slate-200 rounded-full text-sm font-medium text-slate-600 hover:text-primary hover:border-primary/40 cursor-pointer transition-colors shadow-sm">🍳
-                        <span id="extra-category-kitchen">Cocina</span></button>
-                    <button onclick="quickSearch('Perfumes originales')"
-                        class="px-3 py-1.5 bg-white border border-slate-200 rounded-full text-sm font-medium text-slate-600 hover:text-primary hover:border-primary/40 cursor-pointer transition-colors shadow-sm">🧴
-                        <span id="extra-category-perfumes">Perfumes</span></button>
-                    <button onclick="quickSearch('Muebles para casa')"
-                        class="px-3 py-1.5 bg-white border border-slate-200 rounded-full text-sm font-medium text-slate-600 hover:text-primary hover:border-primary/40 cursor-pointer transition-colors shadow-sm">🛋️
-                        <span id="extra-category-furniture">Muebles</span></button>
-                </div>
-            </div>
-            <!-- Tendencias -->
-            <div class="glass-panel p-6 rounded-3xl">
-                <h3 id="extra-trending-title" class="text-xl font-display font-bold text-slate-900 mb-4 flex items-center gap-2">
-                    <svg class="w-5 h-5 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                            d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6"></path>
-                    </svg>
-                    Lo Más Buscado
-                </h3>
-                <ul class="space-y-3">
-                    <li onclick="quickSearch('PlayStation 5 Slim')"
-                        class="flex items-center gap-3 text-sm font-medium text-slate-700 cursor-pointer hover:text-primary transition-colors">
-                        <span
-                            class="w-6 h-6 rounded bg-emerald-100 flex items-center justify-center text-xs font-bold text-emerald-700">1</span>
-                        PlayStation 5 Slim
-                    </li>
-                    <li onclick="quickSearch('iPhone 16 Pro Max')"
-                        class="flex items-center gap-3 text-sm font-medium text-slate-700 cursor-pointer hover:text-primary transition-colors">
-                        <span
-                            class="w-6 h-6 rounded bg-slate-100 flex items-center justify-center text-xs font-bold text-slate-500">2</span>
-                        iPhone 16 Pro Max
-                    </li>
-                    <li onclick="quickSearch('AirPods Pro 2 USB-C')"
-                        class="flex items-center gap-3 text-sm font-medium text-slate-700 cursor-pointer hover:text-primary transition-colors">
-                        <span
-                            class="w-6 h-6 rounded bg-slate-100 flex items-center justify-center text-xs font-bold text-slate-500">3</span>
-                        AirPods Pro 2 USB-C
-                    </li>
-                    <li onclick="quickSearch('Samsung Galaxy S25 Ultra')"
-                        class="flex items-center gap-3 text-sm font-medium text-slate-700 cursor-pointer hover:text-primary transition-colors">
-                        <span
-                            class="w-6 h-6 rounded bg-slate-100 flex items-center justify-center text-xs font-bold text-slate-500">4</span>
-                        Galaxy S25 Ultra
-                    </li>
-                    <li onclick="quickSearch('MacBook Air M3')"
-                        class="flex items-center gap-3 text-sm font-medium text-slate-700 cursor-pointer hover:text-primary transition-colors">
-                        <span
-                            class="w-6 h-6 rounded bg-slate-100 flex items-center justify-center text-xs font-bold text-slate-500">5</span>
-                        MacBook Air M3
-                    </li>
-                </ul>
-            </div>
-            <!-- Ofertas Flash -->
-            <div class="glass-panel p-6 rounded-3xl">
-                <h3 id="extra-deals-title" class="text-xl font-display font-bold text-slate-900 mb-4 flex items-center gap-2">
-                    <svg class="w-5 h-5 text-red-500" fill="currentColor" viewBox="0 0 20 20">
-                        <path fill-rule="evenodd"
-                            d="M12.395 2.553a1 1 0 00-1.45-.385c-.345.23-.614.558-.822.88-.281.436-.506.914-.769 1.36-1.09 1.838-2.253 3.664-4.524 4.54a1 1 0 00-.598.91v7a1 1 0 001 1h8.773a1 1 0 00.957-.704l1.297-4.143a4 4 0 00-1.29-4.2l-2.58-1.547zm-7.382 7.785l-.546-.328A3 3 0 001 10.871v5a1 1 0 001 1h1.5A3.5 3.5 0 007 13.371v-2.033z"
-                            clip-rule="evenodd"></path>
-                    </svg>
-                    Ofertas del Día
-                </h3>
-                <div class="space-y-3">
-                    <div onclick="quickSearch('Echo Dot 5ta Gen')"
-                        class="flex items-center justify-between p-3 bg-white rounded-xl shadow-sm border border-slate-100 cursor-pointer hover:border-primary transition-colors">
-                        <div>
-                            <p class="text-xs font-bold text-slate-500 mb-0.5">Amazon MX</p>
-                            <p class="text-sm font-semibold text-slate-800">Echo Dot 5ta Gen</p>
-                        </div>
-                        <span class="bg-red-100 text-red-700 text-xs font-bold px-2 py-1 rounded-md">-40%</span>
-                    </div>
-                    <div onclick="quickSearch('Freidora de Aire Ninja')"
-                        class="flex items-center justify-between p-3 bg-white rounded-xl shadow-sm border border-slate-100 cursor-pointer hover:border-primary transition-colors">
-                        <div>
-                            <p class="text-xs font-bold text-slate-500 mb-0.5">Liverpool</p>
-                            <p class="text-sm font-semibold text-slate-800">Freidora Ninja AF101</p>
-                        </div>
-                        <span class="bg-red-100 text-red-700 text-xs font-bold px-2 py-1 rounded-md">-35%</span>
-                    </div>
-                    <div onclick="quickSearch('Smart TV Samsung 55 pulgadas')"
-                        class="flex items-center justify-between p-3 bg-white rounded-xl shadow-sm border border-slate-100 cursor-pointer hover:border-primary transition-colors">
-                        <div>
-                            <p class="text-xs font-bold text-slate-500 mb-0.5">Walmart MX</p>
-                            <p class="text-sm font-semibold text-slate-800">Smart TV Samsung 55"</p>
-                        </div>
-                        <span class="bg-red-100 text-red-700 text-xs font-bold px-2 py-1 rounded-md">-28%</span>
-                    </div>
-                </div>
-            </div>
-        </div>
+        <!-- Secciones extra eliminadas — contenido ya cubierto por Flash Deals, Trends y Category Bar -->
 
     </main>
 
@@ -3056,7 +2758,7 @@
                             d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z">
                         </path>
                     </svg>
-                    <span id="mobile-b2b-label">Plan Reseller (B2B)</span>
+                    <span id="mobile-b2b-label">Distribuidor B2B</span>
                 </button>
             </nav>
 

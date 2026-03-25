@@ -54,7 +54,7 @@ window.addEventListener('unhandledrejection', function (event) {
     const msg = String(event.reason?.message || event.reason || '');
     if (msg.includes('Failed to fetch') || msg.includes('NetworkError') || msg.includes('net::ERR_')) {
         if (typeof showGlobalFeedback === 'function') {
-            showGlobalFeedback(detectRegion() === 'US' ? 'Connection error. Check your internet and try again.' : 'Error de conexión. Verifica tu internet e intenta de nuevo.', 'error');
+            showGlobalFeedback(isEnglishRegion(detectRegion()) ? 'Connection error. Check your internet and try again.' : 'Error de conexión. Verifica tu internet e intenta de nuevo.', 'error');
         }
     }
 });
@@ -229,7 +229,15 @@ function getVoiceRecognitionLocale(regionCode = 'MX') {
     return localeMap[normalized] || 'es-MX';
 }
 
-function localizeDynamicResultText(value, isUS = currentRegion === 'US') {
+function isEnglishRegion(regionCode = currentRegion) {
+    return String(regionCode || 'MX').toUpperCase() === 'US';
+}
+
+function getLanguageBucket(regionCode = currentRegion) {
+    return isEnglishRegion(regionCode) ? 'US' : 'MX';
+}
+
+function localizeDynamicResultText(value, isUS = isEnglishRegion()) {
     const text = String(value || '').trim();
     if (!text) return '';
 
@@ -268,7 +276,7 @@ function localizeDynamicResultText(value, isUS = currentRegion === 'US') {
     return replacements.reduce((acc, [pattern, replacement]) => acc.replace(pattern, replacement), text);
 }
 
-function normalizeResultTitle(rawTitle, storeName = '', isUS = currentRegion === 'US') {
+function normalizeResultTitle(rawTitle, storeName = '', isUS = isEnglishRegion()) {
     const title = String(rawTitle || '').replace(/\s+/g, ' ').trim();
     if (!title) return isUS ? 'Product listing' : 'Producto disponible';
 
@@ -285,7 +293,7 @@ function normalizeResultTitle(rawTitle, storeName = '', isUS = currentRegion ===
     return normalized || (isUS ? 'Product listing' : 'Producto disponible');
 }
 
-function buildImageRenderState(product, isUS = currentRegion === 'US') {
+function buildImageRenderState(product, isUS = isEnglishRegion()) {
     const title = normalizeResultTitle(product?.titulo, product?.tienda, isUS);
     const storeName = String(product?.tienda || product?.fuente || '').trim();
     const fallbackImgUrl = buildFallbackProductImage(title || storeName || 'Lumu');
@@ -314,7 +322,7 @@ function buildImageRenderState(product, isUS = currentRegion === 'US') {
 const REGION_UI_COPY = {
     MX: {
         nav: {
-            inspiration: 'Inspiración',
+            inspiration: 'Ofertas',
             trending: 'Tendencias',
             pricing: 'Precios',
             favorites: 'Favoritos',
@@ -326,9 +334,9 @@ const REGION_UI_COPY = {
             login: 'Ingresar'
         },
         hero: {
-            titleHtml: 'El precio perfecto,<br/><span class="text-transparent bg-clip-text bg-gradient-to-r from-emerald-500 to-teal-400">en un instante.</span>',
-            subtitle: 'Comparamos precios en Amazon, Mercado Libre y tiendas locales con IA.',
-            assistant: 'Describe lo que necesitas y Lumu compara precios, tiendas confiables y opciones cerca de ti.',
+            titleHtml: 'Compara precios con IA,<br/><span class="text-transparent bg-clip-text bg-gradient-to-r from-emerald-500 to-teal-400">encuentra dónde conviene.</span>',
+            subtitle: 'Busca cualquier producto y Lumu compara precios en Amazon, Mercado Libre y tiendas locales.',
+            assistant: 'Escribe producto, presupuesto, uso o si quieres que compare por ti.',
             attachImageTitle: 'Adjuntar Imagen',
             voiceInputTitle: 'Dictado por Voz'
         },
@@ -551,7 +559,7 @@ const REGION_UI_COPY = {
     },
     US: {
         nav: {
-            inspiration: 'Inspiration',
+            inspiration: 'Deals',
             trending: 'Trending',
             pricing: 'Pricing',
             favorites: 'Favorites',
@@ -563,9 +571,9 @@ const REGION_UI_COPY = {
             login: 'Sign In'
         },
         hero: {
-            titleHtml: 'The perfect price,<br/><span class="text-transparent bg-clip-text bg-gradient-to-r from-emerald-500 to-teal-400">in an instant.</span>',
-            subtitle: 'We compare prices across Amazon, Mercado Libre, and local stores with AI.',
-            assistant: 'Describe what you need and Lumu compares prices, trusted stores, and nearby options for you.',
+            titleHtml: 'Compare prices with AI,<br/><span class="text-transparent bg-clip-text bg-gradient-to-r from-emerald-500 to-teal-400">find where it makes sense.</span>',
+            subtitle: 'Search any product and Lumu compares prices across Amazon, Mercado Libre, and local stores.',
+            assistant: 'Type the product, budget, use case, or ask Lumu to compare for you.',
             attachImageTitle: 'Attach Image',
             voiceInputTitle: 'Voice Dictation'
         },
@@ -811,7 +819,7 @@ function setBrowseCategoryState(categoryKey = '') {
 }
 
 function revealLandingBrowseSections() {
-    const ids = ['header-browse-strip', 'browse-hub-section', 'category-icon-bar', 'flash-deals-section', 'tendencias-section', 'product-showcase', 'extra-sections'];
+    const ids = ['header-browse-strip', 'category-icon-bar', 'flash-deals-section', 'tendencias-section'];
     ids.forEach((id) => {
         const element = document.getElementById(id);
         if (element) element.classList.remove('hidden');
@@ -819,7 +827,7 @@ function revealLandingBrowseSections() {
 }
 
 function hideLandingBrowseSections() {
-    const ids = ['browse-hub-section', 'category-icon-bar', 'flash-deals-section', 'tendencias-section', 'product-showcase', 'extra-sections'];
+    const ids = ['category-icon-bar', 'flash-deals-section', 'tendencias-section'];
     ids.forEach((id) => {
         const element = document.getElementById(id);
         if (element) element.classList.add('hidden');
@@ -1115,11 +1123,11 @@ function applyOnboardingPreference(preference = '') {
 
     if (searchInput) {
         if (normalizedPreference === 'cheapest' && !searchInput.placeholder.toLowerCase().includes('barato')) {
-            searchInput.placeholder = currentRegion === 'US'
+            searchInput.placeholder = isEnglishRegion()
                 ? 'Search products and find the cheapest real option...'
                 : 'Busca productos y encuentra la opción más barata real...';
         } else if (normalizedPreference === 'best_value' && !searchInput.placeholder.toLowerCase().includes('value')) {
-            searchInput.placeholder = currentRegion === 'US'
+            searchInput.placeholder = isEnglishRegion()
                 ? 'Search products and compare the best value options...'
                 : 'Busca productos y compara las opciones que más convienen...';
         }
@@ -1131,7 +1139,7 @@ function applyOnboardingPreference(preference = '') {
 function buildWelcomeOnboardingModal() {
     const existing = document.getElementById('welcome-onboarding-modal');
     if (existing) return existing;
-    const _onbEs = /^es\b/i.test(navigator.language || '');
+    const _onbEs = !isEnglishRegion();
 
     const overlay = document.createElement('div');
     overlay.id = 'welcome-onboarding-modal';
@@ -1214,7 +1222,7 @@ function initWelcomeOnboarding() {
         step1.classList.toggle('hidden', !isStepOne);
         step2.classList.toggle('hidden', isStepOne);
         backBtn.classList.toggle('hidden', isStepOne);
-        const _sEs = /^es\b/i.test(navigator.language || '');
+        const _sEs = !isEnglishRegion(selectedRegion || currentRegion);
         title.textContent = isStepOne
             ? (_sEs ? '¿Desde dónde compras?' : 'Where are you shopping from?')
             : (_sEs ? '¿Qué es lo más importante para ti?' : 'What matters most to you?');
@@ -1334,27 +1342,27 @@ function renderContinuityHub() {
 
     const recentEntries = getRecentHistoryEntries(4);
     if (recentEntries.length === 0) {
-        continuityList.textContent = currentRegion === 'US' ? 'No recent searches' : 'Sin recientes';
+        continuityList.textContent = isEnglishRegion() ? 'No recent searches' : 'Sin recientes';
         if (historyItems) {
             historyItems.innerHTML = `
                 <button type="button" class="continuity-history-open w-full rounded-xl px-3 py-2 text-left text-sm font-medium text-slate-500 hover:bg-slate-50">
-                    ${currentRegion === 'US' ? 'Open full history' : 'Abrir historial completo'}
+                    ${isEnglishRegion() ? 'Open full history' : 'Abrir historial completo'}
                 </button>
             `;
         }
     } else {
-        continuityList.textContent = recentEntries[0]?.query || (currentRegion === 'US' ? 'Open history' : 'Abrir historial');
+        continuityList.textContent = recentEntries[0]?.query || (isEnglishRegion() ? 'Open history' : 'Abrir historial');
         if (historyItems) {
             historyItems.innerHTML = `
                 ${recentEntries.map((entry) => `
                     <button type="button" class="continuity-history-entry w-full rounded-xl px-3 py-2 text-left hover:bg-slate-50" data-query="${sanitize(entry.query)}">
                         <p class="truncate text-sm font-bold text-slate-800">${sanitize(entry.query)}</p>
-                        <p class="mt-0.5 text-[11px] font-medium text-slate-400">${currentRegion === 'US' ? 'Search again' : 'Buscar otra vez'}</p>
+                        <p class="mt-0.5 text-[11px] font-medium text-slate-400">${isEnglishRegion() ? 'Search again' : 'Buscar otra vez'}</p>
                     </button>
                 `).join('')}
                 <div class="my-1 h-px bg-slate-100"></div>
                 <button type="button" class="continuity-history-open w-full rounded-xl px-3 py-2 text-left text-sm font-bold text-emerald-700 hover:bg-emerald-50">
-                    ${currentRegion === 'US' ? 'Open full history' : 'Abrir historial completo'}
+                    ${isEnglishRegion() ? 'Open full history' : 'Abrir historial completo'}
                 </button>
             `;
         }
@@ -1448,6 +1456,8 @@ function applyRegionalCopy() {
     currentRegion = detectRegion();
     const config = getRegionConfig();
     const ui = getRegionUICopy();
+    const isEnglish = isEnglishRegion(currentRegion);
+    const languageBucket = getLanguageBucket(currentRegion);
     const regionBadge = currentRegion === 'auto' ? 'AUTO' : currentRegion;
     const savedOverride = localStorage.getItem(REGION_OVERRIDE_KEY) || 'auto';
 
@@ -1490,22 +1500,22 @@ function applyRegionalCopy() {
         safeBtn.innerHTML = `${icon} ${config.filters.safe}`;
     }
     if (knownMarketplacesBtn) {
-        knownMarketplacesBtn.textContent = currentRegion === 'US' ? 'Known marketplaces' : 'Marketplaces conocidos';
+        knownMarketplacesBtn.textContent = isEnglish ? 'Known marketplaces' : 'Marketplaces conocidos';
     }
     if (highRiskBtn) {
-        highRiskBtn.textContent = currentRegion === 'US' ? 'High risk' : 'Riesgo alto';
+        highRiskBtn.textContent = isEnglish ? 'High risk' : 'Riesgo alto';
     }
     if (onlyCouponsBtn) {
-        onlyCouponsBtn.textContent = currentRegion === 'US' ? 'Coupons only' : 'Solo con cupón';
+        onlyCouponsBtn.textContent = isEnglish ? 'Coupons only' : 'Solo con cupón';
     }
     if (onlyRealDealsBtn) {
-        onlyRealDealsBtn.textContent = currentRegion === 'US' ? 'Real deals only' : 'Solo oferta real';
+        onlyRealDealsBtn.textContent = isEnglish ? 'Real deals only' : 'Solo oferta real';
     }
     if (advancedFiltersTitle) {
-        advancedFiltersTitle.textContent = currentRegion === 'US' ? 'Advanced filters' : 'Filtros avanzados';
+        advancedFiltersTitle.textContent = isEnglish ? 'Advanced filters' : 'Filtros avanzados';
     }
     if (pricingCopy) {
-        pricingCopy.innerHTML = currentRegion === 'US'
+        pricingCopy.innerHTML = isEnglish
             ? 'From <strong class="text-emerald-600">$39 USD/month</strong> — no ads, price alerts, and tools to find the best deals faster.'
             : `Desde <strong class="text-emerald-600">$39 ${config.currency}/mes</strong> — sin anuncios, con alertas de precio y herramientas para encontrar más rápido las mejores ofertas.`;
     }
@@ -1526,7 +1536,7 @@ function applyRegionalCopy() {
 
     const metaDesc = document.querySelector('meta[name="description"]');
     if (metaDesc) {
-        metaDesc.content = currentRegion === 'US'
+        metaDesc.content = isEnglish
             ? `Compare prices in ${config.activeRegion} with localized stores, marketplaces and nearby results.`
             : `Compara precios en ${config.activeRegion} con tiendas locales, marketplaces y resultados cerca de ti.`;
     }
@@ -1601,11 +1611,11 @@ function applyRegionalCopy() {
     setTextById('category-chip-toys', ui.categoryBar.toys);
     setTextById('category-chip-cars', ui.categoryBar.cars);
     const headerCategoryLabels = {
-        smartphones: currentRegion === 'US' ? 'Phones' : 'Smartphones',
+        smartphones: isEnglish ? 'Phones' : 'Smartphones',
         laptops: ui.categoryBar.laptops,
-        gaming: currentRegion === 'US' ? 'Gaming' : 'Gaming',
+        gaming: 'Gaming',
         audio: ui.categoryBar.audio,
-        tv: currentRegion === 'US' ? 'TVs' : 'TVs',
+        tv: 'TVs',
         home: ui.categoryBar.home
     };
     document.querySelectorAll('[data-header-category]').forEach((button) => {
@@ -1636,14 +1646,14 @@ function applyRegionalCopy() {
     setTextById('extra-deals-title', ui.home.dayDealsTitle);
     setTextById('coins-progress-subtitle', ui.home.coinsSubtitle);
     setTextById('results-title', `${config.sections.analysisComplete} `);
-    setTextById('showcase-title', ui.home.trendingTitle === 'Most Searched' ? SHOWCASE_COPY.US.title : SHOWCASE_COPY.MX.title);
+    setTextById('showcase-title', languageBucket === 'US' ? SHOWCASE_COPY.US.title : SHOWCASE_COPY.MX.title);
 
     const resultsTitle = document.getElementById('results-title');
     if (resultsTitle) {
         resultsTitle.innerHTML = `${config.sections.analysisComplete} <span class="text-slate-500 font-medium">${config.sections.bestOptions}</span>`;
     }
 
-    const showcaseRegionCopy = currentRegion === 'US' ? SHOWCASE_COPY.US : SHOWCASE_COPY.MX;
+    const showcaseRegionCopy = languageBucket === 'US' ? SHOWCASE_COPY.US : SHOWCASE_COPY.MX;
     setTextById('showcase-title', showcaseRegionCopy.title);
     const showcaseViewTrends = document.getElementById('showcase-view-trends');
     if (showcaseViewTrends) {
@@ -1653,13 +1663,13 @@ function applyRegionalCopy() {
     showcaseRegionCopy.categories.forEach((value, index) => setTextById(`showcase-cat-${index + 1}`, value));
     showcaseRegionCopy.products.forEach((value, index) => setTextById(`showcase-product-${index + 1}`, value));
 
-    TREND_PILL_COPY[currentRegion === 'US' ? 'US' : 'MX'].forEach((value, index) => {
+    TREND_PILL_COPY[languageBucket].forEach((value, index) => {
         const button = document.getElementById(`trend-pill-${index + 1}`);
         if (!button) return;
         button.innerHTML = `${button.innerHTML.split('</span>')[0] || button.textContent}`;
         const emoji = button.textContent.trim().split(/\s+/)[0];
         button.textContent = `${emoji} ${value}`;
-        button.onclick = () => quickSearch(button.getAttribute(currentRegion === 'US' ? 'data-query-en' : 'data-query-es') || '');
+        button.onclick = () => quickSearch(button.getAttribute(isEnglish ? 'data-query-en' : 'data-query-es') || '');
     });
 
     updateSeasonTitle();
@@ -1879,6 +1889,13 @@ function getSearchButtonIdleHTML() {
             `;
 }
 
+function getSearchButtonCancelHTML() {
+    return `
+                <span>${getLocalizedText('Cancelar', 'Cancel')}</span>
+                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-x"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
+            `;
+}
+
 function getSearchSnapshots() {
     try {
         return JSON.parse(localStorage.getItem(SEARCH_SNAPSHOTS_KEY) || '{}');
@@ -1908,7 +1925,7 @@ function buildFallbackProductImage(label = 'Lumu') {
 }
 
 function getLocalizedText(spanish, english) {
-    return currentRegion === 'US' ? english : spanish;
+    return isEnglishRegion() ? english : spanish;
 }
 
 const TRUST_LABEL_EN = {
@@ -1952,7 +1969,7 @@ const SHOWCASE_COPY = {
 };
 
 function localizeCouponDetails(details = '') {
-    if (currentRegion !== 'US') return details;
+    if (!isEnglishRegion()) return details;
     return String(details || '')
         .replace(/ENV[IÍ]O GRATIS/gi, 'FREE SHIPPING')
         .replace(/CUP[OÓ]N DISPONIBLE/gi, 'COUPON AVAILABLE')
@@ -2199,8 +2216,6 @@ function restoreHomeSections() {
     const categoryIconBar = document.getElementById('category-icon-bar');
     const flashDealsSection = document.getElementById('flash-deals-section');
     const tendenciasSection = document.getElementById('tendencias-section');
-    const productShowcase = document.getElementById('product-showcase');
-    const extraSections = document.getElementById('extra-sections');
     const resultsWrapper = document.getElementById('results-wrapper');
     const chatContainer = document.getElementById('chat-container');
     const resultsGrid = document.getElementById('results-grid');
@@ -2213,8 +2228,6 @@ function restoreHomeSections() {
     categoryIconBar?.classList.remove('hidden');
     flashDealsSection?.classList.remove('hidden');
     tendenciasSection?.classList.remove('hidden');
-    productShowcase?.classList.remove('hidden');
-    extraSections?.classList.remove('hidden');
     resultsWrapper?.classList.add('hidden');
     chatContainer?.classList.add('hidden');
     if (resultsGrid) resultsGrid.innerHTML = '';
@@ -2238,7 +2251,7 @@ async function renderFavoritesList() {
     const sb = window.supabaseClient || null;
     const user = window.currentUser || null;
     if (!sb || !user) {
-        favoritesList.innerHTML = `<p class="text-slate-400 text-center py-8">${currentRegion === 'US' ? 'Sign in to view your favorites.' : 'Inicia sesión para ver tus favoritos.'}</p>`;
+        favoritesList.innerHTML = `<p class="text-slate-400 text-center py-8">${isEnglishRegion() ? 'Sign in to view your favorites.' : 'Inicia sesión para ver tus favoritos.'}</p>`;
         return;
     }
 
@@ -2249,13 +2262,13 @@ async function renderFavoritesList() {
         if (error) throw error;
 
         if (!data || data.length === 0) {
-            favoritesList.innerHTML = `<p class="text-slate-400 text-center py-8">${currentRegion === 'US' ? 'You do not have saved products yet.' : 'Aún no tienes productos guardados.'}</p>`;
+            favoritesList.innerHTML = `<p class="text-slate-400 text-center py-8">${isEnglishRegion() ? 'You do not have saved products yet.' : 'Aún no tienes productos guardados.'}</p>`;
             return;
         }
 
         favoritesList.innerHTML = data.map(item => {
             const favPrice = typeof item.product_price === 'number' ? item.product_price : parseFloat(String(item.product_price || '0').replace(/[^0-9.-]+/g, ''));
-            const safeTitle = sanitize(item.product_title || (currentRegion === 'US' ? 'Untitled product' : 'Producto sin título'));
+            const safeTitle = sanitize(item.product_title || (isEnglishRegion() ? 'Untitled product' : 'Producto sin título'));
             const safeUrl = sanitize(item.product_url || '#');
             const safeImage = sanitize(item.product_image || '');
             return `
@@ -2268,7 +2281,7 @@ async function renderFavoritesList() {
                             <h4 class="font-bold text-slate-800 text-sm mb-1 truncate">${safeTitle}</h4>
                             <p class="text-emerald-600 font-black text-lg mb-2">${formatCurrencyByRegion(favPrice || 0)}</p>
                             <div class="flex gap-2">
-                                <a href="${safeUrl}" target="_blank" rel="noopener noreferrer" class="flex-grow bg-slate-900 text-white text-[11px] font-black py-2 rounded-lg text-center hover:bg-emerald-600 transition-colors">${currentRegion === 'US' ? 'View Product' : 'Ver Producto'}</a>
+                                <a href="${safeUrl}" target="_blank" rel="noopener noreferrer" class="flex-grow bg-slate-900 text-white text-[11px] font-black py-2 rounded-lg text-center hover:bg-emerald-600 transition-colors">${isEnglishRegion() ? 'View Product' : 'Ver Producto'}</a>
                                 <button onclick="window.removeFavoriteFromList('${encodeURIComponent(item.product_url)}')" class="p-2 bg-rose-50 text-rose-500 rounded-lg hover:bg-rose-100 transition-colors">
                                     <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M3.172 5.172a4 4 0 015.656 0L10 6.343l1.172-1.171a4 4 0 115.656 5.656L10 17.657l-6.828-6.829a4 4 0 010-5.656z" clip-rule="evenodd"></path></svg>
                                 </button>
@@ -2280,7 +2293,7 @@ async function renderFavoritesList() {
         }).join('');
     } catch (err) {
         console.error('Error rendering favorites:', err);
-        favoritesList.innerHTML = `<p class="text-rose-500 text-center py-8">${currentRegion === 'US' ? 'Error loading favorites.' : 'Error cargando favoritos.'}</p>`;
+        favoritesList.innerHTML = `<p class="text-rose-500 text-center py-8">${isEnglishRegion() ? 'Error loading favorites.' : 'Error cargando favoritos.'}</p>`;
     }
 };
 
@@ -2294,7 +2307,7 @@ window.renderMiniFavorites = async () => {
     const user = window.currentUser || null;
 
     if (!sb || !user) {
-        list.innerHTML = `<p class="text-xs text-slate-400 text-center py-4 font-medium">${currentRegion === 'US' ? 'Sign in to view your favorites.' : 'Inicia sesión para ver tus favoritos.'}</p>`;
+        list.innerHTML = `<p class="text-xs text-slate-400 text-center py-4 font-medium">${isEnglishRegion() ? 'Sign in to view your favorites.' : 'Inicia sesión para ver tus favoritos.'}</p>`;
         return;
     }
 
@@ -2305,14 +2318,14 @@ window.renderMiniFavorites = async () => {
         if (error) throw error;
 
         if (!data || data.length === 0) {
-            list.innerHTML = `<p class="text-xs text-slate-400 text-center py-4 font-medium">${currentRegion === 'US' ? 'You do not have saved products yet.' : 'Aún no tienes productos guardados.'}</p>`;
+            list.innerHTML = `<p class="text-xs text-slate-400 text-center py-4 font-medium">${isEnglishRegion() ? 'You do not have saved products yet.' : 'Aún no tienes productos guardados.'}</p>`;
             list.setAttribute('data-loaded', 'true');
             return;
         }
 
         list.innerHTML = data.map(item => {
             const favPrice = typeof item.product_price === 'number' ? item.product_price : parseFloat(String(item.product_price || '0').replace(/[^0-9.-]+/g, ''));
-            const safeTitle = sanitize(item.product_title || (currentRegion === 'US' ? 'Untitled product' : 'Producto sin título'));
+            const safeTitle = sanitize(item.product_title || (isEnglishRegion() ? 'Untitled product' : 'Producto sin título'));
             const safeUrl = sanitize(item.product_url || '#');
             const safeImage = sanitize(item.product_image || '');
             return `
@@ -2331,7 +2344,7 @@ window.renderMiniFavorites = async () => {
         list.setAttribute('data-loaded', 'true');
     } catch (err) {
         console.error('Error rendering mini favorites:', err);
-        list.innerHTML = `<p class="text-xs text-rose-500 text-center py-4 font-medium">${currentRegion === 'US' ? 'Error loading favorites.' : 'Error cargando favoritos.'}</p>`;
+        list.innerHTML = `<p class="text-xs text-rose-500 text-center py-4 font-medium">${isEnglishRegion() ? 'Error loading favorites.' : 'Error cargando favoritos.'}</p>`;
     }
 };
 
@@ -2535,7 +2548,7 @@ async function initApp() {
             if (!SpeechRecognition) {
                 btnVoiceInput.disabled = true;
                 btnVoiceInput.classList.add('opacity-40', 'cursor-not-allowed');
-                btnVoiceInput.title = detectRegion() === 'US' ? 'Your browser does not support voice dictation' : 'Tu navegador no soporta dictado por voz';
+                btnVoiceInput.title = isEnglishRegion(detectRegion()) ? 'Your browser does not support voice dictation' : 'Tu navegador no soporta dictado por voz';
             } else {
                 const recognition = new SpeechRecognition();
                 recognition.lang = getVoiceRecognitionLocale(detectRegion());
@@ -2553,7 +2566,7 @@ async function initApp() {
                     isRecording = true;
                     btnVoiceInput.classList.add('text-rose-500', 'animate-pulse');
                     btnVoiceInput.classList.remove('text-slate-400');
-                    if (typeof showGlobalFeedback === 'function') showGlobalFeedback(currentRegion === 'US' ? 'Listening... speak now.' : 'Escuchando... habla ahora.', 'info');
+                    if (typeof showGlobalFeedback === 'function') showGlobalFeedback(isEnglishRegion() ? 'Listening... speak now.' : 'Escuchando... habla ahora.', 'info');
                 };
 
                 recognition.onresult = (event) => {
@@ -2572,13 +2585,13 @@ async function initApp() {
                     stopRecording();
                     if (typeof showGlobalFeedback !== 'function') return;
                     if (event.error === 'not-allowed' || event.error === 'service-not-allowed') {
-                        showGlobalFeedback(currentRegion === 'US' ? 'Enable microphone permission in your browser.' : 'Activa el permiso del micrófono en tu navegador.', 'error');
+                        showGlobalFeedback(isEnglishRegion() ? 'Enable microphone permission in your browser.' : 'Activa el permiso del micrófono en tu navegador.', 'error');
                     } else if (event.error === 'no-speech') {
-                        showGlobalFeedback(currentRegion === 'US' ? 'No speech detected. Try again.' : 'No detecté voz. Intenta de nuevo.', 'error');
+                        showGlobalFeedback(isEnglishRegion() ? 'No speech detected. Try again.' : 'No detecté voz. Intenta de nuevo.', 'error');
                     } else if (event.error === 'audio-capture') {
-                        showGlobalFeedback(currentRegion === 'US' ? 'I could not access your microphone.' : 'No pude acceder a tu micrófono.', 'error');
+                        showGlobalFeedback(isEnglishRegion() ? 'I could not access your microphone.' : 'No pude acceder a tu micrófono.', 'error');
                     } else {
-                        showGlobalFeedback(currentRegion === 'US' ? 'Microphone error. Try again.' : 'Error con el micrófono. Intenta otra vez.', 'error');
+                        showGlobalFeedback(isEnglishRegion() ? 'Microphone error. Try again.' : 'Error con el micrófono. Intenta otra vez.', 'error');
                     }
                 };
 
@@ -2591,7 +2604,7 @@ async function initApp() {
                     }
 
                     if (window.isSecureContext === false && location.hostname !== 'localhost' && location.hostname !== '127.0.0.1') {
-                        if (typeof showGlobalFeedback === 'function') showGlobalFeedback(currentRegion === 'US' ? 'Microphone requires HTTPS or localhost.' : 'El micrófono requiere HTTPS o localhost.', 'error');
+                        if (typeof showGlobalFeedback === 'function') showGlobalFeedback(isEnglishRegion() ? 'Microphone requires HTTPS or localhost.' : 'El micrófono requiere HTTPS o localhost.', 'error');
                         return;
                     }
 
@@ -2603,7 +2616,7 @@ async function initApp() {
                         recognition.start();
                     } catch (err) {
                         console.error('Microphone permission error:', err);
-                        if (typeof showGlobalFeedback === 'function') showGlobalFeedback(currentRegion === 'US' ? 'Microphone permission was not granted.' : 'No se concedió permiso al micrófono.', 'error');
+                        if (typeof showGlobalFeedback === 'function') showGlobalFeedback(isEnglishRegion() ? 'Microphone permission was not granted.' : 'No se concedió permiso al micrófono.', 'error');
                     }
                 });
             }
@@ -2620,13 +2633,10 @@ async function initApp() {
         const btnDarkMode = document.getElementById('btn-dark-mode');
         iconMoon = document.getElementById('icon-moon');
         const categoryIconBar = document.getElementById('category-icon-bar');
-        const browseHubSection = document.getElementById('browse-hub-section');
         const headerBrowseButtons = document.querySelectorAll('[data-header-category]');
-        const browseHubButtons = document.querySelectorAll('[data-browse-query]');
+        const browseHubButtons = document.querySelectorAll('[data-browse-category]');
         const flashDealsSection = document.getElementById('flash-deals-section');
         const tendenciasSection = document.getElementById('tendencias-section');
-        const productShowcase = document.getElementById('product-showcase');
-        const extraSections = document.getElementById('extra-sections');
         iconSun = document.getElementById('icon-sun');
         locRadiusInput = document.getElementById('loc-radius');
         userLatInput = document.getElementById('user-lat');
@@ -2716,16 +2726,16 @@ async function initApp() {
                 items.push(config.filters.safe);
             }
             if (includeKnownMarketplacesInput?.value === 'true') {
-                items.push(currentRegion === 'US' ? 'Known marketplaces' : 'Marketplaces conocidos');
+                items.push(isEnglishRegion() ? 'Known marketplaces' : 'Marketplaces conocidos');
             }
             if (includeHighRiskMarketplacesInput?.value === 'true') {
-                items.push(currentRegion === 'US' ? 'High risk sources' : 'Riesgo alto');
+                items.push(isEnglishRegion() ? 'High risk sources' : 'Riesgo alto');
             }
             if (onlyCouponsInput?.value === 'true') {
-                items.push(currentRegion === 'US' ? 'Coupons only' : 'Solo con cupón');
+                items.push(isEnglishRegion() ? 'Coupons only' : 'Solo con cupón');
             }
             if (onlyRealDealsInput?.value === 'true') {
-                items.push(currentRegion === 'US' ? 'Real deals only' : 'Solo oferta real');
+                items.push(isEnglishRegion() ? 'Real deals only' : 'Solo oferta real');
             }
 
             activeFiltersSummary.innerHTML = items.map(label => `
@@ -2967,6 +2977,7 @@ async function initApp() {
 
         const btnToggleFilters = document.getElementById('btn-toggle-filters');
         const filtersCollapsible = document.getElementById('filters-collapsible');
+        const filtersWrapper = document.getElementById('filters-wrapper');
         const filtersMobileOverlay = document.getElementById('filters-mobile-overlay');
         const toggleFiltersLabel = document.getElementById('toggle-filters-label');
         const toggleFiltersIcon = document.getElementById('toggle-filters-icon');
@@ -2975,6 +2986,9 @@ async function initApp() {
             const isMobileFiltersViewport = () => window.innerWidth < 640;
             const syncFiltersPanel = (collapsed) => {
                 filtersCollapsible.classList.toggle('filters-collapsed', collapsed);
+                if (filtersWrapper) {
+                    filtersWrapper.classList.toggle('hidden', collapsed);
+                }
                 if (filtersMobileOverlay) {
                     filtersMobileOverlay.classList.toggle('filters-open', !collapsed && isMobileFiltersViewport());
                 }
@@ -2982,7 +2996,7 @@ async function initApp() {
                     document.body.classList.toggle('overflow-hidden', !collapsed && isMobileFiltersViewport());
                 }
                 if (toggleFiltersLabel) {
-                    toggleFiltersLabel.textContent = collapsed ? getRegionUICopy().guidedSearch.toggleShow : getRegionUICopy().guidedSearch.toggleHide;
+                    toggleFiltersLabel.textContent = collapsed ? (getRegionUICopy().guidedSearch.toggleShow || 'Filtros') : (getRegionUICopy().guidedSearch.toggleHide || 'Ocultar');
                 }
                 if (toggleFiltersIcon) {
                     toggleFiltersIcon.classList.toggle('rotate-180', !collapsed);
@@ -3681,8 +3695,6 @@ async function initApp() {
             if (categoryIconBar) categoryIconBar.classList.add('hidden');
             if (flashDealsSection) flashDealsSection.classList.add('hidden');
             if (tendenciasSection) tendenciasSection.classList.add('hidden');
-            if (productShowcase) productShowcase.classList.add('hidden');
-            if (extraSections) extraSections.classList.add('hidden');
             errorMessage.classList.add('hidden');
 
             renderSearchContext({
@@ -3993,6 +4005,15 @@ async function initApp() {
         }
 
         console.log('Main event listeners binding...');
+        if (searchButton) {
+            searchButton.addEventListener('click', (event) => {
+                if (!_isSearchInProgress || !_activeSearchAbortController) return;
+                event.preventDefault();
+                try {
+                    _activeSearchAbortController.abort();
+                } catch { }
+            });
+        }
         if (searchForm) { // FIX: Agregada protección para searchForm
             console.log('Binding searchForm submit listener...');
             searchForm.addEventListener('submit', async (e) => {
@@ -4046,10 +4067,9 @@ async function initApp() {
             }
             const requestAbortController = new AbortController();
             _activeSearchAbortController = requestAbortController;
-            searchButton.disabled = true;
+            searchButton.disabled = false;
             const originalButtonHTML = getSearchButtonIdleHTML();
-            // Asegurar que el spinner tenga el mismo tamaño que el texto para evitar que el botón cambie de tamaño bruscamente
-            searchButton.innerHTML = `<div class="flex items-center justify-center w-[90px] h-[20px]"><svg class="animate-spin h-5 w-5 text-white" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"></path></svg></div>`;
+            searchButton.innerHTML = getSearchButtonCancelHTML();
 
             try {
                 let finalQuery = query;
@@ -4473,6 +4493,11 @@ async function initApp() {
             } catch (error) {
                 console.error('Fetch Error:', error);
                 if (error?.name === 'AbortError') {
+                    removeTypingIndicator();
+                    if (_skeletonMsgInterval) { clearInterval(_skeletonMsgInterval); _skeletonMsgInterval = null; }
+                    if (typeof showGlobalFeedback === 'function') {
+                        showGlobalFeedback(getLocalizedText('Búsqueda cancelada.', 'Search canceled.'), 'info');
+                    }
                     return;
                 }
                 removeTypingIndicator();
@@ -5733,12 +5758,12 @@ async function initApp() {
                         }
                     };
                     
-                    // Add aggregateRating if available
-                    if (product.rating || product.reviewCount) {
+                    // Add aggregateRating only when the product actually provides both values
+                    if (product.rating && product.reviewCount) {
                         schemaData.aggregateRating = {
                             "@type": "AggregateRating",
-                            "ratingValue": product.rating || "4.5",
-                            "reviewCount": product.reviewCount || "10"
+                            "ratingValue": String(product.rating),
+                            "reviewCount": String(product.reviewCount)
                         };
                     }
                     
