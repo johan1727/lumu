@@ -37,6 +37,9 @@
         .fade-in { animation: fadeIn 0.3s ease-in; }
         @keyframes fadeIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
         .modal-overlay { backdrop-filter: blur(4px); }
+        .alert-info { background: #EFF6FF; color: #1D4ED8; border: 1px solid #BFDBFE; }
+        .alert-warn { background: #FFFBEB; color: #B45309; border: 1px solid #FDE68A; }
+        .alert-error { background: #FEF2F2; color: #B91C1C; border: 1px solid #FECACA; }
     </style>
 </head>
 <body class="bg-gray-50 min-h-screen">
@@ -233,6 +236,8 @@
                 </div>
                 <button onclick="loadBusinessStats()" class="bg-slate-100 text-slate-700 px-4 py-2.5 rounded-xl font-bold text-sm hover:bg-slate-200 transition-colors">Actualizar</button>
             </div>
+
+            <div id="biz-status" class="hidden mb-6 rounded-2xl px-4 py-3 text-sm font-medium"></div>
 
             <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
                 <div class="stat-card bg-white rounded-2xl p-5 border border-slate-200">
@@ -750,6 +755,40 @@ function apiFetch(path, options = {}) {
             ...(options.headers || {})
         }
     });
+}
+
+function setBusinessStatus(message = '', tone = 'info') {
+    const el = document.getElementById('biz-status');
+    if (!el) return;
+    el.className = 'hidden mb-6 rounded-2xl px-4 py-3 text-sm font-medium';
+    if (!message) {
+        el.textContent = '';
+        return;
+    }
+    el.textContent = message;
+    el.classList.remove('hidden');
+    el.classList.add(tone === 'error' ? 'alert-error' : tone === 'warn' ? 'alert-warn' : 'alert-info');
+}
+
+function resetBusinessStatsView() {
+    document.getElementById('biz-searches-today').textContent = '0';
+    document.getElementById('biz-searches-30d').textContent = '0';
+    document.getElementById('biz-registrations-today').textContent = '0';
+    document.getElementById('biz-registrations-30d').textContent = '0';
+    document.getElementById('biz-vip-active').textContent = '0';
+    document.getElementById('biz-b2b-active').textContent = '0';
+    document.getElementById('biz-vip-conversion').textContent = '0%';
+    document.getElementById('biz-b2b-conversion').textContent = '0%';
+    document.getElementById('biz-revenue-30d').textContent = '$0';
+    document.getElementById('biz-purchases-30d').textContent = '0';
+    document.getElementById('biz-avg-revenue').textContent = '$0';
+    document.getElementById('biz-affiliate-clicks').textContent = '0';
+    document.getElementById('biz-retention').textContent = '0%';
+    document.getElementById('biz-retention-ring').textContent = '0%';
+    document.getElementById('biz-cost-per-search').textContent = '0';
+    document.getElementById('biz-cost-30d').textContent = '0';
+    document.getElementById('biz-notes').innerHTML = '<p class="text-slate-400 text-sm">Sin datos</p>';
+    document.getElementById('biz-daily').innerHTML = '<p class="text-slate-400 text-sm">Sin datos</p>';
 }
 
 // ============================================================
@@ -1606,11 +1645,20 @@ async function loadAnalytics() {
 
 async function loadBusinessStats() {
     try {
+        setBusinessStatus('Cargando métricas de negocio…', 'info');
         const res = await fetch('/api/admin/business-stats', {
             headers: { 'x-admin-key': ADMIN_KEY }
         });
+        if (!res.ok) {
+            const errorPayload = await res.json().catch(() => ({}));
+            throw new Error(errorPayload.error || `HTTP ${res.status}`);
+        }
         const data = await res.json();
-        if (!data.summary) return;
+        if (!data.summary) {
+            resetBusinessStatsView();
+            setBusinessStatus('No hay métricas de negocio disponibles todavía.', 'warn');
+            return;
+        }
 
         const s = data.summary;
         document.getElementById('biz-searches-today').textContent = formatNum(s.searchesToday || 0);
@@ -1661,8 +1709,16 @@ async function loadBusinessStats() {
         } else {
             dailyEl.innerHTML = '<p class="text-slate-400 text-sm">Sin datos</p>';
         }
+
+        if (Array.isArray(s.warnings) && s.warnings.length > 0) {
+            setBusinessStatus(`Datos parciales: ${s.warnings.join(', ')}`, 'warn');
+        } else {
+            setBusinessStatus('Métricas de negocio actualizadas correctamente.', 'info');
+        }
     } catch (err) {
         console.error('Business stats load error:', err);
+        resetBusinessStatsView();
+        setBusinessStatus(`No se pudieron cargar las métricas de negocio: ${err.message || 'error desconocido'}`, 'error');
     }
 }
 </script>

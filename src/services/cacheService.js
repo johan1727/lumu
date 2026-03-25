@@ -372,6 +372,63 @@ exports.normalizeProductUrl = normalizeProductUrl;
 exports.generateCacheKey = generateCacheKey;
 exports.generateCanonicalCacheKey = generateCanonicalCacheKey;
 exports.normalizeCanonicalKey = normalizeCanonicalKey;
+/**
+ * LLM Response Cache: Reduce Gemini API costs by caching analysis results
+ * TTL: 7 days for stable queries, 24h for volatile ones
+ */
+const LLM_CACHE_TTL_STABLE = 7 * 24 * 60 * 60;
+const LLM_CACHE_TTL_VOLATILE = 24 * 60 * 60;
+
+function generateLLMCacheKey(userText, countryCode = 'MX') {
+    const normalized = normalizeQuery(userText);
+    return `llm:${String(countryCode || 'MX').toUpperCase()}:${normalized}`;
+}
+
+exports.getCachedLLMResponse = async (userText, countryCode = 'MX') => {
+    if (!userText) return null;
+    const cacheKey = generateLLMCacheKey(userText, countryCode);
+
+    const ramHit = ramCacheGet(cacheKey);
+    if (ramHit) {
+        console.log(`[LLM Cache RAM Hit] Análisis instantáneo para: "${String(userText).slice(0, 40)}..."`);
+        return ramHit;
+    }
+
+    if (redisClient) {
+        try {
+            const redisHit = await redisClient.get(`lumu:${cacheKey}`);
+            if (redisHit) {
+                console.log(`[LLM Cache Redis Hit] Análisis ultrarrápido para: "${String(userText).slice(0, 40)}..."`);
+                const parsed = JSON.parse(redisHit);
+                ramCacheSet(cacheKey, parsed);
+                return parsed;
+            }
+        } catch (e) {
+            console.error('[Redis LLM Get Error]:', e.message);
+        }
+    }
+
+    return null;
+};
+
+exports.saveLLMResponse = async (userText, llmResponse, countryCode = 'MX') => {
+    if (!userText || !llmResponse) return;
+    const cacheKey = generateLLMCacheKey(userText, countryCode);
+
+    ramCacheSet(cacheKey, llmResponse);
+
+    if (redisClient) {
+        try {
+            const isVolatile = llmResponse.queryType === 'speculative' || llmResponse.isSpeculative;
+            const ttl = isVolatile ? LLM_CACHE_TTL_VOLATILE : LLM_CACHE_TTL_STABLE;
+            await redisClient.set(`lumu:${cacheKey}`, JSON.stringify(llmResponse), 'EX', ttl);
+            console.log(`[LLM Cache Saved] Análisis cacheado (TTL=${ttl}s) para: "${String(userText).slice(0, 40)}..."`);
+        } catch (e) {
+            console.error('[Redis LLM Set Error]:', e.message);
+        }
+    }
+};
+
 exports.getPopularQueries = async (limit = 50) => {
     if (!supabase) return [];
     try {

@@ -18,6 +18,25 @@ function isoDay(date = new Date()) {
     return startOfDay(date).toISOString().split('T')[0];
 }
 
+function summarizeQueryResult(label, result, fallback = []) {
+    if (!result || result.status !== 'fulfilled') {
+        console.warn(`[Analytics] ${label} query rejected`, result?.reason || 'unknown');
+        return { data: fallback, count: Array.isArray(fallback) ? fallback.length : 0, error: result?.reason || null };
+    }
+
+    const value = result.value || {};
+    if (value.error) {
+        console.warn(`[Analytics] ${label} query failed`, value.error);
+        return { data: fallback, count: Array.isArray(fallback) ? fallback.length : 0, error: value.error };
+    }
+
+    return {
+        data: Array.isArray(value.data) ? value.data : fallback,
+        count: typeof value.count === 'number' ? value.count : (Array.isArray(value.data) ? value.data.length : 0),
+        error: null
+    };
+}
+
 function normalizeText(value, maxLen = 200) {
     const normalized = String(value || '').trim();
     return normalized ? normalized.slice(0, maxLen) : null;
@@ -440,16 +459,7 @@ async function getBusinessStats(req, res) {
         const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
         const sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
 
-        const [
-            searchesTodayResult,
-            searches30dResult,
-            profilesResult,
-            subscriptionsResult,
-            purchases30dResult,
-            affiliateClicks30dResult,
-            searchesForRetentionResult,
-            clickEvents7dResult
-        ] = await Promise.all([
+        const results = await Promise.allSettled([
             supabase.from('searches').select('*', { count: 'exact', head: true }).gte('created_at', todayStart.toISOString()),
             supabase.from('searches').select('*', { count: 'exact', head: true }).gte('created_at', thirtyDaysAgo.toISOString()),
             supabase.from('profiles').select('id, created_at, plan, is_premium').gte('created_at', thirtyDaysAgo.toISOString()),
@@ -457,24 +467,27 @@ async function getBusinessStats(req, res) {
             supabase.from('click_events').select('price, created_at, action_context, brand').eq('event_type', 'purchase').gte('created_at', thirtyDaysAgo.toISOString()).limit(5000),
             supabase.from('click_events').select('id, created_at').eq('event_type', 'click').eq('is_affiliate', true).gte('created_at', thirtyDaysAgo.toISOString()).limit(5000),
             supabase.from('searches').select('user_id, created_at').gte('created_at', thirtyDaysAgo.toISOString()).limit(10000),
+            supabase.from('searches').select('created_at').gte('created_at', sevenDaysAgo.toISOString()).limit(10000),
             supabase.from('click_events').select('event_type, created_at').gte('created_at', sevenDaysAgo.toISOString()).limit(10000)
         ]);
 
-        if (searchesTodayResult.error) throw searchesTodayResult.error;
-        if (searches30dResult.error) throw searches30dResult.error;
-        if (profilesResult.error) throw profilesResult.error;
-        if (subscriptionsResult.error) throw subscriptionsResult.error;
-        if (purchases30dResult.error) throw purchases30dResult.error;
-        if (affiliateClicks30dResult.error) throw affiliateClicks30dResult.error;
-        if (searchesForRetentionResult.error) throw searchesForRetentionResult.error;
-        if (clickEvents7dResult.error) throw clickEvents7dResult.error;
+        const searchesTodayResult = summarizeQueryResult('searchesToday', results[0], []);
+        const searches30dResult = summarizeQueryResult('searches30d', results[1], []);
+        const profilesResult = summarizeQueryResult('profiles', results[2], []);
+        const subscriptionsResult = summarizeQueryResult('subscriptions', results[3], []);
+        const purchases30dResult = summarizeQueryResult('purchases30d', results[4], []);
+        const affiliateClicks30dResult = summarizeQueryResult('affiliateClicks30d', results[5], []);
+        const searchesForRetentionResult = summarizeQueryResult('searchesForRetention', results[6], []);
+        const searches7dResult = summarizeQueryResult('searches7d', results[7], []);
+        const clickEvents7dResult = summarizeQueryResult('clickEvents7d', results[8], []);
 
-        const profiles = profilesResult.data || [];
-        const subscriptions = subscriptionsResult.data || [];
-        const purchases30d = purchases30dResult.data || [];
-        const affiliateClicks30d = affiliateClicks30dResult.data || [];
-        const searchesForRetention = searchesForRetentionResult.data || [];
-        const clickEvents7d = clickEvents7dResult.data || [];
+        const profiles = profilesResult.data;
+        const subscriptions = subscriptionsResult.data;
+        const purchases30d = purchases30dResult.data;
+        const affiliateClicks30d = affiliateClicks30dResult.data;
+        const searchesForRetention = searchesForRetentionResult.data;
+        const searches7d = searches7dResult.data;
+        const clickEvents7d = clickEvents7dResult.data;
 
         const activePaidSubscriptions = subscriptions.filter(item => ['active', 'trialing', 'paid', 'complete'].includes(String(item.status || '').toLowerCase()));
         const vipActive = activePaidSubscriptions.filter(item => ['personal_vip', 'personal_vip_annual', 'vip'].includes(String(item.plan || '').toLowerCase())).length;
@@ -513,18 +526,33 @@ async function getBusinessStats(req, res) {
             dailyMap.set(isoDay(date), { date: isoDay(date), searches: 0, pageViews: 0, purchases: 0 });
         }
 
+        searches7d.forEach(item => {
+            if (!item.created_at) return;
+            const key = String(item.created_at).split('T')[0];
+            const current = dailyMap.get(key);
+            if (!current) return;
+            current.searches += 1;
+        });
+
         clickEvents7d.forEach(item => {
             if (!item.created_at) return;
             const key = String(item.created_at).split('T')[0];
             const current = dailyMap.get(key);
             if (!current) return;
-            if (item.event_type === 'search') current.searches += 1;
             if (item.event_type === 'page_view') current.pageViews += 1;
             if (item.event_type === 'purchase') current.purchases += 1;
         });
 
         const estimatedCostPerSearchUsd = 0;
         const estimatedSearchCost30dUsd = Number((searches30d * estimatedCostPerSearchUsd).toFixed(2));
+        const warnings = [
+            profilesResult.error ? 'profiles_unavailable' : null,
+            subscriptionsResult.error ? 'subscriptions_unavailable' : null,
+            purchases30dResult.error ? 'purchase_events_unavailable' : null,
+            affiliateClicks30dResult.error ? 'affiliate_clicks_unavailable' : null,
+            searches7dResult.error ? 'search_trend_unavailable' : null,
+            clickEvents7dResult.error ? 'click_events_trend_unavailable' : null
+        ].filter(Boolean);
 
         res.json({
             summary: {
@@ -542,12 +570,14 @@ async function getBusinessStats(req, res) {
                 avgRevenuePerPurchase30d,
                 retentionRate30d,
                 estimatedCostPerSearchUsd,
-                estimatedSearchCost30dUsd
+                estimatedSearchCost30dUsd,
+                warnings
             },
             dailyTrend7d: Array.from(dailyMap.values()),
             notes: {
                 estimatedCostPerSearchUsd: 'Configura una fuente persistente basada en logs [Search Cost] para reemplazar este valor.',
-                retention: 'Retención 30d calculada como usuarios con al menos 2 búsquedas separadas por 7+ días dentro de la ventana.'
+                retention: 'Retención 30d calculada como usuarios con al menos 2 búsquedas separadas por 7+ días dentro de la ventana.',
+                dataHealth: warnings.length > 0 ? `Fuentes parciales no disponibles: ${warnings.join(', ')}` : 'Fuentes de datos cargadas sin errores detectados.'
             }
         });
     } catch (err) {

@@ -1,6 +1,7 @@
 const fetchWithTimeout = require('../utils/fetchWithTimeout');
 const supabase = require('../config/supabase');
 const { z } = require('zod');
+const cacheService = require('./cacheService');
 
 let _supabaseFailing = false;
 let _supabaseFailingSince = 0;
@@ -723,6 +724,12 @@ exports.analyzeMessage = async (userText, chatHistory = [], context = {}) => {
     // SECURITY: Sanitize user input before sending to LLM
     const sanitizedText = sanitizeUserInput(userText);
 
+    // PERF: Check LLM cache before calling Gemini API
+    const cachedResponse = await cacheService.getCachedLLMResponse(sanitizedText, regionCode);
+    if (cachedResponse) {
+        return { ...cachedResponse, _cacheHit: true };
+    }
+
     // PRE-PROCESSING: Expand slang/abbreviations and detect language
     const preExpandedText = preExpandSlang(sanitizedText);
     const detectedLang = detectQueryLanguage(sanitizedText);
@@ -802,7 +809,7 @@ exports.analyzeMessage = async (userText, chatHistory = [], context = {}) => {
                         .eq('event_type', 'click')
                         .not('search_query', 'is', null)
                         .order('created_at', { ascending: false })
-                        .limit(50);
+                        .limit(20);
 
                     if (clickError) {
                         _supabaseFailing = true;
@@ -1016,6 +1023,9 @@ ${extraContext}`;
             // Structured logging for analytics and improvement
             const repaired = repairAnalysis(validated.data, sanitizedText || userText);
             console.log(`[LLM Decision] queryType=${repaired.queryType} | readiness=${repaired.commercialReadiness} | speculative=${repaired.isSpeculative} | disambig=${repaired.needsDisambiguation} | lang=${repaired.searchLanguage} | q="${repaired.searchQuery}"`);
+
+            // PERF: Save successful LLM response to cache
+            await cacheService.saveLLMResponse(sanitizedText, repaired, regionCode);
 
             return repaired;
 
