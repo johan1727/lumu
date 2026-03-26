@@ -1,0 +1,39 @@
+[build]
+  command = "npm run build"
+  publish = "public"
+  functions = "netlify/functions"
+
+[[redirects]]
+  from = "/api/*"
+  to = "/.netlify/functions/api/:splat"
+  status = 200
+
+[[redirects]]
+  from = "/buscar"
+  to = "/.netlify/functions/api/buscar"
+  status = 200
+
+[[redirects]]
+  from = "/buscar/*"
+  to = "/.netlify/functions/api/buscar/:splat"
+  status = 200
+
+[[redirects]]
+  from = "/precio-hoy"
+  to = "/.netlify/functions/api/precio-hoy"
+  status = 200
+
+[[redirects]]
+  from = "/precio-hoy/*"
+  to = "/.netlify/functions/api/precio-hoy/:splat"
+  status = 200
+
+[[redirects]]
+  from = "/comparativas"
+  to = "/.netlify/functions/api/comparativas"
+  status = 200
+
+[[redirects]]
+  from = "/comparativas/*"
+  to = "/.netlify/functions/api/comparativas/:splat"
+  status = 200
