@@ -438,6 +438,7 @@ exports.searchGoogleShopping = async (query, radius, lat, lng, intentType, abort
     console.log(`[ShoppingService] Region: ${regionCfg.countryCode} (gl=${regionCfg.gl}, hl=${regionCfg.hl}, currency=${regionCfg.currency})`);
     const apiKey = process.env.SERPER_API_KEY;
     let serperResults = [];
+    let mlPrioritySkipped = false;
     let isService = intentType === 'servicio_local';
     const searchConditionMode = conditionMode || 'all';
     const shoppingQuery = String(query || '').trim();
@@ -646,7 +647,6 @@ exports.searchGoogleShopping = async (query, radius, lat, lng, intentType, abort
 
         // Check if Shopping API already returned ML results to skip mlPriority query
         let hasMercadoLibreInShopping = false;
-        let mlPrioritySkipped = false;
         if (shoppingRes?.data?.shopping) {
             hasMercadoLibreInShopping = shoppingRes.data.shopping.some(item => 
                 /mercadolibre\./i.test(String(item.link || '')) || 
