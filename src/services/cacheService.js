@@ -144,14 +144,16 @@ function ramCacheCleanup() {
 /**
  * Busca resultados en caché: primero RAM, luego Supabase (24 horas TTL)
  */
-function getMaxCacheHours(queryKey = '', priceVolatility = 'medium') {
+function getMaxCacheHours(queryKey = '', priceVolatility = 'medium', queryType = 'generic') {
     if (priceVolatility === 'high') return 6;
-    if (priceVolatility === 'low') return 48;
+    if (priceVolatility === 'low') return 24;
+    // Specific products need fresher data
+    if (queryType === 'brand_model' || queryType === 'comparison') return 4;
     const isGenericQuery = String(queryKey || '').split(' ').length <= 3;
-    return isGenericQuery ? 48 : 24;
+    return isGenericQuery ? 12 : 8;
 }
 
-async function getCachedResultsByKey(queryKey, priceVolatility = 'medium') {
+async function getCachedResultsByKey(queryKey, priceVolatility = 'medium', queryType = 'generic') {
     if (!queryKey) return null;
 
     const ramHit = ramCacheGet(queryKey);
@@ -188,7 +190,7 @@ async function getCachedResultsByKey(queryKey, priceVolatility = 'medium') {
         const cacheTime = new Date(data.created_at).getTime();
         const now = new Date().getTime();
         const hoursDiff = (now - cacheTime) / (1000 * 60 * 60);
-        const maxHours = getMaxCacheHours(queryKey, priceVolatility);
+        const maxHours = getMaxCacheHours(queryKey, priceVolatility, queryType);
 
         if (hoursDiff < maxHours) {
             console.log(`[Cache Supabase Hit] Resultados para: ${queryKey} (${Math.round(hoursDiff)}h old, max ${maxHours}h)`);
@@ -204,14 +206,14 @@ async function getCachedResultsByKey(queryKey, priceVolatility = 'medium') {
     }
 }
 
-exports.getCachedResults = async (query, radius, lat, lng, countryCode = 'MX', canonicalKey = '', priceVolatility = 'medium') => {
+exports.getCachedResults = async (query, radius, lat, lng, countryCode = 'MX', canonicalKey = '', priceVolatility = 'medium', queryType = 'generic') => {
     const queryKey = generateCacheKey(query, radius, lat, lng, countryCode);
-    const directHit = await getCachedResultsByKey(queryKey, priceVolatility);
+    const directHit = await getCachedResultsByKey(queryKey, priceVolatility, queryType);
     if (directHit) return directHit;
 
     const canonicalCacheKey = generateCanonicalCacheKey(canonicalKey, radius, lat, lng, countryCode);
     if (!canonicalCacheKey) return null;
-    return getCachedResultsByKey(canonicalCacheKey, priceVolatility);
+    return getCachedResultsByKey(canonicalCacheKey, priceVolatility, queryType);
 };
 
 /**

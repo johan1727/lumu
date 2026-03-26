@@ -1259,6 +1259,19 @@ function generateCategoryHTML(slug, cat) {
             </div>
         </section>
 
+        ${(() => {
+            const relatedPricePages = Object.entries(PRICE_PAGES).filter(([, p]) => p.categorySlug === slug).slice(0, 3);
+            const relatedComparisons = Object.entries(STORE_COMPARISON_PAGES).filter(([, p]) => p.categorySlug === slug).slice(0, 3);
+            if (relatedPricePages.length === 0 && relatedComparisons.length === 0) return '';
+            return `<section class="section">
+            <h2>Precio hoy y comparativas de tiendas</h2>
+            <div class="categories-grid">
+                ${relatedPricePages.map(([s, p]) => `<a href="/precio-hoy/${s}" class="cat-link">💰 ${esc(p.title)}</a>`).join('')}
+                ${relatedComparisons.map(([s, p]) => `<a href="/comparativas/${s}" class="cat-link">🏪 ${esc(p.title)}</a>`).join('')}
+            </div>
+        </section>`;
+        })()}
+
         <section class="section">
             <h2>Guías y artículos relacionados</h2>
             <div class="categories-grid">

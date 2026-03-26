@@ -92,6 +92,7 @@ function buildBestBuyScore(product = {}) {
     });
     const trustScore = product.storeTier === 1 ? 1 : product.storeTier === 2 ? 0.72 : 0.38;
     const availabilityScore = product.isPotentiallyUnavailable ? 0.2 : (product.hasStockSignal ? 1 : 0.62);
+    const ephemeralPenalty = product.hasEphemeralRedirect && !product.hasStockSignal && product.priceConfidence < 0.5 ? 0.22 : (product.hasEphemeralRedirect ? 0.08 : 0);
     const shippingScore = product.shippingText
         ? (/env[ií]o gratis|llega hoy|llega ma[ñn]ana|same day|free shipping|arrives? tomorrow/i.test(String(product.shippingText)) ? 1 : 0.72)
         : 0.55;
@@ -106,7 +107,7 @@ function buildBestBuyScore(product = {}) {
                     : 0.5;
     const penalty = (product.isSuspicious ? 0.18 : 0)
         + (product.isPriceAnomaly ? 0.16 : 0)
-        + (product.hasEphemeralRedirect ? 0.08 : 0)
+        + ephemeralPenalty
         + (product.isC2C ? 0.12 : 0)
         + (!hasPurchasableSignal ? 0.18 : 0)
         + (isInformational ? 0.4 : 0)
@@ -903,8 +904,8 @@ exports.searchProduct = async (req, res) => {
                             login_required: true
                         });
                     }
-                    // Log this anonymous search (fire & forget)
-                    supabase.from('rate_limits').insert({ ip: searchIpKey, created_at: new Date().toISOString() }).then(() => { }).catch(() => { });
+                    // Store IP key for logging after successful search
+                    req._anonSearchIpKey = searchIpKey;
                 } catch (e) {
                     console.warn('[Anon Paywall] Supabase error, allowing request:', e.message);
                 }
@@ -932,6 +933,7 @@ exports.searchProduct = async (req, res) => {
                 let reqLimit = 10;
                 let isDaily = false;
                 let planName = 'Gratis';
+                const isFreePlan = !profile.is_premium && !['personal_vip', 'personal_vip_annual', 'b2b', 'b2b_annual'].includes(String(profile.plan || '').toLowerCase());
 
                 // SEC-3: Check if user has active temporary VIP from Lumu Coins (1 hour window)
                 const VIP_TEMP_DURATION_MS = 60 * 60 * 1000; // 1 hour
@@ -952,57 +954,108 @@ exports.searchProduct = async (req, res) => {
                     planName = 'VIP Temporal';
                 }
 
-                let queryDate = new Date();
-                if (isDaily) {
-                    queryDate.setHours(0, 0, 0, 0);
-                } else if (profile.plan === 'b2b' || profile.plan === 'b2b_annual' || profile.is_premium || profile.plan === 'personal_vip' || profile.plan === 'personal_vip_annual') {
-                    queryDate.setDate(1); // Inicio de mes
-                    queryDate.setHours(0, 0, 0, 0);
+                const todayStart = new Date();
+                todayStart.setHours(0, 0, 0, 0);
+                const monthStart = new Date();
+                monthStart.setDate(1);
+                monthStart.setHours(0, 0, 0, 0);
+
+                const bonusKey = `bonus:user:${userId}`;
+
+                if (isFreePlan && !hasTempVIP) {
+                    const FREE_DAILY_LIMIT = 2;
+                    const FREE_MONTHLY_LIMIT = 10;
+
+                    const [dailySearches, monthlySearches, dailyBonus, monthlyBonus] = await Promise.all([
+                        supabase.from('searches')
+                            .select('*', { count: 'exact', head: true })
+                            .eq('user_id', userId)
+                            .gte('created_at', todayStart.toISOString()),
+                        supabase.from('searches')
+                            .select('*', { count: 'exact', head: true })
+                            .eq('user_id', userId)
+                            .gte('created_at', monthStart.toISOString()),
+                        supabase.from('rate_limits')
+                            .select('*', { count: 'exact', head: true })
+                            .eq('ip', bonusKey)
+                            .gte('created_at', todayStart.toISOString()),
+                        supabase.from('rate_limits')
+                            .select('*', { count: 'exact', head: true })
+                            .eq('ip', bonusKey)
+                            .gte('created_at', monthStart.toISOString())
+                    ]);
+
+                    const dailyUsed = Math.max(0, (dailySearches.count || 0) - (dailyBonus.count || 0));
+                    const monthlyUsed = Math.max(0, (monthlySearches.count || 0) - (monthlyBonus.count || 0));
+                    const dailyRemaining = Math.max(0, FREE_DAILY_LIMIT - dailyUsed);
+                    const monthlyRemaining = Math.max(0, FREE_MONTHLY_LIMIT - monthlyUsed);
+
+                    if (!dailySearches.error && !monthlySearches.error) {
+                        if (monthlyUsed >= FREE_MONTHLY_LIMIT) {
+                            return res.status(402).json({
+                                error: 'Ya agotaste tus 10 búsquedas gratis de este mes. Hazte VIP para seguir buscando sin límites mensuales.',
+                                paywall: true,
+                                upgrade_required: false
+                            });
+                        }
+
+                        if (dailyUsed >= FREE_DAILY_LIMIT) {
+                            return res.status(402).json({
+                                error: 'Ya usaste tus 2 búsquedas gratis de hoy. Vuelve mañana o hazte VIP para seguir buscando ahora mismo.',
+                                paywall: true,
+                                upgrade_required: false
+                            });
+                        }
+
+                        if (dailyRemaining === 1 && monthlyRemaining <= 3) {
+                            usageWarning = `⚠️ Te queda 1 búsqueda gratis hoy y ${monthlyRemaining} este mes.`;
+                        } else if (dailyRemaining === 1) {
+                            usageWarning = '⚠️ Te queda 1 búsqueda gratis hoy.';
+                        } else if (monthlyRemaining <= 2) {
+                            usageWarning = `⚠️ Te quedan ${monthlyRemaining} búsquedas gratis este mes.`;
+                        }
+                    }
                 } else {
-                    queryDate = new Date('2000-01-01T00:00:00.000Z');
-                }
-
-                const { count, error } = await supabase.from('searches')
-                    .select('*', { count: 'exact', head: true })
-                    .eq('user_id', userId)
-                    .gte('created_at', queryDate.toISOString());
-
-                // Subtract bonus credits (from claimReward) earned today
-                let bonusCredits = 0;
-                try {
-                    const bonusKey = `bonus:user:${userId}`;
-                    const { count: bCount } = await supabase.from('rate_limits')
-                        .select('*', { count: 'exact', head: true })
-                        .eq('ip', bonusKey)
-                        .gte('created_at', queryDate.toISOString());
-                    bonusCredits = bCount || 0;
-                } catch { /* ignore */ }
-
-                const effectiveUsed = Math.max(0, (count || 0) - bonusCredits);
-
-                if (!error) {
-                    if (effectiveUsed >= reqLimit) {
-                        const errorMsg = isDaily
-                            ? 'Límite diario de búsquedas gratuitas alcanzado. Mejora a VIP para búsquedas sin límites.'
-                            : (planName === 'Gratis'
-                                ? 'Has agotado tus 10 búsquedas gratuitas. Elige un plan para seguir buscando.'
-                                : `Tu capacidad de uso mensual para el plan ${planName} ya se utilizó en este ciclo. Por favor espera a tu siguiente ciclo o contacta a soporte.`);
-                        return res.status(402).json({
-                            error: errorMsg,
-                            paywall: !profile.is_premium && !hasTempVIP,
-                            upgrade_required: !!profile.is_premium && !hasTempVIP
-                        });
+                    let queryDate = new Date();
+                    if (isDaily) {
+                        queryDate = todayStart;
+                    } else {
+                        queryDate = monthStart;
                     }
 
-                    // Generar Warning si está cerca del límite
-                    if (!isDaily && effectiveUsed >= reqLimit * 0.9) {
-                        usageWarning = planName === 'Gratis'
-                            ? `⚠️ Te quedan ${Math.max(0, reqLimit - effectiveUsed)} búsquedas gratuitas en tu cuenta.`
-                            : '⚠️ Te estás acercando a la capacidad de uso de tu ciclo actual.';
-                    } else if (isDaily && effectiveUsed === reqLimit - 1) {
-                        usageWarning = `âš ï¸ Te queda 1 búsqueda gratuita hoy.`;
-                    } else if (planName === 'Gratis' && effectiveUsed >= Math.max(0, reqLimit - 3)) {
-                        usageWarning = `⚠️ Te quedan ${Math.max(0, reqLimit - effectiveUsed)} búsquedas gratuitas en tu cuenta.`;
+                    const { count, error } = await supabase.from('searches')
+                        .select('*', { count: 'exact', head: true })
+                        .eq('user_id', userId)
+                        .gte('created_at', queryDate.toISOString());
+
+                    let bonusCredits = 0;
+                    try {
+                        const { count: bCount } = await supabase.from('rate_limits')
+                            .select('*', { count: 'exact', head: true })
+                            .eq('ip', bonusKey)
+                            .gte('created_at', queryDate.toISOString());
+                        bonusCredits = bCount || 0;
+                    } catch { /* ignore */ }
+
+                    const effectiveUsed = Math.max(0, (count || 0) - bonusCredits);
+
+                    if (!error) {
+                        if (effectiveUsed >= reqLimit) {
+                            const errorMsg = isDaily
+                                ? 'Límite diario de búsquedas alcanzado. Mejora a VIP para seguir buscando sin restricciones.'
+                                : `Tu capacidad de uso mensual para el plan ${planName} ya se utilizó en este ciclo. Por favor espera a tu siguiente ciclo o contacta a soporte.`;
+                            return res.status(402).json({
+                                error: errorMsg,
+                                paywall: !profile.is_premium && !hasTempVIP,
+                                upgrade_required: !!profile.is_premium && !hasTempVIP
+                            });
+                        }
+
+                        if (!isDaily && effectiveUsed >= reqLimit * 0.9) {
+                            usageWarning = '⚠️ Te estás acercando a la capacidad de uso de tu ciclo actual.';
+                        } else if (isDaily && effectiveUsed === reqLimit - 1) {
+                            usageWarning = '⚠️ Te queda 1 búsqueda disponible hoy.';
+                        }
                     }
                 }
             }
@@ -1337,7 +1390,8 @@ exports.searchProduct = async (req, res) => {
                     lng,
                     countryCode,
                     llmAnalysis.canonicalKey,
-                    llmAnalysis.priceVolatility
+                    llmAnalysis.priceVolatility,
+                    llmAnalysis.queryType || 'generic'
                 ),
                 null,
                 preSearchTimeoutMs
@@ -1463,25 +1517,32 @@ exports.searchProduct = async (req, res) => {
         });
 
         console.log(`[Search Pipeline] Buscando: "${searchQuery}" | radius=${radius} | lat=${lat} | lng=${lng} | intent=${llmAnalysis.intent_type}`);
-        const shoppingResults = await shoppingService.searchGoogleShopping(
-            shoppingBaseQuery,
-            radius,
-            lat,
-            lng,
-            llmAnalysis.intent_type,
-            abortController.signal,
-            conditionMode,
-            countryCode,
-            cleanAlternativeQueries,
-            llmAnalysis.productCategory || '',
-            preferredStoreKeys,
-            effectiveBrandOfficialQuery,
-            {
-                webQuery: searchQuery,
-                broadProfile: llmAnalysis.broadProfile || null,
-                queryType: llmAnalysis.queryType || 'generic'
-            }
-        );
+        let shoppingResults;
+        try {
+            shoppingResults = await shoppingService.searchGoogleShopping(
+                shoppingBaseQuery,
+                radius,
+                lat,
+                lng,
+                llmAnalysis.intent_type,
+                abortController.signal,
+                conditionMode,
+                countryCode,
+                cleanAlternativeQueries,
+                llmAnalysis.productCategory || '',
+                preferredStoreKeys,
+                effectiveBrandOfficialQuery,
+                {
+                    webQuery: searchQuery,
+                    broadProfile: llmAnalysis.broadProfile || null,
+                    queryType: llmAnalysis.queryType || 'generic'
+                }
+            );
+        } catch (shoppingError) {
+            console.error(`[Search Pipeline] Shopping search failed gracefully: ${shoppingError.message}`);
+            shoppingResults = [];
+        }
+        if (!Array.isArray(shoppingResults)) shoppingResults = [];
         
         // Extract optimization metadata and update cost metrics
         if (shoppingResults._optimizationMeta) {
@@ -1777,6 +1838,10 @@ exports.searchProduct = async (req, res) => {
                 /no longer available|agotado|out of stock|sold out|unavailable|sin stock/i.test(`${item.snippet || ''} ${item.title || ''}`)
             );
             item.hasStockSignal = stockLikeSignal || (item.isLocalStore && Boolean(item.localDetails?.address));
+            // Filter ephemeral redirects with low confidence and no stock signal
+            if (item.hasEphemeralRedirect && !item.hasStockSignal && Number(item.priceConfidence || 0) < 0.5) {
+                return false;
+            }
             return true;
         });
         console.log(`[Search Pipeline] Después de pre - filter: ${cleanedResults.length} de ${shoppingResults.length} `);
@@ -2071,6 +2136,7 @@ exports.searchProduct = async (req, res) => {
                 hasStockSignal: Boolean(product.hasStockSignal),
                 countryCode,
                 lastVerifiedAt: product.lastVerifiedAt || new Date().toISOString(),
+                dataAgeMinutes: product.lastVerifiedAt ? Math.round((Date.now() - new Date(product.lastVerifiedAt).getTime()) / 60000) : 0,
                 rerankBoost: intentMemoryMeta.rerankBoost,
                 intentSuccessScore: intentMemoryMeta.successScore,
                 intentClickedCount: intentMemoryMeta.clickedCount
@@ -2129,13 +2195,19 @@ exports.searchProduct = async (req, res) => {
         }
 
         // FIX #6: Unificar logging - solo loguear en searches (no en rate_limits para autenticados)
-        // Las búsquedas anónimas ya se loguearon arriba en rate_limits
+        // Log búsquedas exitosas (anónimas en rate_limits, autenticadas en searches)
         if (userId && supabase) {
             supabase.from('searches').insert({
                 user_id: userId,
                 query: searchQuery,
                 created_at: new Date().toISOString()
             }).then(() => { }).catch(e => console.error('[Search Logging] Error:', e.message));
+        } else if (!userId && supabase && req._anonSearchIpKey) {
+            // Log anonymous search only after successful response
+            supabase.from('rate_limits').insert({ 
+                ip: req._anonSearchIpKey, 
+                created_at: new Date().toISOString() 
+            }).then(() => { }).catch(() => { });
         }
 
         // NUEVO: Inyectar Cupones Universales Conocidos

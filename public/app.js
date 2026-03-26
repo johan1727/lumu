@@ -74,6 +74,7 @@ let adsLoader, adsManager, adsDone = false, adContainer, adDisplayContainer;
 let imageUpload, btnAttachImage, imagePreviewContainer, imagePreview, btnRemoveImage;
 let btnVoiceInput, isRecording = false;
 let selectedImageBase64 = null;
+let bestOptionSummaryState = null;
 // Location inputs (global so they're accessible in submit handler)
 let locRadiusInput, userLatInput, userLngInput;
 let conditionModeInput = null;
@@ -2452,6 +2453,86 @@ function openProductHistoryModal(product = {}) {
     openHistoryModal();
 }
 
+function getBestOptionProduct(products = []) {
+    if (!Array.isArray(products) || products.length === 0) return null;
+    return [...products].sort((a, b) => Number(b.bestBuyScore || 0) - Number(a.bestBuyScore || 0))[0] || null;
+}
+
+function renderBestOptionSummary(product = null) {
+    const summaryEl = document.getElementById('best-option-summary');
+    if (!summaryEl) return;
+    if (!product) {
+        summaryEl.classList.add('hidden');
+        summaryEl.innerHTML = '';
+        bestOptionSummaryState = null;
+        return;
+    }
+
+    bestOptionSummaryState = product;
+    const isUS = currentRegion === 'US';
+    const preferredTarget = String(product.urlOriginal || product.urlMonetizada || '');
+    const formattedPrice = Number(product.precio) > 0 ? formatProductPriceLabel(product.precio, product) : (isUS ? 'Price unavailable' : 'Precio no disponible');
+    const badgeLabel = sanitize(product.bestBuyLabel || (isUS ? 'Best option' : 'Mejor opción'));
+    const shippingCopy = product.shippingText ? sanitize(localizeDynamicResultText(product.shippingText, isUS)) : (isUS ? 'Trusted store and strong match.' : 'Tienda confiable y buena coincidencia.');
+
+    summaryEl.classList.remove('hidden');
+    summaryEl.innerHTML = `
+        <div class="rounded-[1.75rem] border border-emerald-200 bg-gradient-to-r from-emerald-50 via-white to-teal-50 p-4 md:p-5 shadow-sm">
+            <div class="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+                <div class="min-w-0">
+                    <div class="flex flex-wrap items-center gap-2 mb-2">
+                        <span class="inline-flex items-center gap-2 rounded-full bg-emerald-600 px-3 py-1 text-[11px] font-black uppercase tracking-[0.16em] text-white">✨ ${isUS ? 'Best Option Found' : 'Mejor Opción Encontrada'}</span>
+                        <span class="inline-flex items-center rounded-full bg-white px-3 py-1 text-[11px] font-black uppercase tracking-[0.16em] text-emerald-700 ring-1 ring-emerald-200">${badgeLabel}</span>
+                    </div>
+                    <h4 class="text-base md:text-lg font-black text-slate-900 line-clamp-2">${sanitize(product.titulo || '')}</h4>
+                    <p class="mt-1 text-sm font-medium text-slate-600">${shippingCopy}</p>
+                    <div class="mt-3 flex flex-wrap items-center gap-2 text-xs font-bold text-slate-600">
+                        <span class="rounded-full bg-white px-3 py-1 ring-1 ring-slate-200">${sanitize(product.tienda || (isUS ? 'Store' : 'Tienda'))}</span>
+                        <span class="rounded-full bg-white px-3 py-1 ring-1 ring-slate-200">${formattedPrice}</span>
+                        <span class="rounded-full bg-white px-3 py-1 ring-1 ring-slate-200">Score ${(Number(product.bestBuyScore || 0) * 100).toFixed(0)}/100</span>
+                    </div>
+                </div>
+                <div class="flex w-full flex-col gap-2 md:w-auto md:min-w-[220px]">
+                    <button id="btn-best-option-focus" type="button" class="min-h-[44px] rounded-2xl bg-emerald-500 px-5 py-3 text-sm font-black text-white shadow-lg shadow-emerald-500/20 transition-all hover:bg-emerald-600">${isUS ? 'Show me why' : 'Ver por qué conviene'}</button>
+                    <button id="btn-best-option-open" type="button" class="min-h-[44px] rounded-2xl border border-emerald-200 bg-white px-5 py-3 text-sm font-black text-emerald-700 transition-all hover:bg-emerald-50">${isUS ? 'Open best offer' : 'Abrir mejor oferta'}</button>
+                </div>
+            </div>
+        </div>
+    `;
+
+    summaryEl.querySelector('#btn-best-option-focus')?.addEventListener('click', () => {
+        const targetCard = preferredTarget ? document.querySelector(`[data-best-option-url="${CSS.escape(preferredTarget)}"]`) : null;
+        if (targetCard) {
+            targetCard.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            targetCard.classList.add('ring-4', 'ring-emerald-300', 'shadow-2xl', 'shadow-emerald-500/20', 'scale-[1.01]');
+            setTimeout(() => targetCard.classList.remove('ring-4', 'ring-emerald-300', 'shadow-2xl', 'shadow-emerald-500/20', 'scale-[1.01]'), 2200);
+        }
+    });
+
+    summaryEl.querySelector('#btn-best-option-open')?.addEventListener('click', () => {
+        if (preferredTarget) window.open(preferredTarget, '_blank');
+    });
+}
+
+function syncBestOptionButton(products = []) {
+    const btn = document.getElementById('btn-best-option');
+    if (!btn) return;
+    const bestProduct = getBestOptionProduct(products);
+    if (!bestProduct || products.length < 2) {
+        btn.classList.add('hidden');
+        btn.disabled = true;
+        renderBestOptionSummary(null);
+        return;
+    }
+
+    btn.classList.remove('hidden');
+    btn.disabled = false;
+    btn.onclick = () => {
+        renderBestOptionSummary(bestProduct);
+        document.getElementById('best-option-summary')?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    };
+}
+
 function openFavorites() {
     if (!favoritesModal) return;
     favoritesModal.classList.remove('invisible', 'opacity-0');
@@ -4222,14 +4303,22 @@ async function initApp() {
                     if (response.status === 429) {
                         const retryAfter = data.retry_after || 60;
                         removeTypingIndicator();
-                        addChatBubble('ai', `⏳ **Demasiadas búsquedas.** Espera ${retryAfter} segundos antes de intentar de nuevo.`, [], false);
+                        const msg429 = getLocalizedText(
+                            `⏳ **Demasiadas búsquedas.** Espera ${retryAfter} segundos antes de intentar de nuevo.`,
+                            `⏳ **Too many searches.** Wait ${retryAfter} seconds before trying again.`
+                        );
+                        addChatBubble('ai', msg429, [], false);
                         resultsWrapper.classList.add('hidden');
                         return;
                     }
                     if (response.status === 402) {
                         removeTypingIndicator();
                         if (data.login_required) {
-                            addChatBubble('ai', `🔐 ${data.error || getLocalizedText('Inicia sesión para seguir buscando gratis.', 'Sign in to keep searching for free.')}`, [], false);
+                            const msg402 = getLocalizedText(
+                                '🔐 **Alcanzaste tu búsqueda gratis diaria.** Crea tu cuenta para obtener 2 búsquedas al día y 10 al mes totalmente gratis.',
+                                '🔐 **You reached your free daily search.** Create your account to get 2 searches per day and 10 per month completely free.'
+                            );
+                            addChatBubble('ai', msg402, [], false);
                             if (typeof openModal === 'function') {
                                 openModal();
                             }
@@ -4241,9 +4330,10 @@ async function initApp() {
                         const vipUrl = vipLink !== '#' && currentUser ? `${vipLink}?client_reference_id=${encodeURIComponent(currentUser.id)}` : vipLink;
                         if (isPaywall) {
                             const rewardAvailable = typeof hasRealRewardedAdConfigured === 'function' && hasRealRewardedAdConfigured();
-                            addChatBubble('ai', rewardAvailable
-                                ? `🔒 **${getLocalizedText('Límite de búsquedas gratuitas alcanzado.', 'Free search limit reached.')}** ${getLocalizedText('Hazte VIP para obtener mayor capacidad de búsqueda o mira un anuncio para 3 búsquedas gratis.', 'Upgrade to VIP for more searches or watch an ad for 3 free searches.')}`
-                                : `🔒 **${getLocalizedText('Límite de búsquedas gratuitas alcanzado.', 'Free search limit reached.')}** ${getLocalizedText('Hazte VIP para obtener mayor capacidad de búsqueda.', 'Upgrade to VIP for more searches.')}`, [], false);
+                            const paywallMsg = rewardAvailable
+                                ? `🔒 **${getLocalizedText('Límite gratis alcanzado.', 'Free limit reached.')}** ${getLocalizedText('Tu plan gratis incluye 2 búsquedas por día y 10 por mes. Hazte VIP o mira un anuncio para 3 búsquedas extra.', 'Your free plan includes 2 searches per day and 10 per month. Go VIP or watch an ad for 3 extra searches.')}`
+                                : `🔒 **${getLocalizedText('Límite gratis alcanzado.', 'Free limit reached.')}** ${getLocalizedText('Tu plan gratis incluye 2 búsquedas por día y 10 por mes. Hazte VIP para seguir buscando.', 'Your free plan includes 2 searches per day and 10 per month. Upgrade to VIP to keep searching.')}`;
+                            addChatBubble('ai', paywallMsg, [], false);
                             const signupButton = !currentUser ? `
                                         <button onclick="window.openSignupPrompt();" class="w-full bg-slate-900 hover:bg-slate-800 text-white px-8 py-3.5 rounded-2xl font-bold transition-all">
                                             ${getLocalizedText('Crear cuenta gratis con búsquedas bonus', 'Create free account with bonus searches')}
@@ -4252,7 +4342,7 @@ async function initApp() {
                                 <div class="col-span-full flex flex-col items-center text-center py-12 px-6 bg-gradient-to-br from-amber-50 to-orange-50 rounded-3xl border border-amber-200">
                                     <div class="text-5xl mb-4">⚡</div>
                                     <h3 class="text-xl font-black text-slate-800 mb-2">${getLocalizedText('Límite Alcanzado', 'Limit Reached')}</h3>
-                                    <p class="text-slate-600 font-medium mb-6 max-w-sm">${rewardAvailable ? getLocalizedText('Desbloquea búsquedas ilimitadas con VIP o gana 3 búsquedas extra viendo un anuncio.', 'Unlock unlimited searches with VIP or earn 3 extra searches by watching an ad.') : getLocalizedText('Desbloquea búsquedas ilimitadas con VIP para seguir encontrando las mejores ofertas.', 'Unlock unlimited searches with VIP to keep finding the best deals.')}</p>
+                                    <p class="text-slate-600 font-medium mb-6 max-w-sm">${rewardAvailable ? getLocalizedText('Tu cuenta gratis incluye 2 búsquedas al día y 10 al mes. Desbloquea búsquedas ilimitadas con VIP o gana 3 búsquedas extra viendo un anuncio.', 'Your free account includes 2 searches per day and 10 per month. Unlock unlimited searches with VIP or earn 3 extra searches by watching an ad.') : getLocalizedText('Tu cuenta gratis incluye 2 búsquedas al día y 10 al mes. Desbloquea búsquedas ilimitadas con VIP para seguir encontrando mejores ofertas.', 'Your free account includes 2 searches per day and 10 per month. Unlock unlimited searches with VIP to keep finding better deals.')}</p>
                                     <div class="flex flex-col gap-3 w-full max-w-xs">
                                         ${signupButton}
                                         <a href="${sanitize(vipUrl)}" target="_blank" class="w-full bg-amber-500 hover:bg-amber-600 text-white px-8 py-3.5 rounded-2xl font-bold transition-all shadow-lg shadow-amber-500/20">${getLocalizedText('Obtener VIP - $39 MXN/mes', 'Get VIP - $39 MXN/mo')}</a>
@@ -4386,6 +4476,9 @@ async function initApp() {
 
                     if (data.top_5_baratos && data.top_5_baratos.length > 0) {
                         await renderProducts(data.top_5_baratos);
+                        if (window.innerWidth < 768) {
+                            resultsWrapper.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                        }
                         if (_conversionBounceTimer) clearTimeout(_conversionBounceTimer);
                         _conversionBounceTimer = setTimeout(() => {
                             if (!window._lastSearchHadClick && window._lastSearchQuery) {
@@ -5119,27 +5212,31 @@ async function initApp() {
             // Filtro de envío gratis
             if (freeShippingOnly) {
                 filtered = filtered.filter(p => {
-                    const title = (p.titulo || '').toLowerCase();
+                    const shipping = String(p.shippingText || '').toLowerCase();
                     const details = (p.couponDetails || '').toLowerCase();
-                    return title.includes('gratis') || details.includes('gratis') || details.includes('free');
+                    return shipping.includes('gratis') || shipping.includes('free') || details.includes('gratis') || details.includes('free');
                 });
             }
 
             // Filtro de precio
             if (!isNaN(minVal)) filtered = filtered.filter(p => {
-                const pr = typeof p.precio === 'number' ? p.precio : parseFloat(String(p.precio || '0').replace(/[^0-9.]/g, ''));
+                const pr = parseProductPriceValue(p.precio);
                 return pr >= minVal;
             });
             if (!isNaN(maxVal) && maxVal > 0) filtered = filtered.filter(p => {
-                const pr = typeof p.precio === 'number' ? p.precio : parseFloat(String(p.precio || '0').replace(/[^0-9.]/g, ''));
+                const pr = parseProductPriceValue(p.precio);
                 return pr <= maxVal;
             });
 
             // Ordenamiento
             if (sortVal === 'price-asc') {
-                filtered.sort((a, b) => (parseFloat(a.precio) || Infinity) - (parseFloat(b.precio) || Infinity));
+                filtered.sort((a, b) => {
+                    const priceA = parseProductPriceValue(a.precio);
+                    const priceB = parseProductPriceValue(b.precio);
+                    return (priceA || Infinity) - (priceB || Infinity);
+                });
             } else if (sortVal === 'price-desc') {
-                filtered.sort((a, b) => (parseFloat(b.precio) || 0) - (parseFloat(a.precio) || 0));
+                filtered.sort((a, b) => parseProductPriceValue(b.precio) - parseProductPriceValue(a.precio));
             } else if (sortVal === 'store') {
                 filtered.sort((a, b) => (a.tienda || '').localeCompare(b.tienda || ''));
             }
@@ -5150,6 +5247,7 @@ async function initApp() {
                     ? `${filtered.length} of ${_allProducts.length} results`
                     : `${filtered.length} de ${_allProducts.length} resultados`;
             }
+            syncBestOptionButton(filtered);
 
             // UX-1: Friendly empty state when filters remove all results
             const grid = document.getElementById('results-grid');
@@ -5277,7 +5375,7 @@ async function initApp() {
                 }
                 return true;
             });
-            _allProducts = products || [];
+            _allProducts = filteredProducts;
             _lastProducts = filteredProducts;
 
             // Show toolbar
@@ -5320,6 +5418,7 @@ async function initApp() {
             if (countEl) countEl.textContent = `${filteredProducts.length} ${getRegionConfig().resultsFound}`;
             const resultsSummaryEl = document.getElementById('search-results-summary');
             if (resultsSummaryEl) resultsSummaryEl.textContent = `${filteredProducts.length} ${getRegionConfig().resultsFound}`;
+            syncBestOptionButton(filteredProducts);
 
             const localSearchData = JSON.parse(localStorage.getItem('lumu_searches_data') || '{"count":0}');
             updateCoinsProgress(localSearchData.count || 0);
@@ -5430,6 +5529,7 @@ async function initApp() {
                 card.setAttribute('role', 'link');
                 card.setAttribute('tabindex', '0');
                 card.setAttribute('data-target-url', preferredClickTarget);
+                card.setAttribute('data-best-option-url', preferredClickTarget);
                 card.setAttribute('aria-label', `${isUS ? 'Open offer for' : 'Abrir oferta de'} ${normalizedTitle}`);
 
                 // Local store: price can be null
@@ -5664,13 +5764,40 @@ async function initApp() {
                 const c2cBadgeHtml = product.isC2C
                     ? '<span class="text-[9px] font-bold text-rose-700 bg-rose-50 px-2 py-0.5 rounded-full ring-1 ring-rose-200">C2C</span>'
                     : '';
+                
+                // Data freshness badge
+                const dataAge = Number(product.dataAgeMinutes || 0);
+                let freshnessBadgeHtml = '';
+                if (!isLocal && precioNumerico > 0) {
+                    if (dataAge < 60) {
+                        freshnessBadgeHtml = `<span class="text-[9px] font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full ring-1 ring-emerald-200" title="${isUS ? 'Verified minutes ago' : 'Verificado hace minutos'}">✓ ${isUS ? 'FRESH' : 'FRESCO'}</span>`;
+                    } else if (dataAge >= 60 && dataAge < 240) {
+                        const hours = Math.round(dataAge / 60);
+                        freshnessBadgeHtml = `<span class="text-[9px] font-bold text-amber-700 bg-amber-50 px-2 py-0.5 rounded-full ring-1 ring-amber-200" title="${isUS ? `Verified ${hours}h ago` : `Verificado hace ${hours}h`}">⏱ ${hours}h</span>`;
+                    } else if (dataAge >= 240) {
+                        const hours = Math.round(dataAge / 60);
+                        freshnessBadgeHtml = `<span class="text-[9px] font-bold text-orange-700 bg-orange-50 px-2 py-0.5 rounded-full ring-1 ring-orange-200" title="${isUS ? 'Price may have changed' : 'Precio puede haber cambiado'}">⚠️ ${hours}h</span>`;
+                    }
+                }
+                
+                // Price confidence warning
+                const priceConfidence = Number(product.priceConfidence || 0);
+                const priceNeedsVerification = Boolean(product.priceNeedsVerification);
+                let priceWarningHtml = '';
+                if (!isLocal && precioNumerico > 0) {
+                    if (priceConfidence < 0.6) {
+                        priceWarningHtml = `<span class="text-[9px] font-bold text-amber-700 bg-amber-50 px-2 py-0.5 rounded-full ring-1 ring-amber-200" title="${isUS ? 'Approximate price - verify in store' : 'Precio aproximado - verificar en tienda'}">⚠️ ${isUS ? 'APPROX' : 'APROX'}</span>`;
+                    } else if (priceNeedsVerification) {
+                        priceWarningHtml = `<span class="text-[9px] font-bold text-slate-600 bg-slate-100 px-2 py-0.5 rounded-full ring-1 ring-slate-200" title="${isUS ? 'Verify final price in store' : 'Verificar precio final en tienda'}">ℹ️ ${isUS ? 'VERIFY' : 'VERIFICAR'}</span>`;
+                    }
+                }
                 const shippingBadgeHtml = localizedShippingText && !/coupon available|cup[oó]n disponible/i.test(localizedShippingText)
                     ? `<div class="text-[11px] text-emerald-600 font-bold bg-emerald-50 w-fit px-2 py-0.5 rounded-md mt-2 tracking-wide">${sanitize(localizedShippingText)}</div>`
                     : '';
                 const productAlt = sanitize(normalizedTitle || (isUS ? 'Product' : 'Producto')) + ' - ' + sanitize(product.tienda || (isUS ? 'Store' : 'Tienda'));
                 card.innerHTML = `
                 ${priceDropBadge}
-                <div class="card-open-area w-full bg-gradient-to-b from-slate-50 to-white border-b border-slate-100 flex-shrink-0 h-36 sm:h-40 md:h-52 flex items-center justify-center p-3 md:p-4 relative overflow-hidden group-hover:bg-emerald-50/20 transition-colors cursor-pointer" data-target-url="${preferredClickTarget}">
+                <div class="card-open-area w-full bg-gradient-to-b from-slate-50 to-white border-b border-slate-100 flex-shrink-0 h-32 sm:h-40 md:h-52 flex items-center justify-center p-3 md:p-4 relative overflow-hidden group-hover:bg-emerald-50/20 transition-colors cursor-pointer" data-target-url="${preferredClickTarget}">
                     <img src="${imageState.finalImgUrl}" alt="${productAlt}" loading="lazy" referrerpolicy="no-referrer" data-fallback-src="${imageState.fallbackImgUrl}" class="w-full h-full object-contain group-hover:scale-105 transition-transform duration-500 ease-out ${imageState.hasProductImage ? '' : 'opacity-95'}" onerror="this.onerror=null; this.src=this.dataset.fallbackSrc;">
                     ${imageState.hasProductImage ? '' : `<div class="absolute left-3 bottom-3 inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-white/90 border border-slate-200 text-[10px] font-bold text-slate-500 shadow-sm">${sanitize(product.tienda || (isUS ? 'Store' : 'Tienda'))}</div>`}
                     <button class="btn-favorite absolute top-2 right-2 p-2 bg-white/80 dark:bg-slate-800/80 backdrop-blur rounded-full ${heartColor} hover:text-red-500 hover:bg-white dark:hover:bg-slate-800 shadow-sm transition-all z-20 hover:scale-110">
@@ -5692,6 +5819,8 @@ async function initApp() {
                         <div class="flex flex-wrap items-center gap-1">
                             ${isBestPrice ? `<span class="text-[9px] font-bold text-white bg-gradient-to-r from-emerald-500 to-teal-500 px-2 py-0.5 rounded-full ring-2 ring-emerald-200 shadow-sm animate-pulse">💰 ${isUS ? 'BEST PRICE' : 'MEJOR PRECIO'}</span>` : ''}
                             ${product.isLocalStore ? `<span class="text-[9px] font-bold text-emerald-700 bg-emerald-100 px-2 py-0.5 rounded-full ring-1 ring-emerald-200">📍 ${isUS ? 'LOCAL' : 'LOCAL'}</span>` : ''}
+                            ${freshnessBadgeHtml}
+                            ${priceWarningHtml}
                             ${regionBadgeHtml}
                             ${verificationBadgeHtml}
                             ${trustBadgeHtml}
@@ -5726,7 +5855,7 @@ async function initApp() {
                             
                             <!-- Acciones secundarias en botones Outline abajo -->
                             ${(!isLocal && precioNumerico > 0) ? `
-                            <div class="grid grid-cols-2 gap-2 w-full mt-1">
+                            <div class="grid grid-cols-1 sm:grid-cols-2 gap-2 w-full mt-1">
                                 <button class="btn-quick-alert flex-1 min-h-[42px] py-2 flex justify-center items-center gap-1.5 bg-white text-slate-600 hover:text-amber-600 hover:bg-amber-50 rounded-xl border border-slate-200 hover:border-amber-300 transition-all text-xs font-bold shadow-sm" title="${isUS ? 'Price alert' : 'Alerta de precio'}"
                                         data-alert-name="${sanitize(product.titulo)}"
                                         data-alert-price="${precioNumerico}"
@@ -5741,9 +5870,9 @@ async function initApp() {
                                     <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M9 7h6m0 10v-3m-3 3h.01M9 17h.01M9 14h.01M12 14h.01M15 11h.01M12 11h.01M9 11h.01M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z"/></svg>
                                     <span>${isUS ? 'Margin' : 'Margen'}</span>
                                 </button>
-                                <button class="btn-view-history col-span-2 sm:col-span-1 flex-1 min-h-[42px] py-2 flex justify-center items-center gap-1.5 bg-white text-slate-600 hover:text-emerald-700 hover:bg-emerald-50 rounded-xl border border-slate-200 hover:border-emerald-300 transition-all text-xs font-bold shadow-sm" title="${isUS ? 'Price history' : 'Historial de precio'}">
+                                <button class="btn-view-history col-span-1 flex-1 min-h-[42px] py-2 flex justify-center items-center gap-1.5 ${hasPriceHistory ? 'bg-emerald-50 text-emerald-700 hover:bg-emerald-100 border-emerald-200' : 'bg-slate-50 text-slate-500 border-slate-200'} rounded-xl border transition-all text-xs font-bold shadow-sm" title="${isUS ? 'Price history' : 'Historial de precio'}">
                                     <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M3 3v18h18M7 14l3-3 3 2 4-5"></path></svg>
-                                    <span>${hasPriceHistory ? (isUS ? 'History' : 'Historial') : (isUS ? 'No history yet' : 'Sin historial aún')}</span>
+                                    <span>${hasPriceHistory ? (isUS ? 'Price history' : 'Precio histórico') : (isUS ? 'Tracking price...' : 'Rastreando precio...')}</span>
                                 </button>
                             </div>` : ''}
                             
@@ -5814,6 +5943,20 @@ async function initApp() {
 
                     if (typeof trackProductClick === 'function') {
                         trackProductClick(product.titulo, product.tienda, precioNumerico);
+                    }
+
+                    // Show price disclaimer on first click per session
+                    if (!sessionStorage.getItem('lumu_price_disclaimer_shown')) {
+                        sessionStorage.setItem('lumu_price_disclaimer_shown', 'true');
+                        if (typeof showGlobalFeedback === 'function') {
+                            showGlobalFeedback(
+                                getLocalizedText(
+                                    'Lumu compara precios en tiempo real, pero pueden variar. Verifica el precio final en la tienda.',
+                                    'Lumu compares prices in real-time, but they may vary. Verify the final price at the store.'
+                                ),
+                                'info'
+                            );
+                        }
                     }
 
                     if (target && target !== 'undefined' && target !== 'null') {

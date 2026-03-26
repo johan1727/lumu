@@ -370,7 +370,7 @@ function isResultSellable(result = {}) {
     const url = String(result.url || '').toLowerCase();
     const combined = `${title} ${snippet}`;
     if (!url || !/^https?:\/\//i.test(url)) return false;
-    if (/agotado|out of stock|currently unavailable|unavailable|sin stock|not available|no disponible/.test(combined)) return false;
+    if (/agotado|out of stock|currently unavailable|unavailable|sin stock|not available|no disponible|sin existencia|temporalmente agotado|back ?order|pre-?order|pr[oó]ximamente|coming soon|sold out/.test(combined)) return false;
     if (/\/s\?|\/search\?|[?&](k|q|query|search|searchterm|searchterms|ntt)=/i.test(url) && !result.isDirectProductPage) return false;
     const isKnownMarketplace = /amazon\.|mercadolibre\.|walmart\.|liverpool\.|costco\.|bestbuy\.|target\./i.test(url);
     if (!isKnownMarketplace && !result.price && !Number.isFinite(extractSnippetPrice(snippet) ?? extractSnippetPrice(title))) return false;

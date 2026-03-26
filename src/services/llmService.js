@@ -249,18 +249,17 @@ function inferDisambiguation(text) {
 
 function inferSpeculativeMetadata(text) {
     const normalized = String(text || '').toLowerCase();
-    const isSpeculative = inferFallbackQueryType(normalized) === 'speculative';
-    if (!isSpeculative) {
-        return {
-            isSpeculative: false,
-            commercialReadiness: isBrowseIntent(normalized) ? 0.62 : (isWeakCommerceQuery(normalized) ? 0.2 : 0.5)
-        };
+    const queryType = inferFallbackQueryType(normalized);
+    if (queryType === 'speculative') {
+        return { isSpeculative: true, commercialReadiness: 0.15 };
     }
-
-    return {
-        isSpeculative: true,
-        commercialReadiness: 0.15
-    };
+    let commercialReadiness = 0.5;
+    if (queryType === 'brand_model') commercialReadiness = 0.85;
+    else if (queryType === 'comparison') commercialReadiness = 0.7;
+    else if (queryType === 'coupon_deal') commercialReadiness = 0.75;
+    else if (isBrowseIntent(normalized)) commercialReadiness = 0.62;
+    else if (isWeakCommerceQuery(normalized)) commercialReadiness = 0.2;
+    return { isSpeculative: false, commercialReadiness };
 }
 
 function inferProductCategory(text) {
@@ -715,7 +714,8 @@ function buildFallbackResponse(fallbackQuery) {
 exports.analyzeMessage = async (userText, chatHistory = [], context = {}) => {
     const apiKey = process.env.GEMINI_API_KEY;
     if (!apiKey) {
-        throw new Error("GEMINI_API_KEY no está configurado en .env");
+        console.warn('[LLM] GEMINI_API_KEY no configurado, usando fallback determinístico.');
+        return buildFallbackResponse(sanitizeUserInput(userText));
     }
 
     const regionCode = String(context.countryCode || 'MX').toUpperCase();

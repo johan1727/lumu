@@ -2021,12 +2021,14 @@
                 </div>
             </div>
 
+            <div id="best-option-summary" class="hidden mb-5"></div>
+
             <!-- Filtros y Ordenamiento - Compact Horizontal Layout -->
             <div id="results-toolbar"
-                class="hidden flex items-center gap-2 mb-6 p-2.5 bg-white/90 backdrop-blur-md rounded-full border border-slate-200 shadow-sm overflow-x-auto no-scrollbar">
+                class="hidden flex flex-wrap items-center gap-2 mb-6 p-2.5 bg-white/90 backdrop-blur-md rounded-[1.5rem] border border-slate-200 shadow-sm overflow-x-auto no-scrollbar">
                 <!-- Sort -->
                 <select id="sort-select"
-                    class="text-xs font-bold bg-slate-50 border-0 rounded-full px-3 py-1.5 text-slate-700 focus:ring-2 focus:ring-emerald-200 focus:outline-none cursor-pointer hover:bg-slate-100 transition-colors">
+                    class="min-h-[40px] text-xs font-bold bg-slate-50 border-0 rounded-full px-3 py-1.5 text-slate-700 focus:ring-2 focus:ring-emerald-200 focus:outline-none cursor-pointer hover:bg-slate-100 transition-colors">
                     <option value="price-asc">💰 Menor precio</option>
                     <option value="price-desc">💎 Mayor precio</option>
                     <option value="store">🏪 Por tienda</option>
@@ -2035,12 +2037,12 @@
                 
                 <!-- Store Filter -->
                 <select id="store-filter"
-                    class="text-xs font-bold bg-slate-50 border-0 rounded-full px-3 py-1.5 text-slate-700 focus:ring-2 focus:ring-emerald-200 focus:outline-none cursor-pointer hover:bg-slate-100 transition-colors">
+                    class="min-h-[40px] text-xs font-bold bg-slate-50 border-0 rounded-full px-3 py-1.5 text-slate-700 focus:ring-2 focus:ring-emerald-200 focus:outline-none cursor-pointer hover:bg-slate-100 transition-colors">
                     <option value="all">🏬 Todas las tiendas</option>
                 </select>
                 
                 <!-- Price Range -->
-                <div class="flex items-center gap-1 bg-slate-50 rounded-full px-2.5 py-1">
+                <div class="flex items-center gap-1 bg-slate-50 rounded-full px-2.5 py-1 min-h-[40px]">
                     <span class="text-xs text-slate-500">💵</span>
                     <input type="number" id="price-min" placeholder="Min" min="0" step="100"
                         class="w-14 text-xs py-0.5 text-slate-700 bg-transparent focus:outline-none border-none placeholder:text-slate-400">
@@ -2054,11 +2056,12 @@
                 </div>
                 
                 <!-- Free Shipping Toggle -->
-                <label class="relative inline-flex items-center cursor-pointer group bg-slate-50 rounded-full px-3 py-1.5 hover:bg-slate-100 transition-colors">
+                <label class="relative inline-flex min-h-[40px] items-center cursor-pointer group bg-slate-50 rounded-full px-3 py-1.5 hover:bg-slate-100 transition-colors">
                     <input type="checkbox" id="free-shipping-filter" class="sr-only peer">
                     <div class="w-8 h-4 bg-slate-300 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full after:content-[''] after:absolute after:top-[5px] after:left-[14px] after:bg-white after:rounded-full after:h-3 after:w-3 after:transition-all peer-checked:bg-emerald-500"></div>
                     <span id="free-shipping-label" class="ml-2 text-xs font-bold text-slate-600 whitespace-nowrap">🚚 Envío gratis</span>
                 </label>
+                <button id="btn-best-option" type="button" class="hidden min-h-[40px] rounded-full bg-emerald-500 px-4 py-2 text-xs font-black uppercase tracking-[0.14em] text-white shadow-lg shadow-emerald-500/20 transition-all hover:bg-emerald-600">✨ Mejor opción</button>
                 <!-- Contador -->
                 <span id="results-count" class="text-xs text-slate-400 font-bold w-full sm:w-auto sm:ml-auto text-right"></span>
             </div>
@@ -2723,7 +2726,7 @@
 
         <!-- Drawer Panel -->
         <div id="mobile-menu-panel"
-            class="absolute top-0 right-0 w-80 h-full bg-white dark:bg-slate-900 shadow-2xl translate-x-full transition-transform duration-300 ease-out flex flex-col p-6 pointer-events-auto">
+            class="absolute top-0 right-0 w-[min(88vw,20rem)] h-full bg-white dark:bg-slate-900 shadow-2xl translate-x-full transition-transform duration-300 ease-out flex flex-col p-5 sm:p-6 pointer-events-auto">
             <div class="flex items-center justify-between mb-8">
                 <h2 id="mobile-menu-title" class="text-xl font-display font-black text-slate-900 dark:text-white">
                     Menú
