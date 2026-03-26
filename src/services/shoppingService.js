@@ -445,6 +445,9 @@ exports.searchGoogleShopping = async (query, radius, lat, lng, intentType, abort
     const webQuery = String(searchOptions.webQuery || query || '').trim();
     const isBroadExploration = Boolean(searchOptions?.broadProfile?.broad);
     const queryType = String(searchOptions?.queryType || 'generic').toLowerCase();
+    const searchTier = String(searchOptions?.searchTier || 'free').toLowerCase() === 'vip' ? 'vip' : 'free';
+    const isVipSearch = searchTier === 'vip';
+    const deepSearchEnabled = Boolean(searchOptions?.deepSearchEnabled);
     const isSpecificProduct = queryType === 'brand_model' || queryType === 'comparison';
     const shouldQueryBroadWeb = !isSpecificProduct && shouldRunBroadWebQuery(webQuery, {
         productCategory,
@@ -452,8 +455,8 @@ exports.searchGoogleShopping = async (query, radius, lat, lng, intentType, abort
         isBroadExploration: isBroadExploration && !['smartphone', 'laptop', 'audio', 'tv'].includes(String(productCategory || '').toLowerCase()),
         alternativeQueries
     });
-    const shouldQueryOfficialWeb = !isSpecificProduct && shouldRunOfficialWebQuery(webQuery, brandOfficialQuery, countryCode);
-    const shouldQueryMlPriority = !isSpecificProduct && preferredStoreKeys.length === 0;
+    const shouldQueryOfficialWeb = !isSpecificProduct && (isVipSearch || shouldRunOfficialWebQuery(webQuery, brandOfficialQuery, countryCode));
+    const shouldQueryMlPriority = !isSpecificProduct && (isVipSearch || preferredStoreKeys.length === 0);
     const shouldRunDirectScrapers = !isService
         && intentType !== 'mayoreo_perecedero'
         && (!isLocalFastMode || isBroadExploration || ['smartphone', 'laptop', 'audio', 'tv', 'fashion', 'home', 'appliance'].includes(String(productCategory || '').toLowerCase()));
@@ -506,12 +509,19 @@ exports.searchGoogleShopping = async (query, radius, lat, lng, intentType, abort
         // Flujo normal: Google Shopping + Web en PARALELO para máxima velocidad y variedad
         const skippedCalls = isSpecificProduct ? ' [COST-OPT: skipping broadWeb/officialWeb/mlPriority/altShopping]' : '';
         console.log(`[ShoppingService] Ejecutando Serper Shopping + Web para: "${shoppingQuery}" (${searchConditionMode}, queryType=${queryType})${skippedCalls}`);
+        const shoppingNum = deepSearchEnabled ? 100 : (isVipSearch ? 80 : 50);
+        const webNum = deepSearchEnabled ? (countryCode === 'US' ? 60 : 45) : (isVipSearch ? (countryCode === 'US' ? 50 : 35) : (countryCode === 'US' ? 30 : 20));
+        const broadWebNum = deepSearchEnabled ? 30 : (isVipSearch ? 20 : 10);
+        const officialWebNum = deepSearchEnabled ? 30 : (isVipSearch ? 20 : 10);
+        const marketplaceNum = deepSearchEnabled ? 30 : (isVipSearch ? 20 : 10);
+        const mlPriorityNum = deepSearchEnabled ? 30 : (isVipSearch ? 20 : 12);
+        const altShoppingNum = deepSearchEnabled ? 50 : (isVipSearch ? 40 : (isBroadExploration ? 30 : 20));
         
         const shoppingPromise = fetchWithRetry({
             method: 'post',
             url: 'https://google.serper.dev/shopping',
             headers: { 'X-API-KEY': apiKey, 'Content-Type': 'application/json' },
-            data: JSON.stringify({ q: shoppingQuery, gl: regionCfg.gl, hl: regionCfg.hl, num: 50 }),
+            data: JSON.stringify({ q: shoppingQuery, gl: regionCfg.gl, hl: regionCfg.hl, num: shoppingNum }),
             timeout: serperTimeout,
             signal: abortSignal
         }, serperRetries).catch(err => { console.error('Error Google Shopping:', err.message); return null; });
@@ -537,20 +547,20 @@ exports.searchGoogleShopping = async (query, radius, lat, lng, intentType, abort
             headers: { 'X-API-KEY': apiKey, 'Content-Type': 'application/json' },
             data: JSON.stringify({
                 q: webSearchQ,
-                gl: regionCfg.gl, hl: regionCfg.hl, num: countryCode === 'US' ? 30 : 20
+                gl: regionCfg.gl, hl: regionCfg.hl, num: webNum
             }),
             timeout: serperTimeout,
             signal: abortSignal
         }, serperRetries).catch(err => { console.error('Error Serper Web:', err.message); return null; });
 
-        const broadWebPromise = shouldQueryBroadWeb
+        const broadWebPromise = (isVipSearch || shouldQueryBroadWeb)
             ? fetchWithRetry({
                 method: 'post',
                 url: 'https://google.serper.dev/search',
                 headers: { 'X-API-KEY': apiKey, 'Content-Type': 'application/json' },
                 data: JSON.stringify({
                     q: regionConfigService.buildBroadWebSearchQuery(query, countryCode),
-                    gl: regionCfg.gl, hl: regionCfg.hl, num: 10
+                    gl: regionCfg.gl, hl: regionCfg.hl, num: broadWebNum
                 }),
                 timeout: serperTimeout,
                 signal: abortSignal
@@ -565,7 +575,7 @@ exports.searchGoogleShopping = async (query, radius, lat, lng, intentType, abort
                 headers: { 'X-API-KEY': apiKey, 'Content-Type': 'application/json' },
                 data: JSON.stringify({
                     q: regionConfigService.buildOfficialWebSearchQuery(officialSearchQuery, countryCode),
-                    gl: regionCfg.gl, hl: regionCfg.hl, num: 10
+                    gl: regionCfg.gl, hl: regionCfg.hl, num: officialWebNum
                 }),
                 timeout: serperTimeout,
                 signal: abortSignal
@@ -592,7 +602,7 @@ exports.searchGoogleShopping = async (query, radius, lat, lng, intentType, abort
                 headers: { 'X-API-KEY': apiKey, 'Content-Type': 'application/json' },
                 data: JSON.stringify({
                     q: `${webQuery} ${mlAmazonDomains}`,
-                    gl: regionCfg.gl, hl: regionCfg.hl, num: 10
+                    gl: regionCfg.gl, hl: regionCfg.hl, num: marketplaceNum
                 }),
                 timeout: serperTimeout,
                 signal: abortSignal
@@ -610,24 +620,24 @@ exports.searchGoogleShopping = async (query, radius, lat, lng, intentType, abort
                     q: `${webQuery} site:${mercadoLibreDomain}`,
                     gl: regionCfg.gl,
                     hl: regionCfg.hl,
-                    num: 12
+                    num: mlPriorityNum
                 }),
                 timeout: serperTimeout,
                 signal: abortSignal
             }, serperRetries).catch(err => { console.error('Error Serper MercadoLibre Priority:', err.message); return null; });
 
-        const serperAltQueryCount = isSpecificProduct ? 0 : (isBroadExploration ? 2 : 1);
+        const serperAltQueryCount = isSpecificProduct ? 0 : (deepSearchEnabled ? 6 : (isVipSearch ? 4 : (isBroadExploration ? 2 : 1)));
         const plannedAltShoppingCalls = Math.min((alternativeQueries || []).filter(Boolean).length, serperAltQueryCount);
         const expectedSerperCallCount = [
             1,
             1,
-            shouldQueryBroadWeb ? 1 : 0,
+            (isVipSearch || shouldQueryBroadWeb) ? 1 : 0,
             shouldQueryOfficialWeb ? 1 : 0,
             shouldQueryMlAmazon ? 1 : 0,
             shouldQueryMlPriority ? 1 : 0,
             plannedAltShoppingCalls
         ].reduce((sum, value) => sum + value, 0);
-        console.log(`[ShoppingService] Serper call plan: ${expectedSerperCallCount} (shopping=1, web=1, broad=${shouldQueryBroadWeb ? 1 : 0}, official=${shouldQueryOfficialWeb ? 1 : 0}, mlAmazon=${shouldQueryMlAmazon ? 1 : 0}, mlPriority=${shouldQueryMlPriority ? 1 : 0}, alt=${plannedAltShoppingCalls})`);
+        console.log(`[ShoppingService] Serper call plan: ${expectedSerperCallCount} (tier=${searchTier}, shopping=1, web=1, broad=${(isVipSearch || shouldQueryBroadWeb) ? 1 : 0}, official=${shouldQueryOfficialWeb ? 1 : 0}, mlAmazon=${shouldQueryMlAmazon ? 1 : 0}, mlPriority=${shouldQueryMlPriority ? 1 : 0}, alt=${plannedAltShoppingCalls})`);
         const altShoppingPromises = (alternativeQueries || [])
             .filter(Boolean)
             .slice(0, serperAltQueryCount)
@@ -635,7 +645,7 @@ exports.searchGoogleShopping = async (query, radius, lat, lng, intentType, abort
                 method: 'post',
                 url: 'https://google.serper.dev/shopping',
                 headers: { 'X-API-KEY': apiKey, 'Content-Type': 'application/json' },
-                data: JSON.stringify({ q: altQuery, gl: regionCfg.gl, hl: regionCfg.hl, num: isBroadExploration ? 30 : 20 }),
+                data: JSON.stringify({ q: altQuery, gl: regionCfg.gl, hl: regionCfg.hl, num: altShoppingNum }),
                 timeout: serperTimeout,
                 signal: abortSignal
             }, serperRetries).catch(err => {
@@ -1080,6 +1090,26 @@ exports.searchGoogleShopping = async (query, radius, lat, lng, intentType, abort
     });
     const sortedResults = dedupedByUrl
         .filter(isResultSellable)
+        .filter(result => {
+            // Reject results with invalid or missing URLs
+            const url = String(result?.url || '').trim();
+            if (!url || /^(undefined|null|#|javascript:|about:)$/i.test(url)) {
+                return false;
+            }
+            // Reject results with generic/placeholder titles
+            const title = String(result?.title || '').trim();
+            if (!title || /^(sin t[ií]tulo|no title|product listing|producto disponible|untitled)$/i.test(title)) {
+                return false;
+            }
+            // For non-local results, require valid price
+            if (!result.isLocalStore) {
+                const price = Number(result?.price);
+                if (!Number.isFinite(price) || price <= 0) {
+                    return false;
+                }
+            }
+            return true;
+        })
         .sort((a, b) => {
             const affiliateDelta = getAffiliateStoreRank(a) - getAffiliateStoreRank(b);
             if (affiliateDelta !== 0) return affiliateDelta;
@@ -1100,7 +1130,9 @@ exports.searchGoogleShopping = async (query, radius, lat, lng, intentType, abort
     // Attach optimization metadata for cost tracking
     sortedResults._optimizationMeta = {
         mlPrioritySkipped: mlPrioritySkipped || false,
-        directScraperCalls: directResults.length > 0 ? scraperFunctions.length : 0
+        directScraperCalls: directResults.length > 0 ? scraperFunctions.length : 0,
+        searchTier,
+        totalResultsBeforeFilter: dedupedByUrl.length
     };
     
     return sortedResults;

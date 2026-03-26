@@ -59,6 +59,18 @@ window.addEventListener('unhandledrejection', function (event) {
     }
 });
 
+function safeToast(message, tone = 'info') {
+    if (typeof showToast === 'function') {
+        showToast(message, tone);
+        return;
+    }
+    if (typeof showGlobalFeedback === 'function') {
+        showGlobalFeedback(message, tone);
+        return;
+    }
+    console.warn('[UI Feedback Fallback]', tone, message);
+}
+
 // --- DOM Elements (initialized in DOMContentLoaded) ---
 let authContainer, authModal, closeModalBtn, modalBackdrop, btnGoogleLogin;
 let historyModal, closeHistoryBtn, historyBackdrop, historyList;
@@ -66,6 +78,8 @@ let favoritesModal, closeFavoritesBtn, favoritesBackdrop, navFavoritos, favorite
 let profileModal, closeProfileBtn, profileBackdrop;
 let feedbackModal, closeFeedbackBtn, feedbackBackdrop, btnFeedback, feedbackForm, feedbackSuccess;
 let searchForm, searchInput, searchButton, errorMessage;
+let btnDeepResearch = null;
+let btnSearchModeNormal = null;
 let chatContainer, resultsWrapper, resultsGrid, resultsContainer;
 let adModal, adCountdownText, btnSkipAd;
 let b2bModal, closeB2bModal, b2bBackdrop, navB2b, btnProcessB2b, btnExportB2b;
@@ -488,7 +502,7 @@ const REGION_UI_COPY = {
         auth: {
             title: 'Crea tu cuenta gratis',
             copy: 'Desbloquea más búsquedas, favoritos, historial y alertas de precio.',
-            bonus: '🎁 Bono de bienvenida: +5 búsquedas extra',
+            bonus: '🎁 Bono de bienvenida: búsquedas extra incluidas',
             benefit1: 'Más búsquedas al registrarte',
             benefit2: 'Gana Lumu Coins con cada búsqueda',
             benefit3: 'Guarda favoritos e historial',
@@ -725,7 +739,7 @@ const REGION_UI_COPY = {
         auth: {
             title: 'Create your free account',
             copy: 'Unlock more searches, favorites, history, and price alerts.',
-            bonus: '🎁 Welcome bonus: +5 extra searches',
+            bonus: '🎁 Welcome bonus: extra searches included',
             benefit1: 'More searches when you sign up',
             benefit2: 'Earn Lumu Coins with each search',
             benefit3: 'Save favorites and history',
@@ -811,6 +825,212 @@ let _authModalCompleted = false;
 let _isSearchInProgress = false;
 let _activeSearchAbortController = null;
 let _activeBrowseCategory = '';
+let _deepResearchArmed = false;
+let _lastSubmittedDeepResearch = false;
+
+function setDeepResearchState(enabled) {
+    _deepResearchArmed = Boolean(enabled);
+    if (!btnDeepResearch || !btnSearchModeNormal) return;
+    btnDeepResearch.setAttribute('data-enabled', _deepResearchArmed ? 'true' : 'false');
+    btnSearchModeNormal.setAttribute('data-enabled', _deepResearchArmed ? 'false' : 'true');
+    btnDeepResearch.classList.toggle('bg-white', _deepResearchArmed);
+    btnDeepResearch.classList.toggle('shadow-sm', _deepResearchArmed);
+    btnDeepResearch.classList.toggle('text-violet-800', _deepResearchArmed);
+    btnDeepResearch.classList.toggle('text-violet-600', !_deepResearchArmed);
+    btnDeepResearch.classList.toggle('ring-1', _deepResearchArmed);
+    btnDeepResearch.classList.toggle('ring-violet-200', _deepResearchArmed);
+    btnSearchModeNormal.classList.toggle('bg-white', !_deepResearchArmed);
+    btnSearchModeNormal.classList.toggle('shadow-sm', !_deepResearchArmed);
+    btnSearchModeNormal.classList.toggle('text-slate-800', !_deepResearchArmed);
+    btnSearchModeNormal.classList.toggle('text-slate-500', _deepResearchArmed);
+    btnSearchModeNormal.classList.toggle('ring-1', !_deepResearchArmed);
+    btnSearchModeNormal.classList.toggle('ring-slate-200', !_deepResearchArmed);
+    const copyEl = document.getElementById('deep-research-copy');
+    const badgeEl = document.getElementById('deep-research-badge');
+    if (copyEl) {
+        copyEl.textContent = _deepResearchArmed
+            ? getLocalizedText('Modo activo: más tiendas, más variantes y mejores resultados. Usa más créditos VIP.', 'Active mode: more stores, more variants, and better results. Uses more VIP credits.')
+            : getLocalizedText('Modo normal activo. Cambia a Búsqueda Profunda para ampliar resultados.', 'Normal mode active. Switch to Deep Research to expand results.');
+    }
+    if (badgeEl) {
+        badgeEl.classList.toggle('inline-flex', _deepResearchArmed);
+        badgeEl.classList.toggle('hidden', !_deepResearchArmed);
+        badgeEl.classList.toggle('animate-pulse', _deepResearchArmed);
+        if (_deepResearchArmed) {
+            setTimeout(() => badgeEl.classList.remove('animate-pulse'), 1800);
+        }
+    }
+}
+
+function showDeepResearchSelectorNotice(message, tone = 'info') {
+    const selector = document.getElementById('search-mode-selector');
+    if (!selector) {
+        safeToast(message, tone);
+        return;
+    }
+    const parent = selector.parentElement;
+    if (!parent) {
+        safeToast(message, tone);
+        return;
+    }
+
+    const existing = document.getElementById('deep-research-selector-notice');
+    if (existing) existing.remove();
+
+    const palette = tone === 'warning'
+        ? 'border-amber-200 bg-amber-50 text-amber-800'
+        : tone === 'success'
+            ? 'border-emerald-200 bg-emerald-50 text-emerald-800'
+            : 'border-violet-200 bg-violet-50 text-violet-800';
+
+    const notice = document.createElement('div');
+    notice.id = 'deep-research-selector-notice';
+    notice.className = `mt-2 w-full max-w-md rounded-xl border px-3 py-2 text-[10px] sm:text-[11px] font-bold shadow-sm leading-tight ${palette}`;
+    notice.textContent = message;
+    parent.classList.add('relative', 'flex-col', 'items-start');
+    parent.appendChild(notice);
+
+    clearTimeout(showDeepResearchSelectorNotice._timer);
+    showDeepResearchSelectorNotice._timer = setTimeout(() => {
+        notice.remove();
+    }, 3200);
+}
+
+async function hasVipAccess() {
+    const currentPlan = String(currentUser?.plan || '').toLowerCase();
+    if (currentUser?.is_premium || ['personal_vip', 'personal_vip_annual', 'b2b', 'b2b_annual', 'vip', 'pro'].includes(currentPlan)) {
+        return true;
+    }
+    if (!currentUser || !supabaseClient) return false;
+    try {
+        const { data: profileData } = await supabaseClient
+            .from('profiles')
+            .select('is_premium, plan')
+            .eq('id', currentUser.id)
+            .single();
+        const plan = String(profileData?.plan || '').toLowerCase();
+        return Boolean(profileData?.is_premium || ['personal_vip', 'personal_vip_annual', 'b2b', 'b2b_annual', 'vip', 'pro'].includes(plan));
+    } catch {
+        return false;
+    }
+}
+
+async function promptDeepResearchUpgrade() {
+    if (!currentUser) {
+        safeToast(getLocalizedText('Inicia sesión para usar Búsqueda Profunda.', 'Sign in to use Deep Research.'), 'info');
+        openModal();
+        return;
+    }
+
+    const isES = currentRegion !== 'US';
+
+    // Remove any existing upgrade modal
+    document.getElementById('vip-upgrade-overlay')?.remove();
+
+    const overlay = document.createElement('div');
+    overlay.id = 'vip-upgrade-overlay';
+    overlay.style.cssText = 'position:fixed;inset:0;z-index:99999;display:flex;align-items:center;justify-content:center;padding:16px;background:rgba(0,0,0,0.5);backdrop-filter:blur(4px);';
+
+    const panel = document.createElement('div');
+    panel.style.cssText = 'background:#fff;border-radius:24px;max-width:420px;width:100%;padding:24px;box-shadow:0 25px 50px rgba(0,0,0,0.25);transform:scale(0.95);opacity:0;transition:all 0.3s ease;max-height:90vh;overflow-y:auto;';
+
+    panel.innerHTML = `
+        <div style="text-align:center;margin-bottom:20px;">
+            <div style="width:56px;height:56px;margin:0 auto 12px;background:linear-gradient(135deg,#8b5cf6,#d946ef);border-radius:16px;display:flex;align-items:center;justify-content:center;box-shadow:0 8px 16px rgba(139,92,246,0.3);">
+                <span style="font-size:28px;">✨</span>
+            </div>
+            <div style="display:inline-block;background:#f5f3ff;border:1px solid #ddd6fe;border-radius:999px;padding:4px 12px;font-size:10px;font-weight:900;text-transform:uppercase;letter-spacing:0.15em;color:#6d28d9;margin-bottom:10px;">VIP ${isES ? 'Recomendado' : 'Recommended'}</div>
+            <h3 style="font-size:22px;font-weight:900;color:#0f172a;margin:0 0 8px;">${isES ? '¿Deseas convertirte en VIP?' : 'Want to become VIP?'}</h3>
+            <p style="font-size:13px;color:#64748b;line-height:1.5;margin:0;">${isES ? 'Búsqueda Profunda revisa más tiendas, más variantes y te da los mejores resultados. Es exclusiva del plan VIP.' : 'Deep Research checks more stores, more variants, and gives you the best results. Exclusive to VIP.'}</p>
+        </div>
+        <div style="display:flex;flex-direction:column;gap:10px;margin-bottom:20px;">
+            <div style="display:flex;align-items:center;gap:12px;padding:12px;background:#ecfdf5;border:1px solid #d1fae5;border-radius:16px;">
+                <span style="font-size:20px;">🔬</span>
+                <div>
+                    <div style="font-size:12px;font-weight:700;color:#064e3b;">${isES ? 'Búsqueda Profunda VIP' : 'VIP Deep Research'}</div>
+                    <div style="font-size:10px;color:#047857;">${isES ? 'Más tiendas, más variantes y mejores resultados' : 'More stores, variants, and better results'}</div>
+                </div>
+            </div>
+            <div style="display:flex;align-items:center;gap:12px;padding:12px;background:#f5f3ff;border:1px solid #ede9fe;border-radius:16px;">
+                <span style="font-size:20px;">⚡</span>
+                <div>
+                    <div style="font-size:12px;font-weight:700;color:#4c1d95;">${isES ? 'Más créditos VIP' : 'More VIP credits'}</div>
+                    <div style="font-size:10px;color:#6d28d9;">${isES ? 'Activa búsquedas más potentes con tu plan' : 'Unlock more powerful searches'}</div>
+                </div>
+            </div>
+            <div style="display:flex;align-items:center;gap:12px;padding:12px;background:#eff6ff;border:1px solid #dbeafe;border-radius:16px;">
+                <span style="font-size:20px;">💎</span>
+                <div>
+                    <div style="font-size:12px;font-weight:700;color:#1e3a5f;">${isES ? 'Acceso prioritario' : 'Priority access'}</div>
+                    <div style="font-size:10px;color:#2563eb;">${isES ? 'Nuevas funciones primero' : 'New features first'}</div>
+                </div>
+            </div>
+        </div>
+        <div style="display:flex;flex-direction:column;gap:10px;">
+            <button type="button" data-action="confirm" style="width:100%;padding:14px;border:none;border-radius:16px;font-size:14px;font-weight:700;color:#fff;background:linear-gradient(135deg,#7c3aed,#d946ef);cursor:pointer;box-shadow:0 4px 14px rgba(124,58,237,0.4);min-height:52px;">
+                ${isES ? '✨ Ver planes VIP' : '✨ View VIP plans'}
+            </button>
+            <button type="button" data-action="cancel" style="width:100%;padding:14px;border:none;border-radius:16px;font-size:14px;font-weight:700;color:#64748b;background:#f1f5f9;cursor:pointer;min-height:48px;">
+                ${isES ? 'Ahora no' : 'Not now'}
+            </button>
+        </div>
+    `;
+
+    overlay.appendChild(panel);
+    document.body.appendChild(overlay);
+
+    // Animate in
+    requestAnimationFrame(() => {
+        panel.style.transform = 'scale(1)';
+        panel.style.opacity = '1';
+    });
+
+    const closeUpgradeModal = () => {
+        panel.style.transform = 'scale(0.95)';
+        panel.style.opacity = '0';
+        setTimeout(() => overlay.remove(), 300);
+    };
+
+    // Use event delegation on overlay — guaranteed to work
+    overlay.addEventListener('click', (e) => {
+        const target = e.target;
+
+        // Click on backdrop
+        if (target === overlay) {
+            closeUpgradeModal();
+            return;
+        }
+
+        // Click on cancel or close
+        const cancelBtn = target.closest('[data-action="cancel"]');
+        if (cancelBtn) {
+            closeUpgradeModal();
+            return;
+        }
+
+        // Click on confirm (Ver planes VIP)
+        const confirmBtn = target.closest('[data-action="confirm"]');
+        if (confirmBtn) {
+            closeUpgradeModal();
+            // Navigate to pricing page
+            window.location.href = '/precios.html';
+            return;
+        }
+    });
+}
+
+function explainDeepResearchMode(isVipEligible = false) {
+    const message = isVipEligible
+        ? getLocalizedText(
+            '🔬 **Búsqueda Profunda** revisa más tiendas, más variantes y más rescates para darte los mejores resultados posibles. Está incluida en cualquier plan VIP y consume más créditos de tu plan que una búsqueda normal.',
+            '🔬 **Deep Research** checks more stores, more variants, and more rescue paths to give you the best possible results. It is included in any VIP plan and consumes more plan credits than a normal search.'
+        )
+        : getLocalizedText(
+            '🔬 **Búsqueda Profunda** revisa más tiendas, más variantes y más rescates para darte los mejores resultados posibles. Para usarla necesitas cualquier plan VIP y consume más créditos de tu plan que una búsqueda normal.',
+            '🔬 **Deep Research** checks more stores, more variants, and more rescue paths to give you the best possible results. To use it, you need any VIP plan and it consumes more plan credits than a normal search.'
+        );
+    showDeepResearchSelectorNotice(message.replace(/\*\*/g, ''), isVipEligible ? 'success' : 'warning');
+}
 
 function setBrowseCategoryState(categoryKey = '') {
     _activeBrowseCategory = categoryKey || '';
@@ -4130,21 +4350,82 @@ async function initApp() {
                 // Let the query through. We will only increment count on RESULTS,
                 // and we will rely on the backend for actual rate limiting logic.
                 errorMessage.classList.add('hidden');
-                executeSearch(query);
+                executeSearch(query, false, _deepResearchArmed);
+            });
+        }
+
+        btnDeepResearch = document.getElementById('btn-deep-research');
+        btnSearchModeNormal = document.getElementById('btn-search-mode-normal');
+        if (btnDeepResearch && btnSearchModeNormal) {
+            setDeepResearchState(false);
+            
+            // Tooltip hover for desktop
+            let tooltipTimer = null;
+            let tooltipEl = null;
+            btnDeepResearch.addEventListener('mouseenter', () => {
+                if (window.innerWidth < 768) return;
+                tooltipTimer = setTimeout(() => {
+                    const isES = currentRegion !== 'US';
+                    tooltipEl = document.createElement('div');
+                    tooltipEl.className = 'absolute left-1/2 -translate-x-1/2 bottom-full mb-2 z-[100] w-64 bg-slate-900 text-white text-[11px] rounded-xl p-3 shadow-xl pointer-events-none';
+                    tooltipEl.innerHTML = `
+                        <div class="font-bold mb-1 flex items-center gap-2">
+                            <span>🔬</span>
+                            <span>${isES ? 'Búsqueda Profunda' : 'Deep Research'}</span>
+                        </div>
+                        <p class="text-[10px] text-slate-300 leading-tight">${isES ? 'Revisa más tiendas, más variantes y rescates para darte los mejores resultados. Exclusivo VIP.' : 'Checks more stores, more variants, and rescue paths for the best results. VIP only.'}</p>
+                        <div class="absolute left-1/2 -translate-x-1/2 top-full w-0 h-0 border-l-8 border-r-8 border-t-8 border-transparent border-t-slate-900"></div>
+                    `;
+                    btnDeepResearch.parentElement.classList.add('relative');
+                    btnDeepResearch.parentElement.appendChild(tooltipEl);
+                }, 600);
+            });
+            btnDeepResearch.addEventListener('mouseleave', () => {
+                clearTimeout(tooltipTimer);
+                if (tooltipEl) {
+                    tooltipEl.remove();
+                    tooltipEl = null;
+                }
+            });
+            
+            btnSearchModeNormal.addEventListener('click', () => {
+                if (_deepResearchArmed) {
+                    setDeepResearchState(false);
+                    _trackEvent('deep_research_disabled', { action_context: 'search_mode_selector' });
+                    safeToast(getLocalizedText('Modo normal activado.', 'Normal mode enabled.'), 'info');
+                }
+            });
+            btnDeepResearch.addEventListener('click', async () => {
+                if (_deepResearchArmed) return;
+                const vipAccess = await hasVipAccess();
+                if (!vipAccess) {
+                    setDeepResearchState(false);
+                    await promptDeepResearchUpgrade();
+                    return;
+                }
+                setDeepResearchState(!_deepResearchArmed);
+                if (_deepResearchArmed) {
+                    _trackEvent('deep_research_enabled', { action_context: 'search_box_toggle' });
+                    safeToast(getLocalizedText('Búsqueda Profunda activada. Todas tus búsquedas usarán más créditos VIP para investigar más tiendas.', 'Deep Research enabled. All your searches will use more VIP credits to inspect more stores.'), 'info');
+                } else {
+                    _trackEvent('deep_research_disabled', { action_context: 'search_box_toggle' });
+                    safeToast(getLocalizedText('Búsqueda Profunda desactivada. Las búsquedas normales consumen menos créditos.', 'Deep Research disabled. Normal searches consume fewer credits.'), 'info');
+                }
             });
         }
 
         let _lastSubmittedQuery = '';
         let _lastSubmittedAt = 0;
 
-        async function executeSearch(query, skipLLM = false) {
+        async function executeSearch(query, skipLLM = false, deepResearch = false) {
             // Dedup: prevent identical query within 3s (double-click / double-submit)
             const now = Date.now();
-            if (query === _lastSubmittedQuery && (now - _lastSubmittedAt) < 3000) {
+            if (query === _lastSubmittedQuery && _lastSubmittedDeepResearch === Boolean(deepResearch) && (now - _lastSubmittedAt) < 3000) {
                 console.log('[Search Dedup] Skipping duplicate query:', query);
                 return;
             }
             _lastSubmittedQuery = query;
+            _lastSubmittedDeepResearch = Boolean(deepResearch);
             _lastSubmittedAt = now;
 
             if (_isSearchInProgress && _activeSearchAbortController) {
@@ -4232,6 +4513,7 @@ async function initApp() {
                     chatHistory: safeChatHistory,
                     radius: radius,
                     skipLLM: skipLLM,
+                    deepResearch: Boolean(deepResearch),
                     country: currentRegion,
                     safeStoresOnly: safeStoresOnly,
                     includeKnownMarketplaces,
@@ -4266,7 +4548,8 @@ async function initApp() {
                 trackMetaEventSafe('SearchPerformed', {
                     search_term: finalQuery,
                     region: currentRegion || 'MX',
-                    has_account: Boolean(currentUser)
+                    has_account: Boolean(currentUser),
+                    deep_research: Boolean(deepResearch)
                 });
                 if (_conversionBounceTimer) clearTimeout(_conversionBounceTimer);
 
@@ -4313,6 +4596,17 @@ async function initApp() {
                     }
                     if (response.status === 402) {
                         removeTypingIndicator();
+                        if (data.feature === 'deep_research' || data.upgrade_target === 'vip_deep_research') {
+                            const msgDeep = getLocalizedText(
+                                '✨ **Búsqueda Profunda es exclusiva del plan VIP.** Este modo revisa más tiendas, más variantes y gasta más créditos por búsqueda.',
+                                '✨ **Deep Research is exclusive to the VIP plan.** This mode checks more stores, more variants, and consumes more credits per search.'
+                            );
+                            addChatBubble('ai', msgDeep, [], false);
+                            await promptDeepResearchUpgrade();
+                            resultsWrapper.classList.add('hidden');
+                            setDeepResearchState(false);
+                            return;
+                        }
                         if (data.login_required) {
                             const msg402 = getLocalizedText(
                                 '🔐 **Alcanzaste tu búsqueda gratis diaria.** Crea tu cuenta para obtener 2 búsquedas al día y 10 al mes totalmente gratis.',
@@ -4464,6 +4758,9 @@ async function initApp() {
                         resultCount: data.top_5_baratos?.length || 0
                     });
 
+                    const searchTier = data.search_metadata?.search_tier || 'free';
+                    const deepSearchEnabled = !!data.search_metadata?.deep_search_enabled;
+
                     if (!data.top_5_baratos || data.top_5_baratos.length === 0) {
                         _trackEvent('zero_results', {
                             search_query: data.intencion_detectada?.busqueda || finalQuery,
@@ -4496,6 +4793,14 @@ async function initApp() {
 
                         chatContainer.classList.remove('hidden');
                         addChatBubble('ai', getResultLeadCopy(data.intencion_detectada, data.top_5_baratos.length), [], true);
+
+                        if (deepSearchEnabled) {
+                            setTimeout(() => addChatBubble('ai', getLocalizedText('Activé una búsqueda profunda para revisar más tiendas, variantes y rescates de precio.', 'I enabled a deep search to inspect more stores, variants, and rescue price paths.'), [], true), 220);
+                        }
+
+                        if (data.vip_auto_alert?.created) {
+                            setTimeout(() => addChatBubble('ai', getLocalizedText(`Te activé una alerta automática para avisarte si baja de ${formatPrice(data.vip_auto_alert.targetPrice, data.region?.country || currentRegion)}.`, `I activated an automatic alert to notify you if the price drops below ${formatPrice(data.vip_auto_alert.targetPrice, data.region?.country || currentRegion)}.`), [], true), 500);
+                        }
 
                         if (data.sugerencias && data.sugerencias.length > 0) {
                             const csContainer = document.createElement('div');
@@ -4573,11 +4878,18 @@ async function initApp() {
                             return `<button data-sugg="${safe}" class="sugg-chip px-4 py-2 bg-white border border-emerald-200 text-emerald-700 text-sm font-bold rounded-full hover:bg-emerald-50 transition-colors shadow-sm">${safe}</button>`;
                         }).join('');
 
+                        const zeroMetaBadge = deepSearchEnabled
+                            ? `<div class="mb-4 inline-flex items-center gap-2 rounded-full bg-violet-50 border border-violet-200 px-4 py-2 text-xs font-bold text-violet-700">✨ ${searchTier === 'vip' ? 'VIP' : 'Deep'} Search</div>`
+                            : '';
+
                         resultsContainer.innerHTML = `
                         <div class="col-span-full flex flex-col items-center text-center py-12 px-6 bg-white/60 backdrop-blur-sm rounded-3xl border border-dashed border-slate-200">
+                            ${zeroMetaBadge}
                             <div class="text-6xl mb-4">🔍</div>
                             <h3 class="text-xl font-black text-slate-800 mb-2">${getLocalizedText('Sin resultados directos', 'No direct results')}</h3>
-                            <p class="text-slate-500 font-medium mb-6 max-w-sm">${getLocalizedText('No encontramos disponibilidad inmediata. Selecciona una variante para ampliar la búsqueda:', 'No immediate availability found. Select a variant to expand your search:')}</p>
+                            <p class="text-slate-500 font-medium mb-6 max-w-sm">${deepSearchEnabled
+                                ? getLocalizedText('Ya revisé más tiendas, variantes y rescates automáticos. Prueba una variante más específica para ampliar aún más la búsqueda:', 'I already checked more stores, variants, and automatic rescue queries. Try a more specific variant to expand the search even further:')
+                                : getLocalizedText('No encontramos disponibilidad inmediata. Selecciona una variante para ampliar la búsqueda:', 'No immediate availability found. Select a variant to expand your search:')}</p>
                             <div class="flex flex-wrap gap-2 justify-center sugg-container">
                                 ${suggChips}
                             </div>
@@ -5340,10 +5652,32 @@ async function initApp() {
 
         async function renderProducts(products) {
             resultsContainer.innerHTML = '';
+            
+            // Show Deep Research banner if mode is active
+            if (_deepResearchArmed) {
+                const isES = currentRegion !== 'US';
+                const banner = document.createElement('div');
+                banner.className = 'col-span-full mb-4 bg-gradient-to-r from-violet-50 via-fuchsia-50 to-violet-50 border border-violet-200 rounded-2xl p-4 flex items-center gap-3 shadow-sm';
+                banner.innerHTML = `
+                    <div class="flex-shrink-0 w-10 h-10 bg-gradient-to-br from-violet-500 to-fuchsia-500 rounded-xl flex items-center justify-center shadow-md">
+                        <span class="text-xl">🔬</span>
+                    </div>
+                    <div class="flex-grow min-w-0">
+                        <h4 class="text-sm font-black text-violet-900 mb-0.5">${isES ? 'Resultados con Búsqueda Profunda' : 'Deep Research Results'}</h4>
+                        <p class="text-[11px] text-violet-700 leading-tight">${isES ? 'Revisamos más tiendas y variantes para darte los mejores resultados. Usa más créditos VIP.' : 'We checked more stores and variants to give you the best results. Uses more VIP credits.'}</p>
+                    </div>
+                    <div class="flex-shrink-0 hidden sm:block">
+                        <span class="inline-flex items-center gap-1.5 px-3 py-1.5 bg-white rounded-full text-[10px] font-black uppercase tracking-wider text-violet-700 border border-violet-200 shadow-sm">
+                            <span>✨</span>
+                            <span>${isES ? 'VIP Activo' : 'VIP Active'}</span>
+                        </span>
+                    </div>
+                `;
+                resultsContainer.appendChild(banner);
+            }
+            
             const onlyCouponsInput = document.getElementById('only-coupons');
             const onlyRealDealsInput = document.getElementById('only-real-deals');
-            const currentSearchText = document.getElementById('search-input')?.value || '';
-            const broadUiSearch = isBroadUiSearch(currentSearchText);
             const filteredProducts = (products || []).filter((product) => {
                 if (product.isPotentiallyUnavailable && !product.hasStockSignal) {
                     return false;
@@ -5354,22 +5688,23 @@ async function initApp() {
                 if (onlyRealDealsInput?.value === 'true' && product.dealVerdict?.status !== 'real_deal') {
                     return false;
                 }
+                const targetUrl = String(product.urlOriginal || product.urlMonetizada || '').trim();
+                if (!targetUrl || /^(undefined|null|#)$/i.test(targetUrl)) {
+                    return false;
+                }
+                const normalizedTitle = normalizeResultTitle(product?.titulo, product?.tienda, currentRegion === 'US');
+                if (!normalizedTitle || /^(product listing|producto disponible)$/i.test(normalizedTitle)) {
+                    return false;
+                }
                 // Hide online products with no price — they would show 'Ver precio en tienda'
                 // which provides poor UX. Local store results are exempt since price-in-store is expected.
                 if (!product.isLocalStore) {
                     const rawP = product.precio;
-                    const hasVerifiedSignal = Number(product.priceConfidence || 0) >= 0.45 || product.resultSource === 'shopping_api' || product.resultSource === 'official_web' || Number(product.storeTier || 0) === 1;
                     if (rawP == null || rawP === '' || rawP === 'null' || rawP === 0 || rawP === '0') {
-                        if (hasVerifiedSignal && (broadUiSearch || Number(product.storeTier || 0) === 1) && (product.urlOriginal || product.urlMonetizada)) {
-                            return true;
-                        }
                         return false;
                     }
                     const numP = parseProductPriceValue(rawP);
                     if (Number.isNaN(numP) || numP <= 0) {
-                        if (hasVerifiedSignal && (broadUiSearch || Number(product.storeTier || 0) === 1) && (product.urlOriginal || product.urlMonetizada)) {
-                            return true;
-                        }
                         return false;
                     }
                 }
@@ -5518,6 +5853,13 @@ async function initApp() {
                 }
 
                 const isBestPrice = minPrice && precioNumerico === minPrice && precioNumerico > 0;
+                const rankingBadgeHtml = index === 0
+                    ? `<span class="text-[9px] font-bold text-white bg-gradient-to-r from-violet-600 to-fuchsia-500 px-2 py-0.5 rounded-full ring-2 ring-violet-200 shadow-sm">#1 ${isUS ? 'BEST MATCH' : 'MEJOR MATCH'}</span>`
+                    : index === 1
+                        ? `<span class="text-[9px] font-bold text-violet-700 bg-violet-50 px-2 py-0.5 rounded-full ring-1 ring-violet-200">#2 ${isUS ? 'TOP' : 'TOP'}</span>`
+                        : index === 2
+                            ? `<span class="text-[9px] font-bold text-indigo-700 bg-indigo-50 px-2 py-0.5 rounded-full ring-1 ring-indigo-200">#3 ${isUS ? 'TOP' : 'TOP'}</span>`
+                            : '';
                 
                 const heartColor = isAlreadyFav ? 'text-red-500' : 'text-slate-300';
                 const tiendaLower = (product.tienda || product.fuente || '').toLowerCase();
@@ -5817,6 +6159,7 @@ async function initApp() {
                             ${(tiendaLower.includes('amazon') || tiendaLower.includes('walmart') || tiendaLower.includes('liverpool') || tiendaLower.includes('mercado') || tiendaLower.includes('bodega aurrera') || tiendaLower.includes('linio') || tiendaLower.includes('claro shop') || tiendaLower.includes('sanborns') || tiendaLower.includes('costco') || tiendaLower.includes('best buy')) ? `<span class="text-emerald-600" title="${isUS ? 'Verified store' : 'Tienda verificada'}">✓</span>` : ''}
                         </div>
                         <div class="flex flex-wrap items-center gap-1">
+                            ${rankingBadgeHtml}
                             ${isBestPrice ? `<span class="text-[9px] font-bold text-white bg-gradient-to-r from-emerald-500 to-teal-500 px-2 py-0.5 rounded-full ring-2 ring-emerald-200 shadow-sm animate-pulse">💰 ${isUS ? 'BEST PRICE' : 'MEJOR PRECIO'}</span>` : ''}
                             ${product.isLocalStore ? `<span class="text-[9px] font-bold text-emerald-700 bg-emerald-100 px-2 py-0.5 rounded-full ring-1 ring-emerald-200">📍 ${isUS ? 'LOCAL' : 'LOCAL'}</span>` : ''}
                             ${freshnessBadgeHtml}

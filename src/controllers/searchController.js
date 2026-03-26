@@ -79,6 +79,59 @@ function buildClarifyingSuggestions(query = '', productCategory = '', countryCod
     return generic;
 }
 
+function isVipProfile(profile = null) {
+    if (!profile) return false;
+    const normalizedPlan = String(profile.plan || '').toLowerCase();
+    const VIP_TEMP_DURATION_MS = 60 * 60 * 1000;
+    const hasTempVIP = profile.vip_temp_unlocked_at
+        && (Date.now() - new Date(profile.vip_temp_unlocked_at).getTime()) < VIP_TEMP_DURATION_MS;
+    return Boolean(
+        profile.is_premium
+        || hasTempVIP
+        || ['personal_vip', 'personal_vip_annual', 'b2b', 'b2b_annual'].includes(normalizedPlan)
+    );
+}
+
+async function createVipAutoAlert({ userId = null, product = null }) {
+    if (!userId || !product || !supabase) return { created: false, reason: 'not_eligible' };
+    const numericPrice = Number(product.precio);
+    const productUrl = String(product.urlOriginal || product.urlMonetizada || '').trim();
+    const productName = String(product.titulo || '').trim().slice(0, 200);
+    const storeName = String(product.tienda || '').trim().slice(0, 100) || null;
+    if (!productName || !Number.isFinite(numericPrice) || numericPrice < 500) {
+        return { created: false, reason: 'low_signal_product' };
+    }
+    try {
+        let existingQuery = supabase
+            .from('price_alerts')
+            .select('id', { head: true, count: 'exact' })
+            .eq('user_id', userId)
+            .eq('triggered', false);
+        if (productUrl) {
+            existingQuery = existingQuery.eq('product_url', productUrl);
+        } else {
+            existingQuery = existingQuery.ilike('product_name', productName);
+        }
+        const { count, error: existingError } = await existingQuery;
+        if (existingError) return { created: false, reason: 'lookup_failed' };
+        if ((count || 0) > 0) return { created: false, reason: 'already_exists' };
+        const targetPrice = Number((numericPrice * 0.85).toFixed(2));
+        const { error: insertError } = await supabase
+            .from('price_alerts')
+            .insert({
+                user_id: userId,
+                product_name: productName,
+                target_price: targetPrice,
+                product_url: productUrl || null,
+                store_name: storeName
+            });
+        if (insertError) return { created: false, reason: 'insert_failed' };
+        return { created: true, targetPrice };
+    } catch {
+        return { created: false, reason: 'unexpected_error' };
+    }
+}
+
 function buildBestBuyScore(product = {}) {
     const priceConfidence = Math.min(1, Math.max(0, Number(product.priceConfidence || 0)));
     const matchScore = Math.min(1, Math.max(0, Number(product.matchScore || 0)));
@@ -850,6 +903,7 @@ exports.searchProduct = async (req, res) => {
             lat,
             lng,
             skipLLM,
+            deepResearch = false,
             safeStoresOnly = false,
             includeKnownMarketplaces = true,
             includeHighRiskMarketplaces = false,
@@ -875,6 +929,9 @@ exports.searchProduct = async (req, res) => {
         }
 
         let usageWarning = null;
+        let userProfile = null;
+        let isVipSearch = false;
+        let deepResearchRequested = Boolean(deepResearch);
 
         // PAYWALL Enforcement: Rate limit anonymous users by IP (Supabase-based for serverless safety)
         if (!userId) {
@@ -884,7 +941,7 @@ exports.searchProduct = async (req, res) => {
             } else {
                 // x-vercel-forwarded-for is authoritative on Vercel (can't be spoofed by client)
                 const ip = req.headers['x-vercel-forwarded-for']?.split(',')[0]?.trim() || req.headers['x-real-ip'] || req.headers['x-forwarded-for']?.split(',').pop()?.trim() || req.ip || 'unknown';
-                const ANON_DAILY_LIMIT = 1;
+                const ANON_DAILY_LIMIT = 3;
 
             if (supabase) {
                 try {
@@ -929,6 +986,8 @@ exports.searchProduct = async (req, res) => {
         // PAYWALL Enforcement: Verificar límites por plan en backend (authenticated users)
         if (userId && supabase) {
             const { data: profile } = await supabase.from('profiles').select('plan, is_premium, vip_temp_unlocked_at').eq('id', userId).single();
+            userProfile = profile || null;
+            isVipSearch = isVipProfile(userProfile);
             if (profile) {
                 let reqLimit = 10;
                 let isDaily = false;
@@ -1029,13 +1088,15 @@ exports.searchProduct = async (req, res) => {
                         .gte('created_at', queryDate.toISOString());
 
                     let bonusCredits = 0;
-                    try {
-                        const { count: bCount } = await supabase.from('rate_limits')
-                            .select('*', { count: 'exact', head: true })
-                            .eq('ip', bonusKey)
-                            .gte('created_at', queryDate.toISOString());
-                        bonusCredits = bCount || 0;
-                    } catch { /* ignore */ }
+                    if (!deepResearchRequested) {
+                        try {
+                            const { count: bCount } = await supabase.from('rate_limits')
+                                .select('*', { count: 'exact', head: true })
+                                .eq('ip', bonusKey)
+                                .gte('created_at', queryDate.toISOString());
+                            bonusCredits = bCount || 0;
+                        } catch { /* ignore */ }
+                    }
 
                     const effectiveUsed = Math.max(0, (count || 0) - bonusCredits);
 
@@ -1060,6 +1121,18 @@ exports.searchProduct = async (req, res) => {
                 }
             }
         }
+
+        if (deepResearchRequested && !isVipSearch) {
+            return res.status(402).json({
+                error: 'Deep Research requiere cambiar a plan VIP.',
+                upgrade_required: true,
+                upgrade_target: 'vip_deep_research',
+                feature: 'deep_research'
+            });
+        }
+
+        const deepSearchEnabled = Boolean(deepResearchRequested && isVipSearch);
+        const effectiveSearchTier = isVipSearch ? 'vip' : 'free';
 
         // MASTER TIMEOUT: AbortController para cancelar operaciones si excedemos 45s
         const MASTER_TIMEOUT_MS = 45000;
@@ -1125,7 +1198,9 @@ exports.searchProduct = async (req, res) => {
             // 1. Evaluar el mensaje del usuario con la IA Conversacional (incluyendo historial)
             llmAnalysis = await llmService.analyzeMessage(query, chatHistory, {
                 countryCode,
-                abortSignal: abortController.signal
+                abortSignal: abortController.signal,
+                searchTier: effectiveSearchTier,
+                deepSearchEnabled
             });
             
             // Track cache hit if LLM response came from cache
@@ -1373,7 +1448,7 @@ exports.searchProduct = async (req, res) => {
             .map(value => stripSearchOperators(value))
             .filter(Boolean)
             .filter((value, index, arr) => arr.indexOf(value) === index)
-            .slice(0, 8);
+            .slice(0, deepSearchEnabled ? 12 : (isVipSearch ? 8 : 6));
 
         const isLocalFastMode = process.env.NODE_ENV !== 'production';
         const preSearchTimeoutMs = isLocalFastMode ? 1200 : 4000;
@@ -1481,7 +1556,9 @@ exports.searchProduct = async (req, res) => {
                     disambiguation_options: llmAnalysis.disambiguationOptions,
                     commercial_readiness: llmAnalysis.commercialReadiness,
                     reasoning: llmAnalysis.reasoning || null,
-                    estimatedCostUsd: cacheEstimatedCostUsd
+                    estimatedCostUsd: cacheEstimatedCostUsd,
+                    search_tier: effectiveSearchTier,
+                    deep_search_enabled: deepSearchEnabled
                 },
                 region: {
                     country: countryCode,
@@ -1490,7 +1567,8 @@ exports.searchProduct = async (req, res) => {
                     label: regionCfg.regionLabel
                 },
                 top_5_baratos: filteredCachedResults,
-                advertencia_uso: usageWarning
+                advertencia_uso: usageWarning,
+                vip_auto_alert: null
             });
         }
 
@@ -1535,7 +1613,9 @@ exports.searchProduct = async (req, res) => {
                 {
                     webQuery: searchQuery,
                     broadProfile: llmAnalysis.broadProfile || null,
-                    queryType: llmAnalysis.queryType || 'generic'
+                    queryType: llmAnalysis.queryType || 'generic',
+                    searchTier: effectiveSearchTier,
+                    deepSearchEnabled
                 }
             );
         } catch (shoppingError) {
@@ -1598,7 +1678,34 @@ exports.searchProduct = async (req, res) => {
                 });
             }
 
-            const maxRescueQueries = shoppingResults.length === 0 ? 2 : 1;
+            if (deepSearchEnabled && shoppingResults.length <= 4) {
+                const categoryPivotQuery = llmAnalysis.productCategory
+                    ? `${llmAnalysis.productCategory} ${countryCode === 'US' ? 'best price' : 'mejor precio'}`
+                    : '';
+                if (categoryPivotQuery) {
+                    rescuedQueries.push({
+                        label: 'category_pivot',
+                        query: categoryPivotQuery,
+                        alternativeQueries: [],
+                        preferredStoreKeys: [],
+                        brandOfficialQuery: null
+                    });
+                }
+                const marketplacePivot = countryCode === 'US'
+                    ? `${searchQuery} amazon best buy`
+                    : `${searchQuery} mercado libre amazon`;
+                rescuedQueries.push({
+                    label: 'marketplace_pivot',
+                    query: marketplacePivot,
+                    alternativeQueries: [],
+                    preferredStoreKeys,
+                    brandOfficialQuery: null
+                });
+            }
+
+            const maxRescueQueries = deepSearchEnabled
+                ? (shoppingResults.length === 0 ? 4 : 3)
+                : (isVipSearch ? (shoppingResults.length === 0 ? 3 : 2) : (shoppingResults.length === 0 ? 2 : 1));
             const boundedRescuedQueries = rescuedQueries.slice(0, maxRescueQueries);
 
             // PERF: Run ALL rescue queries in PARALLEL instead of sequentially (saves 8-16s)
@@ -1611,7 +1718,9 @@ exports.searchProduct = async (req, res) => {
                 broadProfile: null,
                 brandOfficialQuery: rescueStep.brandOfficialQuery || null,
                 alternativeQueries: rescueStep.alternativeQueries || [],
-                productCategory: llmAnalysis.productCategory || ''
+                productCategory: llmAnalysis.productCategory || '',
+                preferredStoreKeys: rescueStep.preferredStoreKeys || [],
+                queryType: 'brand_model'
             }));
             console.log(`[Search Pipeline] Running ${boundedRescuedQueries.length} rescue queries in parallel...`);
             const rescuePromises = boundedRescuedQueries.map(rescueStep =>
@@ -1624,610 +1733,53 @@ exports.searchProduct = async (req, res) => {
                     abortController.signal,
                     conditionMode,
                     countryCode,
-                    rescueStep.alternativeQueries,
+                    rescueStep.alternativeQueries || [],
                     llmAnalysis.productCategory || '',
-                    rescueStep.preferredStoreKeys,
+                    rescueStep.preferredStoreKeys || [],
                     rescueStep.brandOfficialQuery,
-                    { queryType: 'brand_model', rescue: true }
+                    { queryType: 'brand_model', rescue: true, searchTier: effectiveSearchTier, deepSearchEnabled }
                 ).catch(err => {
                     console.warn(`[Search Pipeline] Rescue "${rescueStep.label}" failed: ${err.message}`);
                     return [];
                 })
             );
-            const rescueResultSets = await Promise.all(rescuePromises);
-            rescueResultSets.forEach((retryResults, idx) => {
-                if (!Array.isArray(retryResults) || retryResults.length === 0) return;
-                const freshResults = retryResults.filter(item => {
-                    const key = String(item?.url || '').split('?')[0].toLowerCase();
-                    if (!key) return true;
-                    if (rescueSeenKeys.has(key)) return false;
-                    rescueSeenKeys.add(key);
-                    return true;
+            const rescueResults = await Promise.all(rescuePromises);
+            rescueResults.forEach(resultSet => {
+                if (!Array.isArray(resultSet)) return;
+                resultSet.forEach(item => {
+                    const normalizedKey = String(item?.url || '').split('?')[0].toLowerCase();
+                    if (!normalizedKey || rescueSeenKeys.has(normalizedKey)) return;
+                    rescueSeenKeys.add(normalizedKey);
+                    shoppingResults.push(item);
                 });
-                if (freshResults.length > 0) {
-                    shoppingResults.push(...freshResults);
-                    console.log(`[Search Pipeline] Rescue ${boundedRescuedQueries[idx].label} rescued ${freshResults.length} results.`);
-                }
-            });
-
-            if (shoppingResults.length === 0) {
-                logSearchCostMetrics('search.no_results', costMetrics, {
-                    query: searchQuery,
-                    userId: Boolean(userId),
-                    resultCount: 0
-                });
-                return res.json({
-                    tipo_respuesta: 'resultados',
-                    intencion_detectada: {
-                        busqueda: searchQuery,
-                        condicion: llmAnalysis.condition,
-                        modo_condicion: conditionMode,
-                        desde_cache: false
-                    },
-                    search_metadata: {
-                        canonical_key: llmAnalysis.canonicalKey,
-                        product_category: llmAnalysis.productCategory || '',
-                        max_budget: llmAnalysis.maxBudget || null,
-                        ai_summary: llmAnalysis.aiSummary,
-                        is_comparison: llmAnalysis.isComparison,
-                        comparison_products: llmAnalysis.comparisonProducts,
-                        query_type: llmAnalysis.queryType,
-                        is_speculative: llmAnalysis.isSpeculative,
-                        needs_disambiguation: llmAnalysis.needsDisambiguation,
-                        disambiguation_options: llmAnalysis.disambiguationOptions,
-                        commercial_readiness: llmAnalysis.commercialReadiness,
-                        reasoning: llmAnalysis.reasoning || null
-                    },
-                    region: {
-                        country: countryCode,
-                        currency: regionCfg.currency,
-                        locale: regionCfg.locale,
-                        label: regionCfg.regionLabel
-                    },
-                    top_5_baratos: [],
-                    sugerencias: buildFallbackSuggestions(searchQuery, llmAnalysis.alternativeQueries, countryCode),
-                    advertencia_uso: usageWarning
-                });
-            }
-        }
-
-        // 4. Filtrar y Procesar resultados (Simular filtro Condition + Deduplicar)
-        // --- PRE-FILTER: Remove garbage results & Apply Safe Stores Filter ---
-        const cleanedResults = shoppingResults.filter(item => {
-            item.storeTrust = storeTrustService.classifyStore(item);
-            item.title = sanitizeProductTitle(item.title, item.source, item.isLocalStore);
-            item.image = sanitizeProductImage(item.image);
-            item.shippingText = sanitizeShippingText(item.snippet);
-            const sourceText = `${item.source || ''} ${item.url || ''}`.toLowerCase();
-            item.isManufacturerDirectStore = /(?:^|\s)(apple|samsung|sony|nintendo|playstation|google store|microsoft)(?:\s|$)|apple\.com|samsung\.com|sony\.com|playstation\.com|store\.google\.com|microsoft\.com/i.test(sourceText);
-            if (countryCode === 'MX' && /apple\.com\/(us-edu|ca|us-es)\//i.test(sourceText)) return false;
-            if (countryCode === 'MX' && (/apple\.com\/.+\/newsroom\//i.test(sourceText) || /apple\.com\/newsroom\//i.test(sourceText))) return false;
-            const preFilterSignals = buildMatchSignals(query, item.title || '');
-            item.matchScore = Number.isFinite(preFilterSignals.matchScore) ? preFilterSignals.matchScore : 0;
-            item.strongMatch = Boolean(preFilterSignals.strongMatch);
-            item.weakMatch = Boolean(preFilterSignals.weakMatch);
-            item.resultSource = item.resultSource || (item.isLocalStore ? 'places' : (item.isDirectProductPage ? 'direct_web' : 'unknown'));
-            item.priceConfidence = Number.isFinite(Number(item.priceConfidence)) ? Number(item.priceConfidence) : 0.45;
-            item.observedPrices = normalizeObservedPrices(item.observedPrices || (item.price != null ? [item.price] : []));
-            item.priceNeedsVerification = Boolean(item.priceNeedsVerification);
-            item.hasInstallmentLanguage = Boolean(item.hasInstallmentLanguage);
-            item.hasVerifiedStoreSignal = Boolean(
-                item.isLocalStore ||
-                item.isDirectProductPage ||
-                item.isOfficialBrandResult ||
-                (item.localDetails && (item.localDetails.address || item.localDetails.phone || item.localDetails.rating))
-            );
-
-            // Apply Safe Stores Filter if requested
-            if (safeStoresOnly) {
-                if (!storeTrustService.shouldAllowSafeStore(item)) {
-                    console.log(`[Safe Filter] Excluyendo tienda no segura: ${item.source || item.store || 'desconocida'}`);
-                    return false;
-                }
-            }
-
-            if (!safeStoresOnly) {
-                if (!includeKnownMarketplaces && item.storeTrust.storeTier === 2 && !item.storeTrust.isTrustedRetail) {
-                    item.isLessTrustedMarketplace = true;
-                }
-                if (!includeHighRiskMarketplaces && item.storeTrust.storeTier === 3) {
-                    item.isHighRiskMarketplace = true;
-                }
-            }
-
-            // Keep local store results even without price
-            if (item.isLocalStore) return true;
-            // Remove items with no title or garbage titles (navigation pages, category pages)
-            const title = (item.title || '').trim();
-            if (title.length < 5) return false;
-            if (looksLikeGarbageTitle(title)) return false;
-            const broadProductIntent = Boolean(llmAnalysis.broadProfile?.broad || isBroadProductIntent(query));
-            item.resultFamily = inferResultFamily(item);
-            item.resultBrand = inferResultBrand(item);
-            item.partialCategoryMatch = broadProductIntent && (llmAnalysis.broadProfile?.detectedFamilies || []).some(family => item.resultFamily.includes(family) || family.includes(item.resultFamily) || item.resultFamily === 'robot_aspiradora' && family === 'home');
-            item.isKnownStoreDomain = Boolean(item.isKnownStoreDomain || item.storeTrust?.isKnownStore || item.storeTrust?.isTrustedRetail);
-            const hasUsefulUrl = hasUsefulCommercialUrl(item);
-            const hasDirectlyPurchasableSignal = Boolean(item.url) && (item.matchScore >= 0.34 || item.isDirectProductPage || item.isOfficialBrandResult);
-            if (/^(compra|ver|buscar|encuentra|tienda|catálogo|categoría|página|p\.-?\d)/i.test(title) && !hasDirectlyPurchasableSignal) return false;
-            if (broadProductIntent && looksGenericListingTitle(item) && !item.isDirectProductPage) return false;
-            if (!hasUsefulUrl && !item.isLocalStore) return false;
-            if (looksInformationalResult(item) && !item.isDirectProductPage && !(item.isKnownStoreDomain && item.price != null && item.priceConfidence >= 0.45)) {
-                return false;
-            }
-            if (item.resultSource === 'direct_scraper' && !item.isDirectProductPage && !item.isKnownStoreDomain && !item.image) {
-                return false;
-            }
-            if (broadProductIntent && !item.image && item.resultSource === 'web_search' && item.matchScore < 0.45 && !item.isOfficialBrandResult && !item.isDirectProductPage) {
-                return false;
-            }
-            // Robust price parsing: handle "$1,299.00", "MXN 1299", "1,299", numbers, etc.
-            let price = null;
-            const hasTrustedSource = item.storeTrust.isKnownStore || item.isLocalStore;
-            if (item.price != null) {
-                const priceStr = String(item.price).replace(/[^0-9.,]/g, '').replace(/,/g, '');
-                price = parseFloat(priceStr);
-                // Fix: update item.price to numeric so downstream code works
-                if (Number.isFinite(price) && price > 0) {
-                    item.price = price;
-                }
-            }
-            if (price === null || !Number.isFinite(price) || price <= 0) {
-                if (looksInformationalResult(item) || (item.isOfficialBrandResult && !item.isDirectProductPage)) return false;
-                if (!item.isLocalStore && !hasTrustedSource && !item.hasVerifiedStoreSignal && !hasDirectlyPurchasableSignal && !item.isKnownStoreDomain) return false;
-                item.price = null;
-                return true;
-            }
-            const expensiveProductSearch = /iphone|playstation|ps5|macbook|ipad|galaxy|xbox|switch oled|switch|ultra|s24|s25/i.test(searchQuery);
-            const titleLower = title.toLowerCase();
-            if (expensiveProductSearch && price < 1500 && /funda|case|mica|protector|cable|correa|carcasa|templado|adaptador/i.test(titleLower)) {
-                return false;
-            }
-            const minimumMatchScore = broadProductIntent ? 0.04 : 0.18;
-            if (item.matchScore < minimumMatchScore && !item.partialCategoryMatch && !item.isOfficialBrandResult && !item.isDirectProductPage && !(broadProductIntent && item.isKnownStoreDomain && item.priceConfidence >= 0.3)) {
-                return false;
-            }
-            if (item.priceConfidence < 0.22 && !item.isOfficialBrandResult && !item.isDirectProductPage && !item.isLocalStore) {
-                return false;
-            }
-            const combinedText = `${item.snippet || ''} ${item.title || ''}`;
-            if (/(meses|msi|mensual|mensualidades|quincena|por mes|semanales)/i.test(combinedText)) {
-                item.isSuspicious = true;
-                item.priceAnomalyReason = 'installment_language';
-            }
-            if (item.hasInstallmentLanguage && item.priceConfidence < 0.7) {
-                item.isSuspicious = true;
-                item.priceAnomalyReason = item.priceAnomalyReason || 'installment_low_confidence';
-            }
-            // Bundle detection: "pack de 2", "kit 3 piezas", "set de", "x2", "x3", etc.
-            if (/\b(pack|kit|set|lote|combo|bundle)\b.*\b\d+\b|\bx\s*[2-9]\b|\b\d+\s*(pz|piezas|unidades|pcs|pieces)\b/i.test(combinedText)) {
-                item.isBundle = true;
-                item.priceAnomalyReason = item.priceAnomalyReason || 'bundle_detected';
-            }
-            // Per-unit pricing: "precio por pieza", "c/u", "each", "por unidad"
-            if (/\b(c\/u|cada uno|each|por (unidad|pieza|metro|kilo|litro)|precio unitario|unit price)\b/i.test(combinedText)) {
-                item.isSuspicious = true;
-                item.priceAnomalyReason = item.priceAnomalyReason || 'per_unit_pricing';
-            }
-            // Rental/subscription pricing: "al mes", "mensual", "/mes", "suscripción"
-            if (/\b(\/mes|suscripci[oó]n|subscription|rental|renta|alquiler|leasing)\b/i.test(combinedText)) {
-                item.isSuspicious = true;
-                item.priceAnomalyReason = item.priceAnomalyReason || 'subscription_pricing';
-            }
-            if (expensiveProductSearch && price < 1500) {
-                item.isSuspicious = true;
-            }
-            // Remove suspiciously cheap items (likely price-per-unit or errors) â€” lowered from 10 to 5
-            const minAcceptedPrice = regionCfg.currency === 'CLP'
-                ? 500
-                : regionCfg.currency === 'COP'
-                    ? 2000
-                    : regionCfg.currency === 'PEN'
-                        ? 3
-                        : regionCfg.currency === 'USD'
-                            ? 1
-                            : 15;
-            if (price < minAcceptedPrice) return false;
-            if (llmAnalysis.maxBudget && Number.isFinite(price) && price > (llmAnalysis.maxBudget * 1.25)) {
-                item.isOverBudget = true;
-                return true;
-            }
-            item.isOverBudget = false;
-            item.hasEphemeralRedirect = Boolean(item.isGoogleRedirect || item.hasEphemeralRedirect);
-            const stockLikeSignal = /en stock|disponible|recoger hoy|pickup today|same day|retiro|recoge|disponibilidad|listo para entrega|available now|available today/i.test(`${item.snippet || ''} ${item.title || ''}`);
-            item.isPotentiallyUnavailable = Boolean(
-                /no longer available|agotado|out of stock|sold out|unavailable|sin stock/i.test(`${item.snippet || ''} ${item.title || ''}`)
-            );
-            item.hasStockSignal = stockLikeSignal || (item.isLocalStore && Boolean(item.localDetails?.address));
-            // Filter ephemeral redirects with low confidence and no stock signal
-            if (item.hasEphemeralRedirect && !item.hasStockSignal && Number(item.priceConfidence || 0) < 0.5) {
-                return false;
-            }
-            return true;
-        });
-        console.log(`[Search Pipeline] Después de pre - filter: ${cleanedResults.length} de ${shoppingResults.length} `);
-
-        const hasMarketplaceCandidates = cleanedResults.some(item => {
-            const sourceText = `${item.source || ''} ${item.url || ''}`.toLowerCase();
-            return /mercado libre|mercadolibre|amazon|walmart|liverpool|coppel|costco|best buy|target/i.test(sourceText)
-                && Number.isFinite(Number(item.price))
-                && Number(item.price) > 0
-                && !item.isSuspicious;
-        });
-
-        const medianPrice = calculateMedian(cleanedResults
-            .filter(item => Number(item.priceConfidence || 0) >= 0.45)
-            .map(item => Number(item.price))
-            .filter(Number.isFinite));
-        if (medianPrice && medianPrice > 0) {
-            cleanedResults.forEach((item) => {
-                const numericPrice = Number(item.price);
-                if (!Number.isFinite(numericPrice) || numericPrice <= 0) return;
-                const lowerBound = Number(item.priceConfidence || 0) >= 0.7 ? 0.06 : 0.10;
-                const upperBound = Number(item.priceConfidence || 0) >= 0.7 ? 6 : 5;
-                if (numericPrice < (medianPrice * lowerBound) || numericPrice > (medianPrice * upperBound)) {
-                    item.isPriceAnomaly = true;
-                    item.isSuspicious = true;
-                }
             });
         }
 
-        const classifyCondition = (item) => {
-            const text = `${item.title || ''} ${item.snippet || ''} ${item.source || ''} ${item.url || ''}`.toLowerCase();
-            const isRefurbished = /reacond|refurb|renewed|remanufacturado|open box|certified renewed/.test(text);
-            const isUsed = /usad|seminuev|segunda mano|preowned|pre-owned|pre loved|preloved/.test(text);
-            const isC2C = item.storeTrust?.sellerModel === 'c2c' || /facebook|marketplace|ebay|vivanuncios|segundamano/.test(text);
-            return {
-                conditionLabel: isRefurbished ? 'refurbished' : (isUsed ? 'used' : 'new'),
-                isC2C
-            };
-        };
-
-        for (const item of cleanedResults) {
-            const conditionMeta = classifyCondition(item);
-            const matchSignals = buildMatchSignals(llmAnalysis.searchQuery || query, item.title || '');
-            const affiliatePriorityMeta = getAffiliatePriorityMeta(item, countryCode);
-            item.conditionLabel = conditionMeta.conditionLabel;
-            item.isC2C = conditionMeta.isC2C;
-            const broadSearch = Boolean(llmAnalysis.broadProfile?.broad);
-            item.matchScore = Math.max(Number(item.matchScore || 0), matchSignals.matchScore, broadSearch && item.partialCategoryMatch ? 0.14 : 0);
-            item.strongMatch = Boolean(item.strongMatch || matchSignals.strongMatch || (broadSearch && item.matchScore >= 0.22 && item.partialCategoryMatch));
-            item.weakMatch = Boolean(item.weakMatch && matchSignals.weakMatch && !item.partialCategoryMatch);
-            item.structuredTokenOverlap = Number(matchSignals.structuredTokenOverlap || 0);
-            item.exactStructuredMatch = Boolean(matchSignals.exactStructuredMatch);
-            item.hasUsefulImage = Boolean(item.image && !/^(null|undefined)$/i.test(String(item.image)));
-            item.observedPrices = normalizeObservedPrices(item.observedPrices || (item.price != null ? [item.price] : []));
-            item.hasPriceConflict = item.observedPrices.length >= 2
-                && ((Math.max(...item.observedPrices) - Math.min(...item.observedPrices)) / Math.max(...item.observedPrices)) >= 0.12;
-            item.resultFamily = item.resultFamily || inferResultFamily(item);
-            item.resultBrand = item.resultBrand || inferResultBrand(item);
-            item.productSpecificity = computeProductSpecificity(item);
-            item.comparableFingerprint = buildComparableFingerprint(item);
-            item.isGarbageTitle = looksLikeGarbageTitle(item.title || '');
-            item.affiliatePriorityRank = affiliatePriorityMeta.rank;
-            item.affiliateBoost = affiliatePriorityMeta.boost;
-            item.affiliateCapBoost = affiliatePriorityMeta.capBoost;
-        }
-
-        // Deduplicación: por URL exacta + Jaccard similarity en títulos
-        const seen = new Set();
-        const uniqueResults = [];
-        for (const item of cleanedResults) {
-            // Dedup by exact URL first
-            const urlKey = (item.url || '').split('?')[0].toLowerCase();
-            if (urlKey && seen.has(urlKey)) continue;
-            if (urlKey) seen.add(urlKey);
-
-            // Jaccard similarity on title tokens
-            const tokensI = new Set(item.title.toLowerCase().replace(/[^a-z0-9\s]/g, '').split(/\s+/).filter(t => t.length > 2));
-            const itemPrice = Number(item.price);
-            const isDuplicate = uniqueResults.some(u => {
-                const sameStore = String(u.source || '').trim().toLowerCase() === String(item.source || '').trim().toLowerCase();
-                if (!sameStore) {
-                    return false;
-                }
-                const tokensU = new Set(u.title.toLowerCase().replace(/[^a-z0-9\s]/g, '').split(/\s+/).filter(t => t.length > 2));
-                const intersection = [...tokensI].filter(t => tokensU.has(t)).length;
-                const union = new Set([...tokensI, ...tokensU]).size;
-                const similarity = union > 0 ? (intersection / union) : 0;
-                if (similarity < 0.88) {
-                    return false;
-                }
-                const existingPrice = Number(u.price);
-                const comparablePrices = Number.isFinite(itemPrice) && itemPrice > 0 && Number.isFinite(existingPrice) && existingPrice > 0;
-                const exactComparableFingerprint = Boolean(item.comparableFingerprint) && item.comparableFingerprint === u.comparableFingerprint;
-                if (exactComparableFingerprint && sameStore) {
-                    return true;
-                }
-                if (!comparablePrices) {
-                    return similarity >= 0.92;
-                }
-                const priceGapRatio = Math.abs(itemPrice - existingPrice) / Math.max(itemPrice, existingPrice);
-                const sameFamily = (u.resultFamily || 'general') === (item.resultFamily || 'general');
-                return sameFamily && priceGapRatio <= 0.05;
-            });
-            if (!isDuplicate) {
-                uniqueResults.push(item);
-            }
-        }
-
-        // --- FILTRO ANTI-ACCESORIOS: Detectar si la búsqueda es un producto principal caro ---
-        const mainProductKeywords = /consola|laptop|iphone|samsung|galaxy|macbook|ipad|playstation|xbox|nintendo|switch|televisor|tv |pantalla|refrigerador|lavadora|aire acondicionado|pc gamer|computadora|airpods|watch|pixel|fold|flip/i;
-        const accessoryKeywords = /funda|case|protector|mica|cristal|templado|cable|cargador|soporte|base|skin|sticker|grip|joystick|thumb|screen protector|película|pelicula|correa|strap|bolsa|estuche|adaptador|hub|dock(?!ing)|batería|battery|replacement|reemplazo|vidrio|silicona|silicone|tpu|rubber|cover|carcasa|cubierta|holder|mount|stand|sleeve|pouch|cleaning|limpieza|ear.?tip|ear.?bud|ear.?pad|ear.?cushion|hook/i;
-        const isMainProductSearch = mainProductKeywords.test(searchQuery);
-
-        // Marcar cada item como accesorio o no
-        if (isMainProductSearch) {
-            for (const item of uniqueResults) {
-                const titleLower = (item.title || '').toLowerCase();
-                const price = item.price != null ? parseFloat(item.price) : null;
-                item._isAccessory = accessoryKeywords.test(titleLower);
-            }
-            console.log(`[Anti - Accesorio] ${uniqueResults.filter(i => !i._isAccessory).length} productos principales, ${uniqueResults.filter(i => i._isAccessory).length} accesorios marcados`);
-        }
-
-        // Ordenamos: productos principales por precio, luego accesorios por precio
-        const hasLocation = Boolean(lat && lng && radius !== 'global');
-        const sortedResults = uniqueResults.sort((a, b) => {
-            // Tier sort: main products first, accessories last
-            if (isMainProductSearch) {
-                if (a._isAccessory && !b._isAccessory) return 1;
-                if (!a._isAccessory && b._isAccessory) return -1;
-            }
-
-            const aConditionBoost = conditionMode === 'used'
-                ? ((a.conditionLabel === 'used' || a.conditionLabel === 'refurbished') ? -900 : 700)
-                : conditionMode === 'new'
-                    ? (a.conditionLabel === 'new' ? -220 : 350)
-                    : (a.conditionLabel === 'refurbished' ? -120 : a.conditionLabel === 'used' ? -80 : 0);
-            const bConditionBoost = conditionMode === 'used'
-                ? ((b.conditionLabel === 'used' || b.conditionLabel === 'refurbished') ? -900 : 700)
-                : conditionMode === 'new'
-                    ? (b.conditionLabel === 'new' ? -220 : 350)
-                    : (b.conditionLabel === 'refurbished' ? -120 : b.conditionLabel === 'used' ? -80 : 0);
-            const aTrustPenalty = storeTrustService.getTrustPenalty(a, {
-                conditionMode,
-                expensiveProductSearch: isMainProductSearch,
-                strongMatch: Boolean(a.strongMatch),
-                weakMatch: Boolean(a.weakMatch)
-            });
-            const bTrustPenalty = storeTrustService.getTrustPenalty(b, {
-                conditionMode,
-                expensiveProductSearch: isMainProductSearch,
-                strongMatch: Boolean(b.strongMatch),
-                weakMatch: Boolean(b.weakMatch)
-            });
-            const aSuspiciousPenalty = a.isSuspicious ? 3000 : 0;
-            const bSuspiciousPenalty = b.isSuspicious ? 3000 : 0;
-            const aAnomalyPenalty = a.isPriceAnomaly ? 2200 : 0;
-            const bAnomalyPenalty = b.isPriceAnomaly ? 2200 : 0;
-            const aPriceConfidencePenalty = a.price == null ? 0 : Math.round((1 - Math.min(Number(a.priceConfidence || 0), 1)) * 650);
-            const bPriceConfidencePenalty = b.price == null ? 0 : Math.round((1 - Math.min(Number(b.priceConfidence || 0), 1)) * 650);
-            const aPriceVerificationPenalty = a.priceNeedsVerification ? 170 : 0;
-            const bPriceVerificationPenalty = b.priceNeedsVerification ? 170 : 0;
-            const aPriceConflictPenalty = a.hasPriceConflict ? 240 : 0;
-            const bPriceConflictPenalty = b.hasPriceConflict ? 240 : 0;
-            const aRedirectPenalty = a.hasEphemeralRedirect ? ((a.strongMatch && a.hasUsefulImage) ? 260 : 900) : 0;
-            const bRedirectPenalty = b.hasEphemeralRedirect ? ((b.strongMatch && b.hasUsefulImage) ? 260 : 900) : 0;
-            const aAvailabilityPenalty = a.isPotentiallyUnavailable ? 1100 : (a.hasStockSignal ? -140 : 0);
-            const bAvailabilityPenalty = b.isPotentiallyUnavailable ? 1100 : (b.hasStockSignal ? -140 : 0);
-            const broadSearch = Boolean(llmAnalysis.broadProfile?.broad);
-            const aMatchPenalty = a.weakMatch ? (isMainProductSearch ? 1300 : 520) : (a.strongMatch ? -380 : (broadSearch && a.partialCategoryMatch ? -120 : 0));
-            const bMatchPenalty = b.weakMatch ? (isMainProductSearch ? 1300 : 520) : (b.strongMatch ? -380 : (broadSearch && b.partialCategoryMatch ? -120 : 0));
-            const aImagePenalty = a.hasUsefulImage ? -120 : (isMainProductSearch ? 520 : 240);
-            const bImagePenalty = b.hasUsefulImage ? -120 : (isMainProductSearch ? 520 : 240);
-            const aLowSignalPenalty = (!a.hasUsefulImage && a.weakMatch) ? (isMainProductSearch ? 1050 : 420) : 0;
-            const bLowSignalPenalty = (!b.hasUsefulImage && b.weakMatch) ? (isMainProductSearch ? 1050 : 420) : 0;
-            const aGarbagePenalty = a.isGarbageTitle ? 2400 : 0;
-            const bGarbagePenalty = b.isGarbageTitle ? 2400 : 0;
-            const aSpecificityBoost = -Math.round(Number(a.productSpecificity || 0) * 260);
-            const bSpecificityBoost = -Math.round(Number(b.productSpecificity || 0) * 260);
-            const aComparabilityBoost = -Math.round(Number(a.structuredTokenOverlap || 0) * 220) - (a.exactStructuredMatch ? 120 : 0);
-            const bComparabilityBoost = -Math.round(Number(b.structuredTokenOverlap || 0) * 220) - (b.exactStructuredMatch ? 120 : 0);
-            const aOfficialBoost = a.isOfficialBrandResult ? -160 : 0;
-            const bOfficialBoost = b.isOfficialBrandResult ? -160 : 0;
-            const aManufacturerPenalty = hasMarketplaceCandidates && a.isManufacturerDirectStore ? 420 : 0;
-            const bManufacturerPenalty = hasMarketplaceCandidates && b.isManufacturerDirectStore ? 420 : 0;
-            const aMarketplacePenalty = a.isHighRiskMarketplace ? 220 : (a.isLessTrustedMarketplace ? 90 : 0);
-            const bMarketplacePenalty = b.isHighRiskMarketplace ? 220 : (b.isLessTrustedMarketplace ? 90 : 0);
-            const aVerifiedSignalBoost = a.hasVerifiedStoreSignal ? -90 : 0;
-            const bVerifiedSignalBoost = b.hasVerifiedStoreSignal ? -90 : 0;
-            const aSourceBoost = a.resultSource === 'amazon_serpapi'
-                ? -150
-                : a.resultSource === 'ml_api_direct'
-                    ? -135
-                    : a.resultSource === 'ml_amazon_web'
-                        ? -115
-                        : a.resultSource === 'shopping_api'
-                            ? -80
-                            : a.resultSource === 'direct_scraper'
-                                ? -110
-                                : a.resultSource === 'official_web'
-                                    ? -70
-                                    : 0;
-            const bSourceBoost = b.resultSource === 'amazon_serpapi'
-                ? -150
-                : b.resultSource === 'ml_api_direct'
-                    ? -135
-                    : b.resultSource === 'ml_amazon_web'
-                        ? -115
-                        : b.resultSource === 'shopping_api'
-                            ? -80
-                            : b.resultSource === 'direct_scraper'
-                                ? -110
-                                : b.resultSource === 'official_web'
-                                    ? -70
-                                    : 0;
-            const aShippingBoost = a.hasShippingLanguage ? -35 : 0;
-            const bShippingBoost = b.hasShippingLanguage ? -35 : 0;
-            const aCouponBoost = a.hasCouponLanguage ? -28 : 0;
-            const bCouponBoost = b.hasCouponLanguage ? -28 : 0;
-
-            const aPrice = a.price == null ? Infinity : parseFloat(a.price);
-            const bPrice = b.price == null ? Infinity : parseFloat(b.price);
-            const aPriceScore = !Number.isFinite(aPrice)
-                ? 3000
-                : (medianPrice && medianPrice > 0
-                    ? Math.max(-480, Math.min(900, Math.round(((aPrice - medianPrice) / medianPrice) * 620)))
-                    : Math.round(aPrice / 20));
-            const bPriceScore = !Number.isFinite(bPrice)
-                ? 3000
-                : (medianPrice && medianPrice > 0
-                    ? Math.max(-480, Math.min(900, Math.round(((bPrice - medianPrice) / medianPrice) * 620)))
-                    : Math.round(bPrice / 20));
-
-            // Intent Memory boost: reward stores with historical clicks
-            const aStoreKey = (a.source || '').toLowerCase().trim();
-            const bStoreKey = (b.source || '').toLowerCase().trim();
-            const aIntentBoost = intentBoostMap[aStoreKey] || 0;
-            const bIntentBoost = intentBoostMap[bStoreKey] || 0;
-
-            const aLocalBoost = hasLocation && a.isLocalStore ? -220 : 0;
-            const bLocalBoost = hasLocation && b.isLocalStore ? -220 : 0;
-            const aAffiliateBoost = Number(a.affiliateBoost || 0);
-            const bAffiliateBoost = Number(b.affiliateBoost || 0);
-            const aScore = aPriceScore + aConditionBoost + aTrustPenalty + aSuspiciousPenalty + aAnomalyPenalty + aPriceConfidencePenalty + aPriceVerificationPenalty + aPriceConflictPenalty + aRedirectPenalty + aAvailabilityPenalty + aMatchPenalty + aImagePenalty + aLowSignalPenalty + aGarbagePenalty + aSpecificityBoost + aComparabilityBoost + aOfficialBoost + aManufacturerPenalty + aIntentBoost + aLocalBoost + aMarketplacePenalty + aVerifiedSignalBoost + aSourceBoost + aShippingBoost + aCouponBoost + aAffiliateBoost;
-            const bScore = bPriceScore + bConditionBoost + bTrustPenalty + bSuspiciousPenalty + bAnomalyPenalty + bPriceConfidencePenalty + bPriceVerificationPenalty + bPriceConflictPenalty + bRedirectPenalty + bAvailabilityPenalty + bMatchPenalty + bImagePenalty + bLowSignalPenalty + bGarbagePenalty + bSpecificityBoost + bComparabilityBoost + bOfficialBoost + bManufacturerPenalty + bIntentBoost + bLocalBoost + bMarketplacePenalty + bVerifiedSignalBoost + bSourceBoost + bShippingBoost + bCouponBoost + bAffiliateBoost;
-
-            return aScore - bScore;
-        });
-
-        // --- DIVERSIDAD: Round-robin por tienda (máx 3 por tienda) ---
-        const MAX_PER_STORE = 8;
-        const MAX_RESULTS = 50;
-        const topResults = selectBalancedResults(sortedResults, llmAnalysis.broadProfile, MAX_RESULTS, MAX_PER_STORE);
-
-        // 5. Inyectar links de afiliados (o dejarlos como Loss Leaders)
-        const finalProducts = topResults.map(product => {
-            const directUrl = affiliateManager.resolveDirectProductUrl(product.url);
-            const storeKey = (product.source || '').toLowerCase().trim();
-            const intentMemoryMeta = buildIntentMemoryMeta(storeKey, intentBoostMap, intentSignalMetaMap);
-            return {
-                titulo: sanitizeProductTitle(product.title, product.source, product.isLocalStore),
-                precio: product.price,            // null for local stores
-                tienda: product.source,
-                imagen: sanitizeProductImage(product.image),
-                shippingText: sanitizeShippingText(product.shippingText || product.snippet),
-                urlOriginal: directUrl || product.url,
-                urlMonetizada: affiliateManager.generateAffiliateLink(directUrl || product.url, product.source),
-                isLocalStore: product.isLocalStore || false,
-                localDetails: product.localDetails || null,
-                cupon: llmAnalysis.cupon || null,
-                conditionLabel: product.conditionLabel || 'new',
-                isC2C: Boolean(product.isC2C),
-                isSuspicious: Boolean(product.isSuspicious),
-                storeCanonical: product.storeTrust?.canonicalStore || 'desconocida',
-                storeTier: product.storeTrust?.storeTier || 2,
-                trustLabel: product.storeTrust?.trustLabel || 'Marketplace',
-                sellerModel: product.storeTrust?.sellerModel || 'marketplace',
-                riskFlags: product.storeTrust?.riskFlags || [],
-                matchScore: Number(product.matchScore || 0),
-                strongMatch: Boolean(product.strongMatch),
-                weakMatch: Boolean(product.weakMatch),
-                resultSource: product.resultSource || 'unknown',
-                priceSource: product.priceSource || 'unknown',
-                priceConfidence: Number(product.priceConfidence || 0),
-                structuredTokenOverlap: Number(product.structuredTokenOverlap || 0),
-                productSpecificity: Number(product.productSpecificity || 0),
-                observedPrices: normalizeObservedPrices(product.observedPrices || []),
-                priceNeedsVerification: Boolean(product.priceNeedsVerification),
-                isPriceAnomaly: Boolean(product.isPriceAnomaly),
-                isPotentiallyUnavailable: Boolean(product.isPotentiallyUnavailable),
-                hasEphemeralRedirect: Boolean(product.hasEphemeralRedirect),
-                hasStockSignal: Boolean(product.hasStockSignal),
-                countryCode,
-                lastVerifiedAt: product.lastVerifiedAt || new Date().toISOString(),
-                dataAgeMinutes: product.lastVerifiedAt ? Math.round((Date.now() - new Date(product.lastVerifiedAt).getTime()) / 60000) : 0,
-                rerankBoost: intentMemoryMeta.rerankBoost,
-                intentSuccessScore: intentMemoryMeta.successScore,
-                intentClickedCount: intentMemoryMeta.clickedCount
-            };
-        });
-
-        // PERF: Price history with soft timeout (3s max) to avoid blocking response
-        const priceHistoryMap = await resolveWithSoftTimeout(
-            'cacheService.getPriceHistoryMap',
-            () => cacheService.getPriceHistoryMap(searchQuery, radius, lat, lng, finalProducts, countryCode),
-            {},
-            3000
-        );
-        const productsWithTrend = finalProducts.map((product) => {
-            const normalizedUrl = cacheService.normalizeProductUrl(product.urlMonetizada || product.urlOriginal);
-            const productHistory = priceHistoryMap[normalizedUrl] || [];
-            const previous = productHistory[0];
-
-            const currentPrice = typeof product.precio === 'number'
-                ? product.precio
-                : parseFloat(String(product.precio || '').replace(/[^0-9.]/g, ''));
-
-            const dealVerdict = buildDealVerdict(currentPrice, productHistory);
-
-            if (!previous || !Number.isFinite(currentPrice) || currentPrice <= 0) {
-                return {
-                    ...product,
-                    ...(dealVerdict ? { dealVerdict } : {})
-                };
-            }
-
-            const previousPrice = Number(previous.price);
-            const delta = Number((currentPrice - previousPrice).toFixed(2));
-            const absDelta = Math.abs(delta);
-            const direction = absDelta < 1 ? 'same' : (delta < 0 ? 'down' : 'up');
-            const percent = previousPrice > 0 ? Number(((absDelta / previousPrice) * 100).toFixed(1)) : 0;
-
-            return {
-                ...product,
-                ...(dealVerdict ? { dealVerdict } : {}),
-                priceTrend: {
-                    direction,
-                    delta: absDelta,
-                    percent,
-                    previousPrice,
-                    comparedAt: previous.created_at,
-                    history: productHistory.slice(0, 7).map(h => ({ price: Number(h.price), date: h.created_at }))
-                }
-            };
-        });
-
-        // PERF: Fire-and-forget cache save (don't block response)
-        if (productsWithTrend.length > 0) {
-            cacheService.saveToCache(searchQuery, radius, lat, lng, productsWithTrend, countryCode, llmAnalysis.canonicalKey, llmAnalysis.priceVolatility).catch(e => console.warn('[Cache Save] Error:', e.message));
-            cacheService.savePriceSnapshot(searchQuery, radius, lat, lng, productsWithTrend, countryCode).catch(e => console.warn('[Price Snapshot] Error:', e.message));
-        }
-
-        // FIX #6: Unificar logging - solo loguear en searches (no en rate_limits para autenticados)
-        // Log búsquedas exitosas (anónimas en rate_limits, autenticadas en searches)
-        if (userId && supabase) {
-            supabase.from('searches').insert({
-                user_id: userId,
-                query: searchQuery,
-                created_at: new Date().toISOString()
-            }).then(() => { }).catch(e => console.error('[Search Logging] Error:', e.message));
-        } else if (!userId && supabase && req._anonSearchIpKey) {
-            // Log anonymous search only after successful response
-            supabase.from('rate_limits').insert({ 
-                ip: req._anonSearchIpKey, 
-                created_at: new Date().toISOString() 
-            }).then(() => { }).catch(() => { });
-        }
-
-        // NUEVO: Inyectar Cupones Universales Conocidos
-        const finalProductsConCupones = productsWithTrend.map(product => {
+        const finalProductsConCupones = await Promise.all(shoppingResults.map(async (product) => {
             const tienda = (product.tienda || product.fuente || '').toLowerCase();
             let injectedCoupon = null;
             let couponDetails = null;
             let couponDisclaimer = null;
             let couponSourceUrl = null;
-            
-            // Si el LLM detectó un cupón universal validado, usarlo
+
             if (llmAnalysis.cupon && llmAnalysis.cupon.length > 2) {
                 injectedCoupon = llmAnalysis.cupon;
                 couponDetails = 'Cupón sugerido por IA';
                 couponDisclaimer = 'Cupón sugerido por IA — verifica vigencia y condiciones antes de usarlo.';
             } else {
-                // Lookup active universal coupons for this specific store
-                const storeCoupons = couponService.getCouponsForStore(tienda, countryCode);
+                const dynamicCoupon = await couponService.getBestCouponForStore(tienda, countryCode, {
+                    vipOnly: isVipSearch,
+                    allowLiveLookup: isVipSearch
+                });
+                if (dynamicCoupon) {
+                    injectedCoupon = dynamicCoupon.code;
+                    couponDetails = dynamicCoupon.discount;
+                    couponDisclaimer = dynamicCoupon.disclaimer || null;
+                    couponSourceUrl = dynamicCoupon.source_url || null;
+                }
+                const storeCoupons = !injectedCoupon ? couponService.getCouponsForStore(tienda, countryCode) : [];
                 if (storeCoupons && storeCoupons.length > 0) {
-                    injectedCoupon = storeCoupons[0];
+                    injectedCoupon = storeCoupons[0].code;
                     couponDetails = storeCoupons[0].discount;
                     couponDisclaimer = storeCoupons[0].disclaimer || null;
                     couponSourceUrl = storeCoupons[0].source_url || null;
@@ -2243,9 +1795,17 @@ exports.searchProduct = async (req, res) => {
             product.bestBuyScore = buildBestBuyScore(product);
             product.bestBuyLabel = buildBestBuyLabel(product.bestBuyScore);
             return product;
-        });
+        }));
 
         finalProductsConCupones.sort((a, b) => Number(b.bestBuyScore || 0) - Number(a.bestBuyScore || 0));
+
+        let vipAutoAlert = null;
+        if (isVipSearch && userId && finalProductsConCupones.length > 0) {
+            vipAutoAlert = await createVipAutoAlert({
+                userId,
+                product: finalProductsConCupones[0]
+            });
+        }
 
         // Clear master timeout at the end
         clearTimeout(timeoutId);
@@ -2277,9 +1837,12 @@ exports.searchProduct = async (req, res) => {
                 disambiguation_options: llmAnalysis.disambiguationOptions,
                 commercial_readiness: llmAnalysis.commercialReadiness,
                 reasoning: llmAnalysis.reasoning || null,
-                estimatedCostUsd
+                search_tier: effectiveSearchTier,
+                deep_search_enabled: deepSearchEnabled,
+                estimated_cost_usd: estimatedCostUsd,
+                estimated_cost_breakdown: buildCostBreakdown(costMetrics)
             },
-            best_buy_summary: finalProductsConCupones[0]
+            best_buy_pick: finalProductsConCupones.length > 0
                 ? {
                     title: finalProductsConCupones[0].titulo,
                     store: finalProductsConCupones[0].tienda,
@@ -2298,7 +1861,8 @@ exports.searchProduct = async (req, res) => {
             top_5_baratos: finalProductsConCupones,
             sugerencias: buildFallbackSuggestions(searchQuery, llmAnalysis.alternativeQueries, countryCode),
             advertencia_uso: usageWarning,
-            lumu_coins_awarded: (userId && finalProductsConCupones.length > 2) ? 1 : 0
+            lumu_coins_awarded: (userId && finalProductsConCupones.length > 2) ? 1 : 0,
+            vip_auto_alert: vipAutoAlert
         });
 
     } catch (error) {

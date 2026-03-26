@@ -578,14 +578,18 @@ function buildExploratoryAlternativeQueries(base = '', searchLanguage = 'auto') 
     return queries.slice(0, 12);
 }
 
-function buildAlternativeQueries(searchQuery, originalQuery, category = '', searchLanguage = 'auto') {
+function buildAlternativeQueries(searchQuery, originalQuery, category = '', searchLanguage = 'auto', options = {}) {
     const base = String(searchQuery || originalQuery || '').trim();
+    const isDeepResearch = Boolean(options?.deepSearchEnabled);
+    const maxItems = isDeepResearch
+        ? 24
+        : (String(options?.searchTier || 'free').toLowerCase() === 'vip' ? 16 : 12);
     if (!base) return [];
     if (isUrlLikeQuery(base) || isWeakCommerceQuery(base)) return [];
     if (isBrowseIntent(base)) {
         return [...new Set(buildExploratoryAlternativeQueries(base, searchLanguage)
             .map(q => q.replace(/\s+/g, ' ').trim())
-            .filter(Boolean))].slice(0, 12);
+            .filter(Boolean))].slice(0, maxItems);
     }
 
     const queries = [
@@ -607,14 +611,22 @@ function buildAlternativeQueries(searchQuery, originalQuery, category = '', sear
         queries.push(...buildExploratoryAlternativeQueries(base, searchLanguage).slice(0, 4));
     }
 
+    if (maxItems > 12) {
+        queries.push(`${base} promo`, `${base} tienda oficial`, `${base} mejor precio`, `${base} cuotas`);
+    }
+    if (isDeepResearch) {
+        queries.push(`${base} envío gratis`, `${base} oferta oficial`, `${base} rebaja`, `${base} descuento tienda`);
+    }
+
     return [...new Set(queries.map(q => q.replace(/\s+/g, ' ').trim()).filter(Boolean))]
         .filter(q => q.toLowerCase() !== String(originalQuery || '').trim().toLowerCase() || q.toLowerCase() === base.toLowerCase())
-        .slice(0, 12);
+        .slice(0, maxItems);
 }
 
 function repairAnalysis(rawAnalysis, originalText) {
     const analysis = { ...(rawAnalysis || {}) };
     const fallbackText = String(originalText || analysis.searchQuery || '').trim();
+    const deepSearchEnabled = Boolean(analysis.deepSearchEnabled);
     const normalizedQuery = String(analysis.normalizedQuery || analysis.searchQuery || fallbackText).trim() || fallbackText;
     const searchQuery = String(analysis.searchQuery || normalizedQuery || fallbackText).trim() || fallbackText;
     const productCategory = analysis.productCategory || inferProductCategory(`${searchQuery} ${normalizedQuery}`);
@@ -624,8 +636,11 @@ function repairAnalysis(rawAnalysis, originalText) {
         ? analysis.excludeTerms.slice(0, 8)
         : inferExcludeTerms(`${searchQuery} ${normalizedQuery}`, productCategory);
     const alternativeQueries = Array.isArray(analysis.alternativeQueries) && analysis.alternativeQueries.length > 0
-        ? [...new Set(analysis.alternativeQueries.map(q => String(q || '').trim()).filter(Boolean))].slice(0, 12)
-        : buildAlternativeQueries(searchQuery, fallbackText, productCategory, searchLanguage);
+        ? [...new Set(analysis.alternativeQueries.map(q => String(q || '').trim()).filter(Boolean))].slice(0, deepSearchEnabled ? 24 : 12)
+        : buildAlternativeQueries(searchQuery, fallbackText, productCategory, searchLanguage, {
+            searchTier: analysis.searchTier || 'free',
+            deepSearchEnabled
+        });
     const brandOfficialQuery = analysis.brandOfficialQuery || inferOfficialQuery(searchQuery, productCategory);
     const universalQueryDomain = analysis.universalQueryDomain || inferUniversalQueryDomain(searchQuery);
     const universalReply = buildUniversalAssistantReply(searchQuery, universalQueryDomain, productCategory);
@@ -657,7 +672,7 @@ function repairAnalysis(rawAnalysis, originalText) {
     };
 }
 
-function buildFallbackResponse(fallbackQuery) {
+function buildFallbackResponse(fallbackQuery, context = {}) {
     const queryType = inferFallbackQueryType(fallbackQuery);
     const { needsDisambiguation, disambiguationOptions } = inferDisambiguation(fallbackQuery);
     const { isSpeculative, commercialReadiness } = inferSpeculativeMetadata(fallbackQuery);
@@ -671,6 +686,8 @@ function buildFallbackResponse(fallbackQuery) {
     const isUrlLike = isUrlLikeQuery(fallbackQuery);
     const universalQueryDomain = inferUniversalQueryDomain(fallbackQuery);
     const universalReply = buildUniversalAssistantReply(searchQuery, universalQueryDomain, productCategory);
+    const searchTier = String(context?.searchTier || 'free').toLowerCase() === 'vip' ? 'vip' : 'free';
+    const deepSearchEnabled = Boolean(context?.deepSearchEnabled);
     const exploratoryCandidates = buildExploratoryAlternativeQueries(searchQuery, searchLanguage);
     const hasExploratoryCoverage = exploratoryCandidates.length >= 3 || Boolean(productCategory);
     const shouldAsk = universalQueryDomain === 'service_local' || universalQueryDomain === 'commercial_info' || universalQueryDomain === 'general_info' || universalQueryDomain === 'out_of_scope' || isUrlLike || queryType === 'conversational' || weakCommerce || needsDisambiguation || (browseIntent && (!hasExploratoryCoverage || !productCategory));
@@ -690,7 +707,7 @@ function buildFallbackResponse(fallbackQuery) {
         sugerencias: shouldAsk ? (universalReply.suggestions || fallbackSuggestions) : [],
         searchQuery,
         normalizedQuery: searchQuery,
-        alternativeQueries: buildAlternativeQueries(searchQuery, fallbackQuery, productCategory, searchLanguage),
+        alternativeQueries: buildAlternativeQueries(searchQuery, fallbackQuery, productCategory, searchLanguage, { searchTier, deepSearchEnabled }),
         brandOfficialQuery: inferOfficialQuery(searchQuery, productCategory),
         condition,
         canonicalKey: slugifyCanonicalKey(searchQuery),
@@ -715,7 +732,7 @@ exports.analyzeMessage = async (userText, chatHistory = [], context = {}) => {
     const apiKey = process.env.GEMINI_API_KEY;
     if (!apiKey) {
         console.warn('[LLM] GEMINI_API_KEY no configurado, usando fallback determinístico.');
-        return buildFallbackResponse(sanitizeUserInput(userText));
+        return buildFallbackResponse(sanitizeUserInput(userText), context);
     }
 
     const regionCode = String(context.countryCode || 'MX').toUpperCase();
@@ -1010,14 +1027,14 @@ ${extraContext}`;
             // Validar que searchQuery no esté vacío
             if (!parsed.searchQuery || parsed.searchQuery.trim().length === 0) {
                 console.warn('[LLM] searchQuery vacío, usando fallback con query original');
-                return buildFallbackResponse(sanitizedText || userText);
+                return buildFallbackResponse(sanitizedText || userText, context);
             }
 
             // SECURITY FIX #8: Validate LLM output with Zod
             const validated = llmResponseSchema.safeParse(parsed);
             if (!validated.success) {
                 console.warn('[LLM] Response validation failed:', validated.error.issues.map(i => i.message).join(', '));
-                return buildFallbackResponse(sanitizedText || userText);
+                return buildFallbackResponse(sanitizedText || userText, context);
             }
 
             // Structured logging for analytics and improvement
@@ -1032,7 +1049,7 @@ ${extraContext}`;
         } catch (error) {
             if (retries >= maxRetries) {
                 console.error('Error en LLM Assistant tras reintentos:', error.message);
-                return buildFallbackResponse(sanitizedText || userText);
+                return buildFallbackResponse(sanitizedText || userText, context);
             }
             retries++;
             await new Promise(resolve => setTimeout(resolve, retries * 1000));

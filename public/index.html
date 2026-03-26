@@ -1618,8 +1618,13 @@
                     <!-- Fase 6: Autocomplete Dropdown -->
                     <div id="autocomplete-dropdown" class="hidden absolute left-0 right-0 top-[calc(100%+0.6rem)] bg-white text-slate-900 rounded-2xl border border-slate-200 overflow-hidden z-[120] max-h-72 overflow-y-auto custom-scrollbar flex flex-col shadow-[0_24px_60px_rgba(15,23,42,0.16)]"></div>
 
-                    <div class="flex items-center justify-between gap-3 px-2 pb-2 pt-2 border-t border-slate-100">
-                        <div class="flex items-center gap-1.5">
+                    <div class="px-4 pt-1 pb-1.5 flex flex-wrap items-center gap-2">
+                        <span id="deep-research-copy" class="text-[11px] text-slate-500 font-semibold">Busca más tiendas y variantes. Solo VIP. Click para activar.</span>
+                        <span id="deep-research-badge" class="hidden items-center gap-1 rounded-full border border-violet-200 bg-violet-100 px-3 py-1 text-[10px] font-black uppercase tracking-[0.14em] text-violet-800">🔬 Búsqueda Profunda activa</span>
+                    </div>
+
+                    <div class="flex flex-wrap items-center justify-between gap-3 px-2 pb-2 pt-2 border-t border-slate-100">
+                        <div class="flex flex-wrap items-center gap-2 min-w-0 flex-1">
                             <input type="file" id="image-upload" class="hidden" accept="image/*">
                             <button type="button" id="btn-attach-image"
                                 class="p-2.5 text-slate-400 hover:text-emerald-300 hover:bg-emerald-500/10 rounded-xl transition-colors shrink-0"
@@ -1642,6 +1647,22 @@
                                     <line x1="12" x2="12" y1="19" y2="22" />
                                 </svg>
                             </button>
+                            <div class="flex items-center shrink-0">
+                                <div id="search-mode-selector" class="relative z-20 inline-flex items-center rounded-full border border-slate-200 bg-slate-100 p-1 shadow-sm pointer-events-auto select-none">
+                                    <button type="button" id="btn-search-mode-normal"
+                                        class="inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-[11px] font-black uppercase tracking-[0.14em] text-slate-800 transition-all cursor-pointer bg-white shadow-sm ring-1 ring-slate-200"
+                                        data-enabled="true">
+                                        <span>⚡</span>
+                                        <span>Normal</span>
+                                    </button>
+                                    <button type="button" id="btn-deep-research"
+                                        class="inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-[11px] font-black uppercase tracking-[0.14em] text-violet-600 transition-all cursor-pointer"
+                                        data-enabled="false">
+                                        <span>✨</span>
+                                        <span id="deep-research-label">Búsqueda Profunda</span>
+                                    </button>
+                                </div>
+                            </div>
                         </div>
 
                         <!-- ID for preview chip -->
@@ -1658,7 +1679,7 @@
                             </button>
                         </div>
                         <button type="submit" id="search-button"
-                            class="flex min-w-[112px] md:min-w-[124px] items-center justify-center gap-2 bg-gradient-to-r from-emerald-400 to-emerald-500 hover:from-emerald-500 hover:to-emerald-600 text-white px-4 md:px-5 py-2.5 rounded-2xl text-sm font-black active:scale-95 transition-all duration-200 shadow-sm disabled:opacity-90 disabled:cursor-wait">
+                            class="btn-hover-shine bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-primary hover:to-primary-hover text-white font-bold py-3 px-6 rounded-2xl transition-all duration-300 shadow-md shadow-emerald-500/20 flex items-center gap-2 hover:scale-105 focus:outline-none focus:ring-4 focus:ring-primary/30 disabled:opacity-70 disabled:cursor-not-allowed flex-shrink-0">
                             Enviar
                             <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24"
                                 fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"
