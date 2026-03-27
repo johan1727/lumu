@@ -373,7 +373,10 @@ function isResultSellable(result = {}) {
     if (/agotado|out of stock|currently unavailable|unavailable|sin stock|not available|no disponible|sin existencia|temporalmente agotado|back ?order|pre-?order|pr[oó]ximamente|coming soon|sold out/.test(combined)) return false;
     if (/\/s\?|\/search\?|[?&](k|q|query|search|searchterm|searchterms|ntt)=/i.test(url) && !result.isDirectProductPage) return false;
     const isKnownMarketplace = /amazon\.|mercadolibre\.|walmart\.|liverpool\.|costco\.|bestbuy\.|target\./i.test(url);
-    if (!isKnownMarketplace && !result.price && !Number.isFinite(extractSnippetPrice(snippet) ?? extractSnippetPrice(title))) return false;
+    const hasResolvedPrice = Number.isFinite(Number(result.price)) && Number(result.price) > 0;
+    const hasSnippetPrice = Number.isFinite(extractSnippetPrice(snippet) ?? extractSnippetPrice(title));
+    const isTrustedResult = isKnownMarketplace || result.isKnownStoreDomain || result.isDirectProductPage || result.isOfficialBrandResult;
+    if (!isTrustedResult && !hasResolvedPrice && !hasSnippetPrice) return false;
     return !looksLikeGarbageTitleLocal(result.title || '') && !looksGenericListingTitleLocal(result);
 }
 
@@ -1104,19 +1107,26 @@ exports.searchGoogleShopping = async (query, radius, lat, lng, intentType, abort
             // For non-local results, require valid price
             if (!result.isLocalStore) {
                 const price = Number(result?.price);
-                if (!Number.isFinite(price) || price <= 0) {
+                const canKeepWithoutPrice = Boolean(
+                    result.isKnownStoreDomain
+                    || result.isDirectProductPage
+                    || result.isOfficialBrandResult
+                    || /amazon\.|mercadolibre\.|walmart\.|liverpool\.|costco\.|bestbuy\.|target\./i.test(url)
+                );
+                if ((!Number.isFinite(price) || price <= 0) && !canKeepWithoutPrice) {
                     return false;
                 }
             }
             return true;
         })
         .sort((a, b) => {
-            const affiliateDelta = getAffiliateStoreRank(a) - getAffiliateStoreRank(b);
-            if (affiliateDelta !== 0) return affiliateDelta;
-
             const aHasPrice = Number.isFinite(Number(a.price)) && Number(a.price) > 0;
             const bHasPrice = Number.isFinite(Number(b.price)) && Number(b.price) > 0;
             if (aHasPrice !== bHasPrice) return aHasPrice ? -1 : 1;
+
+            const aDirectness = Number(Boolean(a.isDirectProductPage || a.isOfficialBrandResult || a.resultSource === 'shopping_api'));
+            const bDirectness = Number(Boolean(b.isDirectProductPage || b.isOfficialBrandResult || b.resultSource === 'shopping_api'));
+            if (aDirectness !== bDirectness) return bDirectness - aDirectness;
 
             const aConfidence = Number(a.priceConfidence || 0);
             const bConfidence = Number(b.priceConfidence || 0);
@@ -1124,7 +1134,12 @@ exports.searchGoogleShopping = async (query, radius, lat, lng, intentType, abort
 
             const aPrice = Number(a.price || Number.MAX_SAFE_INTEGER);
             const bPrice = Number(b.price || Number.MAX_SAFE_INTEGER);
-            return aPrice - bPrice;
+            if (aPrice !== bPrice) return aPrice - bPrice;
+
+            const affiliateDelta = getAffiliateStoreRank(a) - getAffiliateStoreRank(b);
+            if (affiliateDelta !== 0) return affiliateDelta;
+
+            return String(a.title || '').localeCompare(String(b.title || ''));
         });
     
     // Attach optimization metadata for cost tracking

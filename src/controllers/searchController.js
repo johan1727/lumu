@@ -1755,6 +1755,26 @@ exports.searchProduct = async (req, res) => {
             });
         }
 
+        shoppingResults = shoppingResults.map((product) => {
+            const resolvedOriginalUrl = String(product.urlOriginal || product.url || '').trim();
+            const resolvedStore = product.tienda || product.fuente || product.source || '';
+            const resolvedAffiliateUrl = String(product.urlMonetizada || '').trim()
+                || affiliateManager.generateAffiliateLink(resolvedOriginalUrl, resolvedStore)
+                || resolvedOriginalUrl;
+            return {
+                ...product,
+                titulo: product.titulo || product.title || 'Sin título',
+                precio: product.precio != null ? product.precio : product.price,
+                tienda: resolvedStore,
+                fuente: product.fuente || resolvedStore,
+                urlOriginal: resolvedOriginalUrl,
+                urlMonetizada: resolvedAffiliateUrl,
+                imagen: product.imagen || product.image || '',
+                currency: product.currency || regionCfg.currency,
+                countryCode: product.countryCode || countryCode
+            };
+        });
+
         const finalProductsConCupones = await Promise.all(shoppingResults.map(async (product) => {
             const tienda = (product.tienda || product.fuente || '').toLowerCase();
             let injectedCoupon = null;
