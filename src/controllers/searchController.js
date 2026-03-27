@@ -3,6 +3,7 @@ const shoppingService = require('../services/shoppingService');
 const affiliateManager = require('../utils/affiliateManager');
 const cacheService = require('../services/cacheService');
 const supabase = require('../config/supabase');
+const deepResearchEnhancer = require('../services/deepResearchEnhancer');
 const visionService = require('../services/visionService');
 const couponService = require('../services/couponService');
 const storeTrustService = require('../services/storeTrustService');
@@ -1819,6 +1820,23 @@ exports.searchProduct = async (req, res) => {
 
         finalProductsConCupones.sort((a, b) => Number(b.bestBuyScore || 0) - Number(a.bestBuyScore || 0));
 
+        // Deep Research: AI-powered comparative analysis and variant suggestions
+        let deepResearchEnhancements = null;
+        if (deepSearchEnabled && finalProductsConCupones.length > 0) {
+            try {
+                const enhancementResult = await deepResearchEnhancer.enhanceResults(finalProductsConCupones, {
+                    query: searchQuery,
+                    deepSearchEnabled,
+                    countryCode,
+                    currency: regionCfg.currency,
+                    productCategory: llmAnalysis.productCategory || ''
+                });
+                deepResearchEnhancements = enhancementResult.enhancements;
+            } catch (enhanceError) {
+                console.warn('[Deep Research] Enhancement failed:', enhanceError.message);
+            }
+        }
+
         let vipAutoAlert = null;
         if (isVipSearch && userId && finalProductsConCupones.length > 0) {
             vipAutoAlert = await createVipAutoAlert({
@@ -1862,6 +1880,8 @@ exports.searchProduct = async (req, res) => {
                 estimated_cost_usd: estimatedCostUsd,
                 estimated_cost_breakdown: buildCostBreakdown(costMetrics)
             },
+            deep_research_analysis: deepResearchEnhancements?.comparativeAnalysis || null,
+            suggested_variants: deepResearchEnhancements?.suggestedVariants || null,
             best_buy_pick: finalProductsConCupones.length > 0
                 ? {
                     title: finalProductsConCupones[0].titulo,

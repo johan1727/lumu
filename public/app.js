@@ -3906,6 +3906,23 @@ async function initApp() {
             }
         }
 
+        function getPreferredOAuthRedirectUrl() {
+            try {
+                const currentUrl = new URL(window.location.href);
+                const isLocalHost = currentUrl.hostname === 'localhost';
+                const isLoopback = currentUrl.hostname === '127.0.0.1';
+                if (isLocalHost) {
+                    return `http://127.0.0.1:${currentUrl.port || '3000'}${currentUrl.pathname || '/'}`;
+                }
+                if (isLoopback) {
+                    return currentUrl.toString();
+                }
+                return window.location.origin;
+            } catch (error) {
+                return window.location.origin;
+            }
+        }
+
         if (supabaseClient) {
             supabaseClient.auth.onAuthStateChange((event, session) => {
                 updateAuthUI(session?.user);
@@ -3955,7 +3972,7 @@ async function initApp() {
                     await supabaseClient.auth.signInWithOAuth({
                         provider: 'google',
                         options: {
-                            redirectTo: window.location.origin
+                            redirectTo: getPreferredOAuthRedirectUrl()
                         }
                     });
                 });
@@ -5710,8 +5727,20 @@ async function initApp() {
                 }
                 return true;
             });
-            _allProducts = filteredProducts;
-            _lastProducts = filteredProducts;
+            const fallbackProducts = (products || []).filter((product) => {
+                const targetUrl = String(product.urlOriginal || product.urlMonetizada || '').trim();
+                if (!targetUrl || /^(undefined|null|#)$/i.test(targetUrl)) {
+                    return false;
+                }
+                const normalizedTitle = normalizeResultTitle(product?.titulo, product?.tienda, currentRegion === 'US');
+                if (!normalizedTitle || /^(product listing|producto disponible)$/i.test(normalizedTitle)) {
+                    return false;
+                }
+                return true;
+            });
+            const renderableProducts = filteredProducts.length > 0 ? filteredProducts : fallbackProducts;
+            _allProducts = renderableProducts;
+            _lastProducts = renderableProducts;
 
             // Show toolbar
             const toolbar = document.getElementById('results-toolbar');
@@ -5720,13 +5749,13 @@ async function initApp() {
             // Populate store filter
             const storeSelect = document.getElementById('store-filter');
             if (storeSelect) {
-                const stores = [...new Set(filteredProducts.map(p => p.tienda))].filter(Boolean).sort();
+                const stores = [...new Set(renderableProducts.map(p => p.tienda))].filter(Boolean).sort();
                 storeSelect.innerHTML = `<option value="all">${getLocalizedText('Todas las tiendas', 'All stores')}</option>` + 
                     stores.map(s => `<option value="${s}">${s}</option>`).join('');
             }
 
             // UX-5: Auto-fill price range placeholders from actual results
-            const prices = filteredProducts.map(p => typeof p.precio === 'number' ? p.precio : parseFloat(String(p.precio || '0').replace(/[^0-9.]/g, ''))).filter(v => v > 0);
+            const prices = renderableProducts.map(p => typeof p.precio === 'number' ? p.precio : parseFloat(String(p.precio || '0').replace(/[^0-9.]/g, ''))).filter(v => v > 0);
             if (prices.length > 0) {
                 const minPrice = Math.floor(Math.min(...prices));
                 const maxPrice = Math.ceil(Math.max(...prices));
@@ -5750,20 +5779,20 @@ async function initApp() {
             _lastFavorites = userFavorites;
 
             const countEl = document.getElementById('results-count');
-            if (countEl) countEl.textContent = `${filteredProducts.length} ${getRegionConfig().resultsFound}`;
+            if (countEl) countEl.textContent = `${renderableProducts.length} ${getRegionConfig().resultsFound}`;
             const resultsSummaryEl = document.getElementById('search-results-summary');
-            if (resultsSummaryEl) resultsSummaryEl.textContent = `${filteredProducts.length} ${getRegionConfig().resultsFound}`;
-            syncBestOptionButton(filteredProducts);
+            if (resultsSummaryEl) resultsSummaryEl.textContent = `${renderableProducts.length} ${getRegionConfig().resultsFound}`;
+            syncBestOptionButton(renderableProducts);
 
             const localSearchData = JSON.parse(localStorage.getItem('lumu_searches_data') || '{"count":0}');
             updateCoinsProgress(localSearchData.count || 0);
 
-            renderProductCards(filteredProducts, userFavorites);
-            renderSmartFilterSuggestions(filteredProducts);
+            renderProductCards(renderableProducts, userFavorites);
+            renderSmartFilterSuggestions(renderableProducts);
 
             // Check price alerts after rendering
             if (typeof window.checkPriceAlerts === 'function') {
-                window.checkPriceAlerts(filteredProducts);
+                window.checkPriceAlerts(renderableProducts);
             }
         }
 
