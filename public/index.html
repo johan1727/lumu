@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="es">
+<html lang="es" class="dark">
 
 <head>
     <meta charset="UTF-8">
@@ -203,7 +203,7 @@
         "url": "https://www.lumu.dev/",
         "potentialAction": {
             "@type": "SearchAction",
-            "target": "https://www.lumu.dev/buscar/{search_term_string}",
+            "target": "https://www.lumu.dev/?q={search_term_string}",
             "query-input": "required name=search_term_string"
         }
     }
@@ -234,7 +234,7 @@
         "@type": "BreadcrumbList",
         "itemListElement": [
             { "@type": "ListItem", "position": 1, "name": "Inicio", "item": "https://www.lumu.dev/" },
-            { "@type": "ListItem", "position": 2, "name": "Comparar Precios", "item": "https://www.lumu.dev/buscar" }
+            { "@type": "ListItem", "position": 2, "name": "Blog y comparativas", "item": "https://www.lumu.dev/blog.html" }
         ]
     }
     </script>
@@ -1462,7 +1462,9 @@
     </style>
 
     <body
-        class="bg-slate-50 font-sans text-slate-800 antialiased min-h-screen flex flex-col relative selection:bg-emerald-200 selection:text-emerald-900 safe-bottom">
+        class="page-home bg-slate-50 font-sans text-slate-800 antialiased min-h-screen flex flex-col relative selection:bg-emerald-200 selection:text-emerald-900 safe-bottom">
+
+        <div id="bg-dotted-surface" class="pointer-events-none fixed inset-0 -z-10"></div>
 
         <!-- Header Premium Full-Width -->
         <header
@@ -2340,7 +2342,54 @@
         </div>
     </div>
 
-    <!-- AdSense: Auto Ads maneja la colocación automáticamente -->
+    <section class="w-full max-w-6xl mx-auto mb-14 px-4">
+        <div class="rounded-[2rem] border border-emerald-100 bg-white/80 shadow-[0_24px_70px_rgba(16,185,129,0.06)] px-6 py-8 md:px-8 backdrop-blur-sm">
+            <div class="flex flex-col md:flex-row md:items-end md:justify-between gap-4 mb-6">
+                <div>
+                    <div class="inline-flex items-center gap-2 rounded-full bg-emerald-50 px-3 py-1 text-[11px] font-black uppercase tracking-[0.18em] text-emerald-700 ring-1 ring-emerald-200 mb-3">Guías que sí queremos posicionar</div>
+                    <h2 class="text-2xl md:text-3xl font-display font-black text-slate-900 tracking-tight">Empieza por las guías y comparativas más útiles</h2>
+                    <p class="text-slate-600 font-medium mt-2 max-w-3xl">Estas páginas ayudan a Google a entender mejor el contenido editorial de Lumu y también sirven como rutas internas fuertes hacia nuestras mejores guías de ahorro, laptops, celulares y comparativas entre tiendas.</p>
+                </div>
+                <a href="/blog.html" class="inline-flex items-center gap-2 text-sm font-black text-emerald-700 hover:text-emerald-800 transition-colors">Ver todo el blog
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M9 5l7 7-7 7" />
+                    </svg>
+                </a>
+            </div>
+            <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+                <a href="/comparar-precios-celulares-mexico.html" class="rounded-[1.5rem] border border-slate-200 bg-white px-5 py-5 hover:border-emerald-300 hover:shadow-md transition-all">
+                    <div class="text-[11px] font-black uppercase tracking-[0.18em] text-emerald-700 mb-2">Guía</div>
+                    <h3 class="text-lg font-black text-slate-900 mb-2">Cómo comparar precios de celulares en México</h3>
+                    <p class="text-sm text-slate-600">Qué revisar entre Amazon, Mercado Libre, Walmart y otras tiendas para no mezclar versiones ni pagar de más.</p>
+                </a>
+                <a href="/amazon-vs-mercado-libre.html" class="rounded-[1.5rem] border border-slate-200 bg-white px-5 py-5 hover:border-emerald-300 hover:shadow-md transition-all">
+                    <div class="text-[11px] font-black uppercase tracking-[0.18em] text-emerald-700 mb-2">Comparativa</div>
+                    <h3 class="text-lg font-black text-slate-900 mb-2">Amazon vs Mercado Libre en México</h3>
+                    <p class="text-sm text-slate-600">Una comparativa editorial para decidir mejor según precio final, reputación del vendedor, devoluciones y envío.</p>
+                </a>
+                <a href="/mejor-momento-para-comprar-laptop.html" class="rounded-[1.5rem] border border-slate-200 bg-white px-5 py-5 hover:border-emerald-300 hover:shadow-md transition-all">
+                    <div class="text-[11px] font-black uppercase tracking-[0.18em] text-emerald-700 mb-2">Timing</div>
+                    <h3 class="text-lg font-black text-slate-900 mb-2">Mejor momento para comprar laptop</h3>
+                    <p class="text-sm text-slate-600">Temporadas, rebajas y señales para detectar cuándo sí conviene esperar y cuándo ya encontraste una buena opción.</p>
+                </a>
+                <a href="/mejores-laptops-calidad-precio.html" class="rounded-[1.5rem] border border-slate-200 bg-white px-5 py-5 hover:border-emerald-300 hover:shadow-md transition-all">
+                    <div class="text-[11px] font-black uppercase tracking-[0.18em] text-emerald-700 mb-2">Selección</div>
+                    <h3 class="text-lg font-black text-slate-900 mb-2">Mejores laptops calidad-precio</h3>
+                    <p class="text-sm text-slate-600">Equipos equilibrados para estudio, trabajo y uso diario con foco en valor real y no solo en precio de lista.</p>
+                </a>
+                <a href="/historial-de-precios-amazon-y-mercado-libre.html" class="rounded-[1.5rem] border border-slate-200 bg-white px-5 py-5 hover:border-emerald-300 hover:shadow-md transition-all">
+                    <div class="text-[11px] font-black uppercase tracking-[0.18em] text-emerald-700 mb-2">Contexto</div>
+                    <h3 class="text-lg font-black text-slate-900 mb-2">Historial de precios en Amazon y Mercado Libre</h3>
+                    <p class="text-sm text-slate-600">Cómo leer el historial de precio para distinguir una oferta real de una promoción inflada.</p>
+                </a>
+                <a href="/mejores-ofertas-reales-hot-sale.html" class="rounded-[1.5rem] border border-slate-200 bg-white px-5 py-5 hover:border-emerald-300 hover:shadow-md transition-all">
+                    <div class="text-[11px] font-black uppercase tracking-[0.18em] text-emerald-700 mb-2">Ahorro</div>
+                    <h3 class="text-lg font-black text-slate-900 mb-2">Mejores ofertas reales en Hot Sale</h3>
+                    <p class="text-sm text-slate-600">Qué promociones sí suelen valer la pena y cómo evaluar si una rebaja realmente mejora frente al precio habitual.</p>
+                </a>
+            </div>
+        </div>
+    </section>
 
     <!-- Pricing CTA (full details at /precios.html) -->
     <section id="pricing-section" class="w-full max-w-3xl mx-auto mb-16 px-4">
@@ -3031,6 +3080,8 @@
     <div id="cookie-banner-spacer" aria-hidden="true"></div>
 
     <!-- Scripts Finales (Versionado para evadir caché local y asegurar que los fixes carguen) -->
+
+    <script src="/ui-bundle.js" defer></script>
 
     <script>console.log('INLINE SCRIPT: About to load app.js');</script>
     <!-- Lógica de la APP (JS Principal) -->

@@ -1,9 +1,15 @@
-const ML_AFFILIATE_CAMPAIGN = process.env.ML_AFFILIATE_CAMPAIGN || '';
-const AMAZON_AFFILIATE_TAG = (process.env.AMAZON_AFFILIATE_TAG || '').trim();
-const ALIEXPRESS_TRACKING_ID = (process.env.ALIEXPRESS_TRACKING_ID || '').trim();
-const LIVERPOOL_AFFILIATE_ID = (process.env.LIVERPOOL_AFFILIATE_ID || '').trim();
-const WALMART_AFFILIATE_ID = (process.env.WALMART_AFFILIATE_ID || '').trim();
-const COPPEL_AFFILIATE_ID = (process.env.COPPEL_AFFILIATE_ID || '').trim();
+const sanitizeAffiliateValue = (value = '') => {
+    const normalized = String(value || '').trim();
+    if (!normalized || /^(pending|todo|n\/a|null|undefined)$/i.test(normalized)) return '';
+    return normalized;
+};
+
+const ML_AFFILIATE_CAMPAIGN = sanitizeAffiliateValue(process.env.ML_AFFILIATE_CAMPAIGN);
+const AMAZON_AFFILIATE_TAG = sanitizeAffiliateValue(process.env.AMAZON_AFFILIATE_TAG);
+const ALIEXPRESS_TRACKING_ID = sanitizeAffiliateValue(process.env.ALIEXPRESS_TRACKING_ID);
+const LIVERPOOL_AFFILIATE_ID = sanitizeAffiliateValue(process.env.LIVERPOOL_AFFILIATE_ID);
+const WALMART_AFFILIATE_ID = sanitizeAffiliateValue(process.env.WALMART_AFFILIATE_ID);
+const COPPEL_AFFILIATE_ID = sanitizeAffiliateValue(process.env.COPPEL_AFFILIATE_ID);
 
 const missingAffiliateConfigs = [];
 if (!ML_AFFILIATE_CAMPAIGN) missingAffiliateConfigs.push('ML_AFFILIATE_CAMPAIGN');

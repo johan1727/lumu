@@ -1,28 +1,9 @@
 ﻿<?xml version="1.0" encoding="UTF-8"?>
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
-    <url><loc>https://www.lumu.dev/</loc><lastmod>2026-03-14</lastmod><changefreq>daily</changefreq><priority>1.0</priority></url>
+    <url><loc>https://www.lumu.dev/</loc><lastmod>2026-03-27</lastmod><changefreq>daily</changefreq><priority>1.0</priority></url>
     <url><loc>https://www.lumu.dev/privacidad.html</loc><lastmod>2026-03-14</lastmod><changefreq>monthly</changefreq><priority>0.7</priority></url>
     <url><loc>https://www.lumu.dev/terminos.html</loc><lastmod>2026-03-14</lastmod><changefreq>monthly</changefreq><priority>0.7</priority></url>
-    <url><loc>https://www.lumu.dev/buscar</loc><lastmod>2026-03-14</lastmod><changefreq>daily</changefreq><priority>0.9</priority></url>
-    <url><loc>https://www.lumu.dev/buscar/celulares-baratos</loc><lastmod>2026-03-22</lastmod><changefreq>weekly</changefreq><priority>0.8</priority></url>
-    <url><loc>https://www.lumu.dev/buscar/audifonos-bluetooth</loc><lastmod>2026-03-14</lastmod><changefreq>daily</changefreq><priority>0.8</priority></url>
-    <url><loc>https://www.lumu.dev/buscar/airpods-pro</loc><lastmod>2026-03-23</lastmod><changefreq>weekly</changefreq><priority>0.8</priority></url>
-    <url><loc>https://www.lumu.dev/buscar/laptops</loc><lastmod>2026-03-22</lastmod><changefreq>weekly</changefreq><priority>0.8</priority></url>
-    <url><loc>https://www.lumu.dev/buscar/laptop-gamer</loc><lastmod>2026-03-23</lastmod><changefreq>weekly</changefreq><priority>0.8</priority></url>
-    <url><loc>https://www.lumu.dev/buscar/smartwatch</loc><lastmod>2026-03-22</lastmod><changefreq>weekly</changefreq><priority>0.8</priority></url>
-    <url><loc>https://www.lumu.dev/buscar/tenis-nike</loc><lastmod>2026-03-14</lastmod><changefreq>daily</changefreq><priority>0.8</priority></url>
-    <url><loc>https://www.lumu.dev/buscar/consolas-videojuegos</loc><lastmod>2026-03-22</lastmod><changefreq>weekly</changefreq><priority>0.8</priority></url>
-    <url><loc>https://www.lumu.dev/buscar/playstation-5</loc><lastmod>2026-03-23</lastmod><changefreq>weekly</changefreq><priority>0.8</priority></url>
-    <url><loc>https://www.lumu.dev/buscar/macbook-air-m3</loc><lastmod>2026-03-24</lastmod><changefreq>weekly</changefreq><priority>0.8</priority></url>
-    <url><loc>https://www.lumu.dev/buscar/nintendo-switch-oled</loc><lastmod>2026-03-24</lastmod><changefreq>weekly</changefreq><priority>0.8</priority></url>
-    <url><loc>https://www.lumu.dev/buscar/iphone</loc><lastmod>2026-03-22</lastmod><changefreq>weekly</changefreq><priority>0.8</priority></url>
-    <url><loc>https://www.lumu.dev/buscar/iphone-16-pro-max</loc><lastmod>2026-03-23</lastmod><changefreq>weekly</changefreq><priority>0.8</priority></url>
-    <url><loc>https://www.lumu.dev/buscar/samsung-galaxy-s25</loc><lastmod>2026-03-24</lastmod><changefreq>weekly</changefreq><priority>0.8</priority></url>
-    <url><loc>https://www.lumu.dev/buscar/monitores</loc><lastmod>2026-03-22</lastmod><changefreq>weekly</changefreq><priority>0.8</priority></url>
-    <url><loc>https://www.lumu.dev/buscar/smart-tv-4k</loc><lastmod>2026-03-23</lastmod><changefreq>weekly</changefreq><priority>0.8</priority></url>
-    <url><loc>https://www.lumu.dev/buscar/tablets</loc><lastmod>2026-03-22</lastmod><changefreq>weekly</changefreq><priority>0.8</priority></url>
-    <url><loc>https://www.lumu.dev/buscar/freidora-de-aire</loc><lastmod>2026-03-24</lastmod><changefreq>weekly</changefreq><priority>0.8</priority></url>
-    <url><loc>https://www.lumu.dev/blog.html</loc><lastmod>2026-03-14</lastmod><changefreq>weekly</changefreq><priority>0.8</priority></url>
+    <url><loc>https://www.lumu.dev/blog.html</loc><lastmod>2026-03-27</lastmod><changefreq>weekly</changefreq><priority>0.8</priority></url>
     <url><loc>https://www.lumu.dev/en/</loc><lastmod>2026-03-15</lastmod><changefreq>weekly</changefreq><priority>0.8</priority></url>
     <url><loc>https://www.lumu.dev/en/blog.html</loc><lastmod>2026-03-15</lastmod><changefreq>weekly</changefreq><priority>0.7</priority></url>
     <url><loc>https://www.lumu.dev/en/best-price-iphone-16.html</loc><lastmod>2026-03-15</lastmod><changefreq>weekly</changefreq><priority>0.7</priority></url>
@@ -38,18 +19,18 @@
     <url><loc>https://www.lumu.dev/donde-comprar-celulares-baratos-mexico.html</loc><lastmod>2026-03-15</lastmod><changefreq>weekly</changefreq><priority>0.7</priority></url>
     <url><loc>https://www.lumu.dev/mejores-celulares-gama-media-mexico-2026.html</loc><lastmod>2026-03-15</lastmod><changefreq>weekly</changefreq><priority>0.7</priority></url>
     <url><loc>https://www.lumu.dev/mejores-audifonos-calidad-precio-mexico-2026.html</loc><lastmod>2026-03-15</lastmod><changefreq>weekly</changefreq><priority>0.7</priority></url>
-    <url><loc>https://www.lumu.dev/precios-de-laptops.html</loc><lastmod>2026-03-15</lastmod><changefreq>weekly</changefreq><priority>0.7</priority></url>
-    <url><loc>https://www.lumu.dev/mejores-laptops-calidad-precio.html</loc><lastmod>2026-03-15</lastmod><changefreq>weekly</changefreq><priority>0.7</priority></url>
+    <url><loc>https://www.lumu.dev/precios-de-laptops.html</loc><lastmod>2026-03-27</lastmod><changefreq>weekly</changefreq><priority>0.7</priority></url>
+    <url><loc>https://www.lumu.dev/mejores-laptops-calidad-precio.html</loc><lastmod>2026-03-27</lastmod><changefreq>weekly</changefreq><priority>0.7</priority></url>
     <url><loc>https://www.lumu.dev/amazon-vs-mercado-libre.html</loc><lastmod>2026-03-15</lastmod><changefreq>weekly</changefreq><priority>0.8</priority></url>
     <url><loc>https://www.lumu.dev/como-saber-si-una-oferta-si-conviene.html</loc><lastmod>2026-03-15</lastmod><changefreq>weekly</changefreq><priority>0.8</priority></url>
-    <url><loc>https://www.lumu.dev/mejor-momento-para-comprar-laptop.html</loc><lastmod>2026-03-15</lastmod><changefreq>weekly</changefreq><priority>0.8</priority></url>
+    <url><loc>https://www.lumu.dev/mejor-momento-para-comprar-laptop.html</loc><lastmod>2026-03-27</lastmod><changefreq>weekly</changefreq><priority>0.8</priority></url>
     <url><loc>https://www.lumu.dev/donde-comprar-iphone-mas-barato-mexico.html</loc><lastmod>2026-03-15</lastmod><changefreq>weekly</changefreq><priority>0.8</priority></url>
-    <url><loc>https://www.lumu.dev/historial-de-precios-amazon-y-mercado-libre.html</loc><lastmod>2026-03-15</lastmod><changefreq>weekly</changefreq><priority>0.8</priority></url>
+    <url><loc>https://www.lumu.dev/historial-de-precios-amazon-y-mercado-libre.html</loc><lastmod>2026-03-27</lastmod><changefreq>weekly</changefreq><priority>0.8</priority></url>
     <url><loc>https://www.lumu.dev/cuando-bajan-de-precio-los-iphone-en-mexico.html</loc><lastmod>2026-03-15</lastmod><changefreq>weekly</changefreq><priority>0.8</priority></url>
     <url><loc>https://www.lumu.dev/amazon-walmart-mercado-libre-cual-conviene-para-electronica.html</loc><lastmod>2026-03-15</lastmod><changefreq>weekly</changefreq><priority>0.8</priority></url>
     <url><loc>https://www.lumu.dev/como-comparar-precios-sin-caer-en-descuentos-falsos.html</loc><lastmod>2026-03-15</lastmod><changefreq>weekly</changefreq><priority>0.8</priority></url>
     <url><loc>https://www.lumu.dev/donde-conviene-comprar-laptops-en-mexico.html</loc><lastmod>2026-03-15</lastmod><changefreq>weekly</changefreq><priority>0.8</priority></url>
-    <url><loc>https://www.lumu.dev/mejores-ofertas-reales-hot-sale.html</loc><lastmod>2026-03-15</lastmod><changefreq>weekly</changefreq><priority>0.8</priority></url>
+    <url><loc>https://www.lumu.dev/mejores-ofertas-reales-hot-sale.html</loc><lastmod>2026-03-27</lastmod><changefreq>weekly</changefreq><priority>0.8</priority></url>
     <url><loc>https://www.lumu.dev/precio-hoy</loc><lastmod>2026-03-24</lastmod><changefreq>weekly</changefreq><priority>0.8</priority></url>
     <url><loc>https://www.lumu.dev/precio-hoy/iphone-16-pro-max-mexico</loc><lastmod>2026-03-24</lastmod><changefreq>weekly</changefreq><priority>0.8</priority></url>
     <url><loc>https://www.lumu.dev/precio-hoy/playstation-5-mexico</loc><lastmod>2026-03-24</lastmod><changefreq>weekly</changefreq><priority>0.8</priority></url>
@@ -67,7 +48,7 @@
     <url><loc>https://www.lumu.dev/comparativas/macbook-air-m3-amazon-vs-ishop-vs-liverpool</loc><lastmod>2026-03-24</lastmod><changefreq>weekly</changefreq><priority>0.8</priority></url>
     <url><loc>https://www.lumu.dev/comparativas/samsung-galaxy-s25-amazon-vs-mercado-libre-vs-samsung-store</loc><lastmod>2026-03-24</lastmod><changefreq>weekly</changefreq><priority>0.8</priority></url>
     <url><loc>https://www.lumu.dev/comparativas/laptop-gamer-amazon-vs-mercado-libre-vs-cyberpuerta</loc><lastmod>2026-03-24</lastmod><changefreq>weekly</changefreq><priority>0.8</priority></url>
-    <url><loc>https://www.lumu.dev/guia-de-ahorro.html</loc><lastmod>2026-03-14</lastmod><changefreq>weekly</changefreq><priority>0.8</priority></url>
+    <url><loc>https://www.lumu.dev/guia-de-ahorro.html</loc><lastmod>2026-03-27</lastmod><changefreq>weekly</changefreq><priority>0.8</priority></url>
     <url><loc>https://www.lumu.dev/laptops.html</loc><lastmod>2026-03-14</lastmod><changefreq>weekly</changefreq><priority>0.8</priority></url>
     <url><loc>https://www.lumu.dev/audifonos-baratos.html</loc><lastmod>2026-03-14</lastmod><changefreq>weekly</changefreq><priority>0.8</priority></url>
     <url><loc>https://www.lumu.dev/tenis-deportivos.html</loc><lastmod>2026-03-14</lastmod><changefreq>weekly</changefreq><priority>0.8</priority></url>

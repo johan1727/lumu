@@ -9,6 +9,8 @@ const couponService = require('../services/couponService');
 const storeTrustService = require('../services/storeTrustService');
 const regionConfigService = require('../services/regionConfigService');
 
+const DEV_VIP_BYPASS = process.env.NODE_ENV !== 'production' && String(process.env.DEV_VIP_BYPASS || '').toLowerCase() === 'true';
+
 function buildFallbackSuggestions(baseQuery, altQueries = [], countryCode = 'MX') {
     const cleanBase = String(baseQuery || '').trim();
     const isUS = countryCode === 'US';
@@ -93,6 +95,92 @@ function isVipProfile(profile = null) {
     );
 }
 
+function tokenizeComparableText(text = '') {
+    return String(text || '')
+        .toLowerCase()
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .replace(/[^a-z0-9+]+/g, ' ')
+        .trim()
+        .split(/\s+/)
+        .filter(token => token && token.length > 1);
+}
+
+function detectQueryBrand(query = '') {
+    const normalized = String(query || '').toLowerCase();
+    const knownBrands = ['apple', 'iphone', 'samsung', 'xiaomi', 'motorola', 'sony', 'lg', 'lenovo', 'asus', 'acer', 'hp', 'dell', 'huawei', 'google', 'nintendo', 'playstation', 'ps5', 'xbox', 'dyson', 'nikon', 'canon'];
+    return knownBrands.find(brand => normalized.includes(brand)) || '';
+}
+
+function extractSpecificTokens(query = '') {
+    return tokenizeComparableText(query).filter(token => {
+        return /\d/.test(token)
+            || /^(ultra|plus|pro|max|mini|oled|fe|air|m1|m2|m3|m4|256gb|512gb|1tb|128gb|16gb|8gb|4k)$/i.test(token)
+            || /^[a-z]{1,4}\d{1,4}$/i.test(token);
+    });
+}
+
+function computeModelMatchScore(title = '', query = '') {
+    const titleTokens = new Set(tokenizeComparableText(title));
+    const queryTokens = tokenizeComparableText(query);
+    const specificTokens = extractSpecificTokens(query);
+    if (queryTokens.length === 0) return 0.5;
+    const overlap = queryTokens.filter(token => titleTokens.has(token)).length / queryTokens.length;
+    if (specificTokens.length === 0) return Number(Math.min(1, Math.max(0, overlap)).toFixed(3));
+    const specificOverlap = specificTokens.filter(token => titleTokens.has(token)).length / specificTokens.length;
+    const missingCriticalVariant = specificTokens.some(token => titleTokens.has(token) === false && /^(ultra|plus|pro|max|mini|oled|fe|air)$/i.test(token));
+    const variantConflict = (/\bs23\s*fe\b/i.test(title) && /\bs23\s*ultra\b/i.test(query))
+        || (/\bs23\+\b/i.test(title) && /\bs23\s*ultra\b/i.test(query))
+        || (/\b15\s*pro\s*max\b/i.test(query) && /\b15\s*pro\b/i.test(title) && !/\bmax\b/i.test(title));
+    let score = (specificOverlap * 0.7) + (overlap * 0.3);
+    if (missingCriticalVariant) score -= 0.18;
+    if (variantConflict) score -= 0.24;
+    return Number(Math.min(1, Math.max(0, score)).toFixed(3));
+}
+
+function computeClonePenalty(title = '', query = '') {
+    const normalizedTitle = String(title || '').toLowerCase();
+    const brand = detectQueryBrand(query);
+    let penalty = 0;
+    if (/global version|android\s*\d+\s*pro\s*max|smartphone\s*promax|telefono inteligente|dual sim fake|tel[eé]fono inteligente android/i.test(normalizedTitle)) penalty += 0.34;
+    if (/8gb\+?\/?256gb|12gb\+?\/?512gb/i.test(normalizedTitle) && !/(apple|iphone|samsung|xiaomi|motorola|sony|google|oneplus|huawei)/i.test(normalizedTitle)) penalty += 0.18;
+    if (brand && !normalizedTitle.includes(brand) && !(brand === 'iphone' && normalizedTitle.includes('apple'))) penalty += 0.14;
+    if ((normalizedTitle.match(/smartphone|telefono|android/gi) || []).length >= 2) penalty += 0.12;
+    return Number(Math.min(0.85, penalty).toFixed(3));
+}
+
+async function getSearchUnitsUsed({ userId = null, sinceIso = null } = {}) {
+    if (!userId || !sinceIso || !supabase) return { used: 0, error: null };
+    const { data, error } = await supabase
+        .from('searches')
+        .select('billed_units')
+        .eq('user_id', userId)
+        .gte('created_at', sinceIso);
+    if (error) {
+        return { used: 0, error };
+    }
+    const used = (data || []).reduce((sum, row) => sum + Math.max(1, Number(row?.billed_units || 1)), 0);
+    return { used, error: null };
+}
+
+async function logSuccessfulSearchUsage({ userId = null, query = '', deepSearchEnabled = false, countryCode = 'MX' } = {}) {
+    if (!userId || !supabase) return;
+    const chargeUnits = deepSearchEnabled ? 3 : 1;
+    const insertPayload = {
+        user_id: userId,
+        query,
+        is_deep: deepSearchEnabled,
+        country_code: countryCode,
+        billed_units: chargeUnits,
+        created_at: new Date().toISOString()
+    };
+    try {
+        await supabase.from('searches').insert(insertPayload);
+    } catch (error) {
+        console.error('[Search Usage] Error logging successful search:', error.message);
+    }
+}
+
 async function createVipAutoAlert({ userId = null, product = null }) {
     if (!userId || !product || !supabase) return { created: false, reason: 'not_eligible' };
     const numericPrice = Number(product.precio);
@@ -133,9 +221,11 @@ async function createVipAutoAlert({ userId = null, product = null }) {
     }
 }
 
-function buildBestBuyScore(product = {}) {
+function buildBestBuyScore(product = {}, deepMode = false) {
+    const isVerifiedMeliApi = product.resultSource === 'meli_api';
     const priceConfidence = Math.min(1, Math.max(0, Number(product.priceConfidence || 0)));
     const matchScore = Math.min(1, Math.max(0, Number(product.matchScore || 0)));
+    const modelMatchScore = Math.min(1, Math.max(0, Number(product._modelMatchScore != null ? product._modelMatchScore : 0.55)));
     const specificity = Math.min(1, Math.max(0, Number(product.productSpecificity || 0)));
     const comparability = Math.min(1, Math.max(0, Number(product.structuredTokenOverlap || 0)));
     const hasPurchasableSignal = Boolean(product.precio != null || product.price != null || product.isLocalStore || product.hasStockSignal || product.shippingText);
@@ -162,19 +252,39 @@ function buildBestBuyScore(product = {}) {
     const penalty = (product.isSuspicious ? 0.18 : 0)
         + (product.isPriceAnomaly ? 0.16 : 0)
         + ephemeralPenalty
+        + Number(product._clonePenalty || 0)
         + (product.isC2C ? 0.12 : 0)
         + (!hasPurchasableSignal ? 0.18 : 0)
         + (isInformational ? 0.4 : 0)
         + (!product.isLocalStore && !product.precio && !product.price && !product.shippingText ? 0.16 : 0);
+
+    if (deepMode) {
+        // Deep Research: price rank is the dominant signal (~32% combined)
+        // priceRank (0-1) is computed externally and attached to product before scoring
+        const priceRank = Math.min(1, Math.max(0, Number(product._deepPriceRank || 0)));
+        const rawScore = (priceRank * 0.18)
+            + (priceConfidence * 0.14)
+            + (matchScore * 0.10)
+            + (modelMatchScore * 0.12)
+            + (dealScore * 0.14)
+            + (trustScore * 0.10)
+            + (specificity * 0.10)
+            + (comparability * 0.08)
+            + (availabilityScore * 0.07)
+            + (shippingScore * 0.05);
+        return Number(Math.max(0, Math.min(1, rawScore - penalty + (isVerifiedMeliApi ? 0.04 : 0))).toFixed(3));
+    }
+
     const rawScore = (priceConfidence * 0.16)
-        + (matchScore * 0.22)
+        + (matchScore * 0.16)
+        + (modelMatchScore * 0.12)
         + (specificity * 0.12)
         + (comparability * 0.12)
         + (trustScore * 0.16)
         + (availabilityScore * 0.10)
         + (shippingScore * 0.05)
         + (dealScore * 0.07);
-    return Number(Math.max(0, Math.min(1, rawScore - penalty)).toFixed(3));
+    return Number(Math.max(0, Math.min(1, rawScore - penalty + (isVerifiedMeliApi ? 0.04 : 0))).toFixed(3));
 }
 
 function buildBestBuyLabel(score = 0) {
@@ -931,7 +1041,7 @@ exports.searchProduct = async (req, res) => {
 
         let usageWarning = null;
         let userProfile = null;
-        let isVipSearch = false;
+        let isVipSearch = DEV_VIP_BYPASS;
         let deepResearchRequested = Boolean(deepResearch);
 
         // PAYWALL Enforcement: Rate limit anonymous users by IP (Supabase-based for serverless safety)
@@ -988,7 +1098,7 @@ exports.searchProduct = async (req, res) => {
         if (userId && supabase) {
             const { data: profile } = await supabase.from('profiles').select('plan, is_premium, vip_temp_unlocked_at').eq('id', userId).single();
             userProfile = profile || null;
-            isVipSearch = isVipProfile(userProfile);
+            isVipSearch = DEV_VIP_BYPASS || isVipProfile(userProfile);
             if (profile) {
                 let reqLimit = 10;
                 let isDaily = false;
@@ -1027,14 +1137,8 @@ exports.searchProduct = async (req, res) => {
                     const FREE_MONTHLY_LIMIT = 10;
 
                     const [dailySearches, monthlySearches, dailyBonus, monthlyBonus] = await Promise.all([
-                        supabase.from('searches')
-                            .select('*', { count: 'exact', head: true })
-                            .eq('user_id', userId)
-                            .gte('created_at', todayStart.toISOString()),
-                        supabase.from('searches')
-                            .select('*', { count: 'exact', head: true })
-                            .eq('user_id', userId)
-                            .gte('created_at', monthStart.toISOString()),
+                        getSearchUnitsUsed({ userId, sinceIso: todayStart.toISOString() }),
+                        getSearchUnitsUsed({ userId, sinceIso: monthStart.toISOString() }),
                         supabase.from('rate_limits')
                             .select('*', { count: 'exact', head: true })
                             .eq('ip', bonusKey)
@@ -1045,8 +1149,8 @@ exports.searchProduct = async (req, res) => {
                             .gte('created_at', monthStart.toISOString())
                     ]);
 
-                    const dailyUsed = Math.max(0, (dailySearches.count || 0) - (dailyBonus.count || 0));
-                    const monthlyUsed = Math.max(0, (monthlySearches.count || 0) - (monthlyBonus.count || 0));
+                    const dailyUsed = Math.max(0, (dailySearches.used || 0) - (dailyBonus.count || 0));
+                    const monthlyUsed = Math.max(0, (monthlySearches.used || 0) - (monthlyBonus.count || 0));
                     const dailyRemaining = Math.max(0, FREE_DAILY_LIMIT - dailyUsed);
                     const monthlyRemaining = Math.max(0, FREE_MONTHLY_LIMIT - monthlyUsed);
 
@@ -1083,10 +1187,10 @@ exports.searchProduct = async (req, res) => {
                         queryDate = monthStart;
                     }
 
-                    const { count, error } = await supabase.from('searches')
-                        .select('*', { count: 'exact', head: true })
-                        .eq('user_id', userId)
-                        .gte('created_at', queryDate.toISOString());
+                    const { used, error } = await getSearchUnitsUsed({
+                        userId,
+                        sinceIso: queryDate.toISOString()
+                    });
 
                     let bonusCredits = 0;
                     if (!deepResearchRequested) {
@@ -1099,7 +1203,7 @@ exports.searchProduct = async (req, res) => {
                         } catch { /* ignore */ }
                     }
 
-                    const effectiveUsed = Math.max(0, (count || 0) - bonusCredits);
+                    const effectiveUsed = Math.max(0, (used || 0) - bonusCredits);
 
                     if (!error) {
                         if (effectiveUsed >= reqLimit) {
@@ -1445,11 +1549,24 @@ exports.searchProduct = async (req, res) => {
             searchQuery = `${searchQuery} -usado -reacondicionado -refurbished -"open box"`;
         }
 
-        const cleanAlternativeQueries = (llmAnalysis.alternativeQueries || [])
+        // Deep Research: pre-generate product variants and prepend as real alternative queries
+        let deepVariantQueries = [];
+        if (deepSearchEnabled) {
+            deepVariantQueries = deepResearchEnhancer.generateProductVariants(
+                searchQuery,
+                llmAnalysis.productCategory || ''
+            );
+            console.log(`[Deep Research] Pre-search variants generated: ${deepVariantQueries.join(', ')}`);
+        }
+
+        const cleanAlternativeQueries = [
+            ...deepVariantQueries,
+            ...(llmAnalysis.alternativeQueries || [])
+        ]
             .map(value => stripSearchOperators(value))
             .filter(Boolean)
             .filter((value, index, arr) => arr.indexOf(value) === index)
-            .slice(0, deepSearchEnabled ? 12 : (isVipSearch ? 8 : 6));
+            .slice(0, deepSearchEnabled ? 14 : (isVipSearch ? 8 : 6));
 
         const isLocalFastMode = process.env.NODE_ENV !== 'production';
         const preSearchTimeoutMs = isLocalFastMode ? 1200 : 4000;
@@ -1528,6 +1645,12 @@ exports.searchProduct = async (req, res) => {
                 if (countryCode === 'MX' && /apple\.com\/(us-edu|ca|us-es)\//i.test(sourceText)) return false;
                 if (countryCode === 'MX' && (/apple\.com\/.+\/newsroom\//i.test(sourceText) || /apple\.com\/newsroom\//i.test(sourceText))) return false;
                 return true;
+            });
+            await logSuccessfulSearchUsage({
+                userId,
+                query: searchQuery,
+                deepSearchEnabled,
+                countryCode
             });
             costMetrics.cacheHit = true;
             const cacheEstimatedCostUsd = estimateSearchCostUsd(costMetrics);
@@ -1680,26 +1803,28 @@ exports.searchProduct = async (req, res) => {
             }
 
             if (deepSearchEnabled && shoppingResults.length <= 4) {
-                const categoryPivotQuery = llmAnalysis.productCategory
-                    ? `${llmAnalysis.productCategory} ${countryCode === 'US' ? 'best price' : 'mejor precio'}`
-                    : '';
-                if (categoryPivotQuery) {
-                    rescuedQueries.push({
-                        label: 'category_pivot',
-                        query: categoryPivotQuery,
-                        alternativeQueries: [],
-                        preferredStoreKeys: [],
-                        brandOfficialQuery: null
-                    });
-                }
-                const marketplacePivot = countryCode === 'US'
-                    ? `${searchQuery} amazon best buy`
-                    : `${searchQuery} mercado libre amazon`;
+                // Smart site: operator queries for deep mode — directly target marketplaces
+                const meliDomain = countryCode === 'US' ? 'mercadolibre.com'
+                    : countryCode === 'MX' ? 'mercadolibre.com.mx'
+                    : countryCode === 'AR' ? 'mercadolibre.com.ar'
+                    : countryCode === 'CO' ? 'mercadolibre.com.co'
+                    : countryCode === 'CL' ? 'mercadolibre.cl'
+                    : 'mercadolibre.com';
+                const amazonDomain = countryCode === 'US' ? 'amazon.com'
+                    : countryCode === 'MX' ? 'amazon.com.mx'
+                    : 'amazon.com';
                 rescuedQueries.push({
-                    label: 'marketplace_pivot',
-                    query: marketplacePivot,
+                    label: 'deep_meli_site',
+                    query: `site:${meliDomain} "${searchQuery}" nuevo`,
                     alternativeQueries: [],
-                    preferredStoreKeys,
+                    preferredStoreKeys: [],
+                    brandOfficialQuery: null
+                });
+                rescuedQueries.push({
+                    label: 'deep_amazon_site',
+                    query: `site:${amazonDomain} "${searchQuery}" nuevo`,
+                    alternativeQueries: [],
+                    preferredStoreKeys: [],
                     brandOfficialQuery: null
                 });
             }
@@ -1762,9 +1887,15 @@ exports.searchProduct = async (req, res) => {
             const resolvedAffiliateUrl = String(product.urlMonetizada || '').trim()
                 || affiliateManager.generateAffiliateLink(resolvedOriginalUrl, resolvedStore)
                 || resolvedOriginalUrl;
+            const resolvedTitle = product.titulo || product.title || 'Sin título';
+            const clonePenalty = computeClonePenalty(resolvedTitle, searchQuery);
+            const modelMatchScore = computeModelMatchScore(resolvedTitle, searchQuery);
+            const qualityFlags = [];
+            if (clonePenalty >= 0.34) qualityFlags.push('likely_clone');
+            if (modelMatchScore <= 0.35) qualityFlags.push('model_mismatch');
             return {
                 ...product,
-                titulo: product.titulo || product.title || 'Sin título',
+                titulo: resolvedTitle,
                 precio: product.precio != null ? product.precio : product.price,
                 tienda: resolvedStore,
                 fuente: product.fuente || resolvedStore,
@@ -1772,11 +1903,19 @@ exports.searchProduct = async (req, res) => {
                 urlMonetizada: resolvedAffiliateUrl,
                 imagen: product.imagen || product.image || '',
                 currency: product.currency || regionCfg.currency,
-                countryCode: product.countryCode || countryCode
+                countryCode: product.countryCode || countryCode,
+                _clonePenalty: clonePenalty,
+                _modelMatchScore: modelMatchScore,
+                _qualityFlags: qualityFlags
             };
         });
 
-        const finalProductsConCupones = await Promise.all(shoppingResults.map(async (product) => {
+        const qualityFilteredResults = shoppingResults.filter(product => {
+            if (product._clonePenalty >= 0.5 && product._modelMatchScore <= 0.25) return false;
+            return true;
+        });
+
+        const finalProductsConCupones = await Promise.all(qualityFilteredResults.map(async (product) => {
             const tienda = (product.tienda || product.fuente || '').toLowerCase();
             let injectedCoupon = null;
             let couponDetails = null;
@@ -1818,6 +1957,51 @@ exports.searchProduct = async (req, res) => {
             return product;
         }));
 
+        // Deep Research: compute relative price rank across all results before deep scoring
+        if (deepSearchEnabled && finalProductsConCupones.length > 1) {
+            const validPrices = finalProductsConCupones
+                .map(p => Number(p.precio || p.price || 0))
+                .filter(p => p > 0);
+            const minPrice = Math.min(...validPrices);
+            const maxPrice = Math.max(...validPrices);
+            const priceRange = maxPrice - minPrice || 1;
+            finalProductsConCupones.forEach(p => {
+                const price = Number(p.precio || p.price || 0);
+                if (price > 0) {
+                    // 1 = cheapest, 0 = most expensive
+                    p._deepPriceRank = 1 - ((price - minPrice) / priceRange);
+                } else {
+                    p._deepPriceRank = 0.35;
+                }
+                // Re-score with deep mode weights
+                p.bestBuyScore = buildBestBuyScore(p, true);
+                p.bestBuyLabel = buildBestBuyLabel(p.bestBuyScore);
+            });
+        }
+
+        const comparablePrices = finalProductsConCupones
+            .map(p => Number(p.precio || p.price || 0))
+            .filter(price => Number.isFinite(price) && price > 0);
+        const comparableAverage = comparablePrices.length > 0
+            ? comparablePrices.reduce((sum, value) => sum + value, 0) / comparablePrices.length
+            : null;
+        finalProductsConCupones.forEach(product => {
+            const productPrice = Number(product.precio || product.price || 0);
+            if (comparableAverage && productPrice > 0) {
+                const diffPct = Math.round(((productPrice - comparableAverage) / comparableAverage) * 100);
+                product.priceDiffPct = diffPct;
+                product.verifiedPriceDelta = diffPct <= -10
+                    ? {
+                        pct: Math.abs(diffPct),
+                        label: `ML verificado: ${Math.abs(diffPct)}% más barato que el promedio`
+                    }
+                    : null;
+            } else {
+                product.priceDiffPct = null;
+                product.verifiedPriceDelta = null;
+            }
+        });
+
         finalProductsConCupones.sort((a, b) => Number(b.bestBuyScore || 0) - Number(a.bestBuyScore || 0));
 
         // Deep Research: AI-powered comparative analysis and variant suggestions
@@ -1850,6 +2034,12 @@ exports.searchProduct = async (req, res) => {
 
         // 6. Devolver respuesta estandarizada al frontend
         const estimatedCostUsd = estimateSearchCostUsd(costMetrics);
+        await logSuccessfulSearchUsage({
+            userId,
+            query: searchQuery,
+            deepSearchEnabled,
+            countryCode
+        });
         logSearchCostMetrics('search.results', costMetrics, {
             query: searchQuery,
             userId: Boolean(userId),
@@ -1877,6 +2067,7 @@ exports.searchProduct = async (req, res) => {
                 reasoning: llmAnalysis.reasoning || null,
                 search_tier: effectiveSearchTier,
                 deep_search_enabled: deepSearchEnabled,
+                billed_search_units: deepSearchEnabled ? 3 : 1,
                 estimated_cost_usd: estimatedCostUsd,
                 estimated_cost_breakdown: buildCostBreakdown(costMetrics)
             },

@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="es">
+<html lang="es" class="dark">
 
 <head>
     <meta charset="UTF-8">
@@ -28,6 +28,7 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script>tailwind.config = { darkMode: 'class', theme: { extend: { fontFamily: { sans: ['Inter', 'sans-serif'], display: ['Outfit', 'sans-serif'] }, colors: { primary: '#10B981' } } } }</script>
+    <script src="https://cdn.jsdelivr.net/npm/@themesberg/flowbite@1.3.0/dist/flowbite.bundle.js"></script>
     <style>
         .glass-header {
             background: rgba(255, 255, 255, .85);
@@ -45,8 +46,144 @@
             background-color: #030712 !important;
         }
 
+        .dark main {
+            background: linear-gradient(180deg, rgba(0, 0, 0, 0.0) 0%, rgba(0, 0, 0, 0.08) 100%);
+        }
+
         .dark .bg-white {
             background-color: #111827 !important;
+        }
+
+        .dark section.text-center.pt-16.pb-12.px-4 {
+            position: relative;
+        }
+
+        .dark section.text-center.pt-16.pb-12.px-4::before {
+            content: '';
+            position: absolute;
+            inset: 0;
+            background: radial-gradient(50% 38% at 50% 32%, rgba(16, 185, 129, 0.12) 0%, rgba(16, 185, 129, 0.0) 72%);
+            pointer-events: none;
+        }
+
+        .dark #i18n-hero-badge {
+            color: #bbf7d0 !important;
+        }
+
+        .dark .inline-flex.items-center.gap-2.bg-emerald-50.dark\:bg-emerald-900\/30 {
+            background: rgba(6, 78, 59, 0.28) !important;
+            border: 1px solid rgba(52, 211, 153, 0.20) !important;
+            box-shadow: 0 10px 28px rgba(0, 0, 0, 0.18) !important;
+        }
+
+        .dark #i18n-hero-title,
+        .dark #i18n-hero-subtitle {
+            position: relative;
+            z-index: 1;
+        }
+
+        .dark #i18n-hero-title {
+            color: #f8fafc !important;
+            text-shadow: 0 10px 28px rgba(0, 0, 0, 0.36);
+        }
+
+        .dark #i18n-hero-subtitle {
+            color: rgba(226, 232, 240, 0.78) !important;
+        }
+
+        .dark #i18n-toggle-monthly,
+        .dark #i18n-toggle-annual {
+            color: rgba(226, 232, 240, 0.90) !important;
+            text-shadow: 0 6px 20px rgba(0, 0, 0, 0.32);
+        }
+
+        .dark #i18n-toggle-monthly {
+            color: rgba(248, 250, 252, 0.98) !important;
+            opacity: 1 !important;
+        }
+
+        .dark #i18n-toggle-annual {
+            color: rgba(148, 163, 184, 0.92) !important;
+            opacity: 0.88;
+        }
+
+        .dark .flex.items-center.justify-center.gap-3.mb-10 {
+            background: rgba(6, 12, 22, 0.52);
+            border: 1px solid rgba(255, 255, 255, 0.06);
+            border-radius: 999px;
+            padding: 0.55rem 0.85rem;
+            width: fit-content;
+            margin-left: auto;
+            margin-right: auto;
+            box-shadow: 0 16px 34px rgba(0, 0, 0, 0.24);
+            backdrop-filter: blur(14px);
+        }
+
+        .dark #btn-billing-toggle + #i18n-toggle-annual,
+        .dark #btn-billing-toggle[aria-pressed='true'] ~ #i18n-toggle-annual {
+            color: rgba(226, 232, 240, 0.96) !important;
+        }
+
+        .dark #btn-billing-toggle {
+            background-color: rgba(15, 23, 42, 0.88) !important;
+            border: 1px solid rgba(255, 255, 255, 0.10) !important;
+            box-shadow: 0 10px 24px rgba(0, 0, 0, 0.24) !important;
+            overflow: hidden;
+        }
+
+        .dark #btn-billing-toggle[aria-pressed='true'] {
+            background: linear-gradient(90deg, rgba(16, 185, 129, 0.88) 0%, rgba(5, 150, 105, 0.92) 100%) !important;
+            border-color: rgba(110, 231, 183, 0.30) !important;
+            box-shadow: 0 12px 28px rgba(16, 185, 129, 0.18) !important;
+        }
+
+        .dark #btn-billing-toggle[aria-pressed='true'] #billing-toggle-dot {
+            transform: translateX(1.65rem) !important;
+        }
+
+        .dark #billing-toggle-dot {
+            background-color: rgba(255, 255, 255, 0.98) !important;
+            box-shadow: 0 6px 16px rgba(0, 0, 0, 0.28) !important;
+        }
+
+        .dark #annual-save-badge {
+            background: rgba(6, 78, 59, 0.34) !important;
+            color: rgba(167, 243, 208, 0.98) !important;
+            border: 1px solid rgba(52, 211, 153, 0.24) !important;
+            box-shadow: 0 8px 18px rgba(0, 0, 0, 0.20) !important;
+        }
+
+        .dark .plan-card {
+            background: linear-gradient(180deg, rgba(8, 14, 24, 0.96) 0%, rgba(4, 8, 15, 0.98) 100%) !important;
+            border-color: rgba(255, 255, 255, 0.08) !important;
+            box-shadow: 0 24px 56px rgba(0, 0, 0, 0.34) !important;
+        }
+
+        .dark .plan-card:hover {
+            transform: translateY(-6px);
+            box-shadow: 0 30px 70px rgba(0, 0, 0, 0.42) !important;
+        }
+
+        .dark .plan-card .text-slate-800,
+        .dark .plan-card .text-slate-900 {
+            color: #f8fafc !important;
+        }
+
+        .dark .plan-card .text-slate-500,
+        .dark .plan-card .text-slate-400,
+        .dark .plan-card .text-slate-700 {
+            color: rgba(203, 213, 225, 0.82) !important;
+        }
+
+        .dark .plan-card .border-slate-200,
+        .dark .plan-card .dark\:border-slate-800 {
+            border-color: rgba(255, 255, 255, 0.08) !important;
+        }
+
+        .dark .plan-card.bg-gradient-to-br.from-emerald-50.to-emerald-100\/50.dark\:from-emerald-950\/40.dark\:to-emerald-900\/20 {
+            background: linear-gradient(180deg, rgba(6, 78, 59, 0.18) 0%, rgba(8, 14, 24, 0.98) 100%) !important;
+            border-color: rgba(52, 211, 153, 0.36) !important;
+            box-shadow: 0 28px 72px rgba(16, 185, 129, 0.12), 0 24px 56px rgba(0, 0, 0, 0.36) !important;
         }
 
         .dark .text-slate-900 {
@@ -121,6 +258,7 @@
 </head>
 
 <body class="bg-[#F8FAFC] text-slate-800 font-sans min-h-screen flex flex-col">
+    <div id="bg-dotted-surface" class="pointer-events-none fixed inset-0 -z-10"></div>
     <!-- Header -->
     <header class="w-full glass-header sticky top-0 z-50">
         <div class="max-w-5xl mx-auto px-4 h-14 flex items-center justify-between">
@@ -135,13 +273,7 @@
             </a>
             <nav class="flex gap-4 items-center text-sm font-semibold">
                 <a href="/" id="i18n-back-link" class="text-slate-500 hover:text-primary transition-colors">← Volver al inicio</a>
-                <button id="btn-toggle-dark"
-                    class="p-2 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors text-slate-500">
-                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                            d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z" />
-                    </svg>
-                </button>
+                <button id="btn-toggle-dark" class="hidden"></button>
             </nav>
         </div>
     </header>
@@ -755,7 +887,7 @@
                 window.open(withClientReferenceId(link, currentUser.id), '_blank');
             } else {
                 const isEN2 = (localStorage.getItem('lumu_region_override') === 'US');
-                window.location.href = 'mailto:jhonatanvillagomez38@gmail.com?subject=' + (isEN2 ? 'B2B Distributor Plan Lumu' : 'Plan Distribuidor B2B Lumu');
+                window.location.href = 'mailto:soporte.lumu@gmail.com?subject=' + (isEN2 ? 'B2B Distributor Plan Lumu' : 'Plan Distribuidor B2B Lumu');
             }
         });
 
@@ -811,6 +943,8 @@
         }
         applyI18n();
     </script>
+
+    <script src="/ui-bundle.js" defer></script>
 </body>
 
 </html>

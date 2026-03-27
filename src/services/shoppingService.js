@@ -3,6 +3,7 @@ const directScraper = require('./directScraper');
 const monitor = require('./scraperMonitor');
 const localPriceExtractor = require('./localPriceExtractor');
 const regionConfigService = require('./regionConfigService');
+const meliService = require('./meliService');
 
 // Timeout por defecto para Serper API
 const SERPER_TIMEOUT = 6000;
@@ -1028,11 +1029,20 @@ exports.searchGoogleShopping = async (query, radius, lat, lng, intentType, abort
         // Strip Google-only negative keywords (-funda -case etc.) since direct scrapers use URL search params
         const cleanQuery = query.replace(/\s+-\w+/g, '').trim();
         const hasProxy = Boolean(process.env.SCRAPER_PROXIES);
+        const meliResultLimit = deepSearchEnabled ? 50 : 25;
         console.log(`Ejecutando scrapers directos rápidos para ${countryCode}: ${cleanQuery} ...${hasProxy ? '' : ' [sin proxy — solo API scrapers]'}`);
 
         scraperFunctions = [
             () => monitor.wrap(() => directScraper.scrapeMercadoLibreAPI(cleanQuery, countryCode, abortSignal, conditionMode), 'ml_api_direct'),
         ];
+
+        scraperFunctions.push(
+            () => monitor.wrap(() => meliService.searchMeli(cleanQuery, countryCode, {
+                limit: meliResultLimit,
+                signal: abortSignal,
+                conditionMode
+            }), deepSearchEnabled ? 'meli_api_deep' : 'meli_api_normal')
+        );
 
         if (hasProxy) {
             scraperFunctions.push(
@@ -1123,6 +1133,13 @@ exports.searchGoogleShopping = async (query, radius, lat, lng, intentType, abort
             const aHasPrice = Number.isFinite(Number(a.price)) && Number(a.price) > 0;
             const bHasPrice = Number.isFinite(Number(b.price)) && Number(b.price) > 0;
             if (aHasPrice !== bHasPrice) return aHasPrice ? -1 : 1;
+
+            // Deep mode: price is criterion #2 — find the cheapest option first
+            if (deepSearchEnabled && aHasPrice && bHasPrice) {
+                const aPrice = Number(a.price);
+                const bPrice = Number(b.price);
+                if (aPrice !== bPrice) return aPrice - bPrice;
+            }
 
             const aDirectness = Number(Boolean(a.isDirectProductPage || a.isOfficialBrandResult || a.resultSource === 'shopping_api'));
             const bDirectness = Number(Boolean(b.isDirectProductPage || b.isOfficialBrandResult || b.resultSource === 'shopping_api'));

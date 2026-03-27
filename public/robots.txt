@@ -9,7 +9,5 @@ Crawl-delay: 1
 Allow: /sobre-nosotros.html
 Allow: /privacidad.html
 Allow: /terminos.html
-Allow: /buscar
-Allow: /buscar/
 
 Sitemap: https://www.lumu.dev/sitemap.xml

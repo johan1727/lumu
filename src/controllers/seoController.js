@@ -1149,7 +1149,7 @@ function generateCategoryHTML(slug, cat) {
     <meta name="twitter:title" content="${esc(cat.title)} — ${SITE_NAME}">
     <meta name="twitter:description" content="${esc(cat.description)}">
     <meta name="twitter:image" content="${SITE_URL}/images/og-cover.png">
-    <meta name="robots" content="index, follow">
+    <meta name="robots" content="noindex, follow">
     <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 48 48' fill='none'><path d='M10 18h28l-3 22H13L10 18z' stroke='%2310B981' stroke-width='3' stroke-linejoin='round'/><path d='M17 18V14a7 7 0 0114 0v4' stroke='%2310B981' stroke-width='3' stroke-linecap='round'/></svg>">
     <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800&display=swap" rel="stylesheet">
     <meta name="google-adsense-account" content="ca-pub-7394172038398161">
@@ -1301,7 +1301,7 @@ function generateCategoryIndex() {
     <meta property="og:description" content="Explora categorías populares y compara precios en México con IA.">
     <meta property="og:url" content="${SITE_URL}/buscar">
     <meta property="og:image" content="${SITE_URL}/images/og-cover.png">
-    <meta name="robots" content="index, follow">
+    <meta name="robots" content="noindex, follow">
     <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 48 48' fill='none'><path d='M10 18h28l-3 22H13L10 18z' stroke='%2310B981' stroke-width='3' stroke-linejoin='round'/><path d='M17 18V14a7 7 0 0114 0v4' stroke='%2310B981' stroke-width='3' stroke-linecap='round'/></svg>">
     <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800&display=swap" rel="stylesheet">
     <meta name="google-adsense-account" content="ca-pub-7394172038398161">
@@ -1370,6 +1370,7 @@ exports.serveCategoryPage = (req, res) => {
         // Category index page
         res.setHeader('Content-Type', 'text/html; charset=utf-8');
         res.setHeader('Cache-Control', 'public, max-age=3600, s-maxage=86400');
+        res.setHeader('X-Robots-Tag', 'noindex, follow');
         return res.send(generateCategoryIndex());
     }
 
@@ -1381,12 +1382,14 @@ exports.serveCategoryPage = (req, res) => {
 
     res.setHeader('Content-Type', 'text/html; charset=utf-8');
     res.setHeader('Cache-Control', 'public, max-age=3600, s-maxage=86400');
+    res.setHeader('X-Robots-Tag', 'noindex, follow');
     res.send(generateCategoryHTML(slug, category));
 };
 
 exports.serveCategoryIndex = (req, res) => {
     res.setHeader('Content-Type', 'text/html; charset=utf-8');
     res.setHeader('Cache-Control', 'public, max-age=3600, s-maxage=86400');
+    res.setHeader('X-Robots-Tag', 'noindex, follow');
     res.send(generateCategoryIndex());
 };
 
