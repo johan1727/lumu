@@ -4006,6 +4006,46 @@ async function initApp() {
             }
         }
 
+        async function handleGoogleLogin(event) {
+            if (event) {
+                event.preventDefault();
+                event.stopPropagation();
+            }
+            const activeSupabaseClient = supabaseClient || window.supabaseClient;
+            if (!activeSupabaseClient) {
+                console.error('Google OAuth unavailable: supabaseClient not initialized');
+                if (typeof showGlobalFeedback === 'function') {
+                    showGlobalFeedback(currentRegion === 'US' ? 'Login is temporarily unavailable. Please refresh and try again.' : 'El login no está disponible temporalmente. Recarga e inténtalo de nuevo.', 'error');
+                }
+                return;
+            }
+            if (btnGoogleLogin) {
+                btnGoogleLogin.disabled = true;
+                btnGoogleLogin.classList.add('opacity-70', 'cursor-wait');
+            }
+            try {
+                sessionStorage.setItem('just_logged_in', 'true');
+                const { error } = await activeSupabaseClient.auth.signInWithOAuth({
+                    provider: 'google',
+                    options: {
+                        redirectTo: getPreferredOAuthRedirectUrl()
+                    }
+                });
+                if (error) {
+                    throw error;
+                }
+            } catch (error) {
+                console.error('Google OAuth start failed:', error);
+                if (typeof showGlobalFeedback === 'function') {
+                    showGlobalFeedback(currentRegion === 'US' ? 'We could not start Google login. Try again.' : 'No pudimos iniciar el login con Google. Inténtalo otra vez.', 'error');
+                }
+                if (btnGoogleLogin) {
+                    btnGoogleLogin.disabled = false;
+                    btnGoogleLogin.classList.remove('opacity-70', 'cursor-wait');
+                }
+            }
+        }
+
         if (supabaseClient) {
             supabaseClient.auth.onAuthStateChange((event, session) => {
                 updateAuthUI(session?.user);
@@ -4048,24 +4088,16 @@ async function initApp() {
                     }
                 }
             });
-
-            if (btnGoogleLogin) {
-                btnGoogleLogin.addEventListener('click', async () => {
-                    sessionStorage.setItem('just_logged_in', 'true');
-                    await supabaseClient.auth.signInWithOAuth({
-                        provider: 'google',
-                        options: {
-                            redirectTo: getPreferredOAuthRedirectUrl()
-                        }
-                    });
-                });
-            }
             // Ocultar botón login si estamos logueados
             const btnLoginNav = document.getElementById('btn-login');
             if (btnLoginNav) btnLoginNav.classList.add('hidden');
         } else {
             // Fallback visual si falla Supabase
             updateAuthUI(null);
+        }
+
+        if (btnGoogleLogin) {
+            btnGoogleLogin.addEventListener('click', handleGoogleLogin);
         }
 
         // --- Email/Password auth removed (only Google OAuth is supported) ---
