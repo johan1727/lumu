@@ -223,6 +223,8 @@ async function createVipAutoAlert({ userId = null, product = null }) {
 
 function buildBestBuyScore(product = {}, deepMode = false) {
     const isVerifiedMeliApi = product.resultSource === 'meli_api';
+    const meliPriorityBoost = Math.max(0, Number(product._meliPriorityBoost || 0));
+    const meliHardPenalty = Math.max(0, Number(product._meliAccessoryPenalty || 0)) + Math.max(0, Number(product._meliGenericTitlePenalty || 0)) + Math.max(0, Number(product._meliCategoryPenalty || 0));
     const priceConfidence = Math.min(1, Math.max(0, Number(product.priceConfidence || 0)));
     const matchScore = Math.min(1, Math.max(0, Number(product.matchScore || 0)));
     const modelMatchScore = Math.min(1, Math.max(0, Number(product._modelMatchScore != null ? product._modelMatchScore : 0.55)));
@@ -256,7 +258,8 @@ function buildBestBuyScore(product = {}, deepMode = false) {
         + (product.isC2C ? 0.12 : 0)
         + (!hasPurchasableSignal ? 0.18 : 0)
         + (isInformational ? 0.4 : 0)
-        + (!product.isLocalStore && !product.precio && !product.price && !product.shippingText ? 0.16 : 0);
+        + (!product.isLocalStore && !product.precio && !product.price && !product.shippingText ? 0.16 : 0)
+        + meliHardPenalty;
 
     if (deepMode) {
         // Deep Research: price rank is the dominant signal (~32% combined)
@@ -272,7 +275,7 @@ function buildBestBuyScore(product = {}, deepMode = false) {
             + (comparability * 0.08)
             + (availabilityScore * 0.07)
             + (shippingScore * 0.05);
-        return Number(Math.max(0, Math.min(1, rawScore - penalty + (isVerifiedMeliApi ? 0.04 : 0))).toFixed(3));
+        return Number(Math.max(0, Math.min(1, rawScore - penalty + (isVerifiedMeliApi ? 0.04 : 0) + meliPriorityBoost)).toFixed(3));
     }
 
     const rawScore = (priceConfidence * 0.16)
@@ -284,7 +287,7 @@ function buildBestBuyScore(product = {}, deepMode = false) {
         + (availabilityScore * 0.10)
         + (shippingScore * 0.05)
         + (dealScore * 0.07);
-    return Number(Math.max(0, Math.min(1, rawScore - penalty + (isVerifiedMeliApi ? 0.04 : 0))).toFixed(3));
+    return Number(Math.max(0, Math.min(1, rawScore - penalty + (isVerifiedMeliApi ? 0.04 : 0) + Math.min(0.04, meliPriorityBoost))).toFixed(3));
 }
 
 function buildBestBuyLabel(score = 0) {

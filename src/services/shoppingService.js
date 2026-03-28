@@ -434,6 +434,217 @@ async function runWithConcurrencyLimit(promiseFns, limit, abortSignal) {
     return Promise.all(results);
 }
 
+function tokenizeMeliComparableText(text = '') {
+    return String(text || '')
+        .toLowerCase()
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .replace(/[^a-z0-9+]+/g, ' ')
+        .trim()
+        .split(/\s+/)
+        .filter(token => token && token.length > 1);
+}
+
+function buildMeliSearchVariants(query = '', alternativeQueries = [], conditionMode = 'all', productCategory = '', maxVariants = 10) {
+    const baseQuery = String(query || '').trim();
+    const normalizedBase = baseQuery.replace(/\s+/g, ' ').trim();
+    const variants = [];
+    const pushVariant = (value) => {
+        const next = String(value || '').replace(/\s+/g, ' ').trim();
+        if (!next) return;
+        if (variants.some(existing => existing.toLowerCase() === next.toLowerCase())) return;
+        variants.push(next);
+    };
+    pushVariant(normalizedBase);
+    (alternativeQueries || []).forEach(pushVariant);
+
+    const withoutNegativeTerms = normalizedBase.replace(/\s+-[\w-]+/g, ' ').replace(/\s+/g, ' ').trim();
+    pushVariant(withoutNegativeTerms);
+
+    const withoutConditionWords = withoutNegativeTerms
+        .replace(/\b(nuevo|nueva|usado|usada|reacondicionado|refurbished|seminuevo|open box|segunda mano)\b/gi, ' ')
+        .replace(/\s+/g, ' ')
+        .trim();
+    pushVariant(withoutConditionWords);
+
+    const tokens = tokenizeMeliComparableText(withoutConditionWords);
+    const specificTokens = tokens.filter(token => /\d/.test(token) || /^(pro|max|mini|plus|ultra|oled|fe|air|128gb|256gb|512gb|1tb|16gb|8gb|4k)$/i.test(token) || /^[a-z]{1,4}\d{1,4}$/i.test(token));
+    const broadTokens = tokens.filter(token => !/^(negro|blanco|azul|rojo|rosa|verde|morado|gris|plateado|silver|black|white|blue|red|pink|green|gray|grey|titanio|titanium)$/i.test(token));
+
+    if (broadTokens.length > 0) {
+        pushVariant(broadTokens.join(' '));
+    }
+    if (specificTokens.length >= 2) {
+        pushVariant(specificTokens.join(' '));
+    }
+    if (specificTokens.length >= 1) {
+        pushVariant(`${broadTokens.slice(0, Math.max(2, broadTokens.length - 1)).join(' ')} ${specificTokens[0]}`.trim());
+    }
+
+    if (['smartphone', 'laptop', 'audio', 'gaming', 'tv'].includes(String(productCategory || '').toLowerCase())) {
+        const withoutColor = withoutConditionWords
+            .replace(/\b(negro|blanco|azul|rojo|rosa|verde|morado|gris|plateado|silver|black|white|blue|red|pink|green|gray|grey|titanio|titanium)\b/gi, ' ')
+            .replace(/\s+/g, ' ')
+            .trim();
+        pushVariant(withoutColor);
+    }
+
+    if (conditionMode === 'new') {
+        pushVariant(`${withoutConditionWords} nuevo`.trim());
+    } else if (conditionMode === 'used') {
+        pushVariant(`${withoutConditionWords} usado`.trim());
+        pushVariant(`${withoutConditionWords} reacondicionado`.trim());
+    }
+
+    return variants.slice(0, Math.max(1, maxVariants));
+}
+
+function scoreMeliCandidate(result = {}, canonicalQuery = '', productCategory = '', countryCode = 'MX') {
+    const title = String(result?.title || result?.titulo || '').trim();
+    const queryTokens = tokenizeMeliComparableText(canonicalQuery);
+    const titleTokens = new Set(tokenizeMeliComparableText(title));
+    const specificTokens = queryTokens.filter(token => /\d/.test(token) || /^(pro|max|mini|plus|ultra|oled|fe|air|128gb|256gb|512gb|1tb|16gb|8gb|4k)$/i.test(token) || /^[a-z]{1,4}\d{1,4}$/i.test(token));
+    const overlap = queryTokens.length > 0 ? queryTokens.filter(token => titleTokens.has(token)).length / queryTokens.length : 0.5;
+    const exactModelScore = specificTokens.length > 0
+        ? specificTokens.filter(token => titleTokens.has(token)).length / specificTokens.length
+        : overlap;
+    const variantTokens = queryTokens.filter(token => /^(128gb|256gb|512gb|1tb|64gb|16gb|8gb|32gb|negro|blanco|azul|rojo|verde|morado|gris|silver|black|white|blue|red|pink|green|gray|grey|titanio|titanium)$/i.test(token));
+    const variantScore = variantTokens.length > 0
+        ? variantTokens.filter(token => titleTokens.has(token)).length / variantTokens.length
+        : Math.max(overlap, exactModelScore * 0.82);
+    const accessoryPenalty = /\b(funda|case|mica|protector|display|pantalla|refaccion|refacci[oó]n|bateria|bater[ií]a|carcasa|compatible|reemplazo|cargador|charger|cable|glass|templado|housing|teclado|keyboard|mouse|adaptador|adapter|forro)\b/i.test(title)
+        ? 0.65
+        : 0;
+    const genericTitlePenalty = /\b(android|smartphone|telefono|celular)\b/i.test(title) && specificTokens.length >= 2 && exactModelScore < 0.5
+        ? 0.22
+        : 0;
+    const categoryPenalty = ['smartphone', 'laptop', 'audio', 'gaming', 'tv'].includes(String(productCategory || '').toLowerCase())
+        && /\b(refaccion|compatible|reemplazo|display|pantalla|funda|case|mica|protector)\b/i.test(title)
+        ? 0.18
+        : 0;
+    const sellerQualityScore = Math.min(1,
+        (result._meliOfficialStoreId ? 0.34 : 0)
+        + (result._meliCatalogListing ? 0.24 : 0)
+        + (result.shippingText ? 0.16 : 0)
+        + (result.hasStockSignal ? 0.12 : 0.04)
+        + Math.min(0.14, Math.log10(Math.max(1, Number(result._meliSoldQuantity || 0)) + 1) * 0.08)
+    );
+    const listingQualityScore = Math.min(1,
+        (result.imagen ? 0.18 : 0)
+        + (Number(result.priceConfidence || 0) * 0.30)
+        + (result.hasStockSignal ? 0.14 : 0.04)
+        + (result.isPotentiallyUnavailable ? 0 : 0.12)
+        + (looksLikeProductPage(result.urlOriginal || result.url, countryCode) ? 0.12 : 0)
+    );
+    const pagePenalty = Math.min(0.12, Math.max(0, Number(result._meliPage || 1) - 1) * 0.04);
+    const score = Math.max(0, Math.min(1,
+        (overlap * 0.24)
+        + (exactModelScore * 0.26)
+        + (variantScore * 0.18)
+        + (sellerQualityScore * 0.14)
+        + (listingQualityScore * 0.18)
+        - accessoryPenalty
+        - genericTitlePenalty
+        - categoryPenalty
+        - pagePenalty
+    ));
+    return {
+        overlap,
+        exactModelScore,
+        variantScore,
+        sellerQualityScore,
+        listingQualityScore,
+        accessoryPenalty,
+        genericTitlePenalty,
+        categoryPenalty,
+        mlScore: Number(score.toFixed(3))
+    };
+}
+
+function rerankMeliCandidates(results = [], canonicalQuery = '', productCategory = '', countryCode = 'MX') {
+    return (results || []).map(result => {
+        const scores = scoreMeliCandidate(result, canonicalQuery, productCategory, countryCode);
+        const hardReject = scores.accessoryPenalty >= 0.65 && scores.exactModelScore < 0.55;
+        return {
+            ...result,
+            _meliOverlapScore: scores.overlap,
+            _meliExactModelScore: scores.exactModelScore,
+            _meliVariantScore: scores.variantScore,
+            _meliSellerQualityScore: scores.sellerQualityScore,
+            _meliListingQualityScore: scores.listingQualityScore,
+            _meliAccessoryPenalty: scores.accessoryPenalty,
+            _meliGenericTitlePenalty: scores.genericTitlePenalty,
+            _meliCategoryPenalty: scores.categoryPenalty,
+            _meliScore: scores.mlScore,
+            _meliHardRejected: hardReject,
+            _meliPriorityBoost: !hardReject && scores.mlScore >= 0.72 ? Number(Math.min(0.08, 0.02 + ((scores.mlScore - 0.72) * 0.2)).toFixed(3)) : 0,
+            _meliPriorityVisible: !hardReject && scores.mlScore >= 0.8
+        };
+    }).sort((a, b) => {
+        const hardDelta = Number(Boolean(a._meliHardRejected)) - Number(Boolean(b._meliHardRejected));
+        if (hardDelta !== 0) return hardDelta;
+        const scoreDelta = Number(b._meliScore || 0) - Number(a._meliScore || 0);
+        if (Math.abs(scoreDelta) >= 0.02) return scoreDelta;
+        const priceDelta = Number(a.price || Number.MAX_SAFE_INTEGER) - Number(b.price || Number.MAX_SAFE_INTEGER);
+        if (priceDelta !== 0) return priceDelta;
+        return String(a.title || '').localeCompare(String(b.title || ''));
+    });
+}
+
+function shouldExpandMeliCoverage(results = [], minStrongMatches = 8) {
+    const useful = (results || []).filter(item => !item._meliHardRejected);
+    if (useful.length < minStrongMatches) return true;
+    const topSlice = useful.slice(0, Math.min(10, useful.length));
+    const avgScore = topSlice.length > 0
+        ? topSlice.reduce((sum, item) => sum + Number(item._meliScore || 0), 0) / topSlice.length
+        : 0;
+    const accessoryNoiseRatio = useful.length > 0
+        ? useful.filter(item => Number(item._meliAccessoryPenalty || 0) >= 0.4).length / useful.length
+        : 1;
+    return avgScore < 0.68 || accessoryNoiseRatio >= 0.28;
+}
+
+async function fetchExpandedVipMeliResults({ query = '', alternativeQueries = [], countryCode = 'MX', signal = null, conditionMode = 'all', productCategory = '', resultLimit = 40 }) {
+    const variants = buildMeliSearchVariants(query, alternativeQueries, conditionMode, productCategory, 10);
+    const limit = Math.min(40, Math.max(20, Number(resultLimit) || 40));
+    const pageOffsets = [0];
+    const firstPassFns = variants.map((variant, index) => () => meliService.searchMeli(variant, countryCode, {
+        limit,
+        offset: 0,
+        sort: index === 0 ? 'price_asc' : 'price_asc',
+        signal,
+        conditionMode
+    }));
+    const firstPass = await runWithConcurrencyLimit(firstPassFns, 4, signal);
+    let aggregate = firstPass.flatMap(result => result.status === 'fulfilled' && Array.isArray(result.value) ? result.value : []);
+    let reranked = rerankMeliCandidates(aggregate, query, productCategory, countryCode);
+    if (shouldExpandMeliCoverage(reranked, 8)) {
+        pageOffsets.push(limit);
+    }
+    if (shouldExpandMeliCoverage(reranked, 10)) {
+        pageOffsets.push(limit * 2);
+    }
+    if (pageOffsets.length > 1) {
+        const trailingVariants = variants.slice(0, Math.min(10, variants.length));
+        const extraFns = [];
+        pageOffsets.slice(1).forEach(offset => {
+            trailingVariants.forEach(variant => {
+                extraFns.push(() => meliService.searchMeli(variant, countryCode, {
+                    limit,
+                    offset,
+                    sort: 'price_asc',
+                    signal,
+                    conditionMode
+                }));
+            });
+        });
+        const extraPass = await runWithConcurrencyLimit(extraFns, 4, signal);
+        aggregate = aggregate.concat(extraPass.flatMap(result => result.status === 'fulfilled' && Array.isArray(result.value) ? result.value : []));
+        reranked = rerankMeliCandidates(aggregate, query, productCategory, countryCode);
+    }
+    return reranked;
+}
+
 exports.searchGoogleShopping = async (query, radius, lat, lng, intentType, abortSignal, conditionMode = 'all', countryCode = 'MX', alternativeQueries = [], productCategory = '', preferredStoreKeys = [], brandOfficialQuery = null, searchOptions = {}) => {
     const regionCfg = regionConfigService.getRegionConfig(countryCode);
     const isLocalFastMode = process.env.NODE_ENV !== 'production' && process.env.FORCE_FULL_SEARCH !== 'true';
@@ -1029,20 +1240,34 @@ exports.searchGoogleShopping = async (query, radius, lat, lng, intentType, abort
         // Strip Google-only negative keywords (-funda -case etc.) since direct scrapers use URL search params
         const cleanQuery = query.replace(/\s+-\w+/g, '').trim();
         const hasProxy = Boolean(process.env.SCRAPER_PROXIES);
-        const meliResultLimit = deepSearchEnabled ? 50 : 25;
+        const meliResultLimit = deepSearchEnabled ? 40 : 25;
         console.log(`Ejecutando scrapers directos rápidos para ${countryCode}: ${cleanQuery} ...${hasProxy ? '' : ' [sin proxy — solo API scrapers]'}`);
 
         scraperFunctions = [
             () => monitor.wrap(() => directScraper.scrapeMercadoLibreAPI(cleanQuery, countryCode, abortSignal, conditionMode), 'ml_api_direct'),
         ];
 
-        scraperFunctions.push(
-            () => monitor.wrap(() => meliService.searchMeli(cleanQuery, countryCode, {
-                limit: meliResultLimit,
-                signal: abortSignal,
-                conditionMode
-            }), deepSearchEnabled ? 'meli_api_deep' : 'meli_api_normal')
-        );
+        if (deepSearchEnabled && searchTier === 'vip') {
+            scraperFunctions.push(
+                () => monitor.wrap(() => fetchExpandedVipMeliResults({
+                    query: cleanQuery,
+                    alternativeQueries,
+                    countryCode,
+                    signal: abortSignal,
+                    conditionMode,
+                    productCategory,
+                    resultLimit: meliResultLimit
+                }), 'meli_api_vip_expanded')
+            );
+        } else {
+            scraperFunctions.push(
+                () => monitor.wrap(() => meliService.searchMeli(cleanQuery, countryCode, {
+                    limit: meliResultLimit,
+                    signal: abortSignal,
+                    conditionMode
+                }), deepSearchEnabled ? 'meli_api_deep' : 'meli_api_normal')
+            );
+        }
 
         if (hasProxy) {
             scraperFunctions.push(
@@ -1094,15 +1319,30 @@ exports.searchGoogleShopping = async (query, radius, lat, lng, intentType, abort
     // 3. Unir resultados
     const dedupedByUrl = [];
     const seenUrls = new Set();
+    const seenMeliItemIds = new Set();
     [...serperResults, ...directResults].map(applyResultMetadata).forEach(result => {
         const key = String(result?.url || '').split('?')[0].toLowerCase();
+        const meliItemId = String(result?._meliItemId || '').trim();
+        if (meliItemId && seenMeliItemIds.has(meliItemId)) {
+            return;
+        }
         if (!key || !seenUrls.has(key)) {
             if (key) seenUrls.add(key);
+            if (meliItemId) seenMeliItemIds.add(meliItemId);
             dedupedByUrl.push(result);
         }
     });
+    const rerankedMergedMeli = rerankMeliCandidates(
+        dedupedByUrl.filter(result => String(result?.url || '').toLowerCase().includes('mercadolibre.')),
+        query,
+        productCategory,
+        countryCode
+    );
+    const mlByKey = new Map(rerankedMergedMeli.map(result => [String(result?._meliItemId || result?.url || '').toLowerCase(), result]));
     const sortedResults = dedupedByUrl
+        .map(result => mlByKey.get(String(result?._meliItemId || result?.url || '').toLowerCase()) || result)
         .filter(isResultSellable)
+        .filter(result => !(result._meliHardRejected && result.resultSource === 'meli_api'))
         .filter(result => {
             // Reject results with invalid or missing URLs
             const url = String(result?.url || '').trim();
@@ -1152,6 +1392,10 @@ exports.searchGoogleShopping = async (query, radius, lat, lng, intentType, abort
             const aPrice = Number(a.price || Number.MAX_SAFE_INTEGER);
             const bPrice = Number(b.price || Number.MAX_SAFE_INTEGER);
             if (aPrice !== bPrice) return aPrice - bPrice;
+
+            const aMeliScore = Number(a._meliScore || 0);
+            const bMeliScore = Number(b._meliScore || 0);
+            if (Math.abs(aMeliScore - bMeliScore) >= 0.04) return bMeliScore - aMeliScore;
 
             const affiliateDelta = getAffiliateStoreRank(a) - getAffiliateStoreRank(b);
             if (affiliateDelta !== 0) return affiliateDelta;

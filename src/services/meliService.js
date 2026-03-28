@@ -92,7 +92,11 @@ function normaliseMeliItem(item, siteId, currency, query) {
         isKnownStoreDomain: true,
         isDirectProductPage: true,
         _meliItemId: item.id,
-        _meliSiteId: siteId
+        _meliSiteId: siteId,
+        _meliSoldQuantity: Number(item.sold_quantity || 0),
+        _meliCatalogListing: Boolean(item.catalog_listing),
+        _meliOfficialStoreId: item.official_store_id || null,
+        _meliThumbnailId: rawThumb || null
     };
 }
 
@@ -102,19 +106,24 @@ function normaliseMeliItem(item, siteId, currency, query) {
  * @param {string} countryCode - ISO country code (MX, AR, CO, CL, …)
  * @param {Object} options
  * @param {number} [options.limit=50] - Max items to fetch
+ * @param {number} [options.offset=0] - Offset for pagination
+ * @param {string} [options.sort=price_asc] - MELI sort mode
  * @param {AbortSignal} [options.signal] - Abort signal for timeout propagation
  * @returns {Promise<Array>} Normalised product results
  */
 async function searchMeli(query, countryCode = 'MX', options = {}) {
     const siteId = COUNTRY_TO_SITE_ID[String(countryCode).toUpperCase()] || 'MLM';
     const limit = Math.min(Number(options.limit) || 50, 50); // API cap is 50 per call
+    const offset = Math.max(0, Number(options.offset) || 0);
+    const sort = String(options.sort || 'price_asc').trim() || 'price_asc';
     const currency = countryCode === 'AR' ? 'ARS' : countryCode === 'CO' ? 'COP' : countryCode === 'CL' ? 'CLP' : countryCode === 'BR' ? 'BRL' : 'MXN';
     const conditionMode = String(options.conditionMode || 'all').toLowerCase();
 
     const params = new URLSearchParams({
         q: String(query).trim(),
         limit: String(limit),
-        sort: 'price_asc' // cheapest first — key goal of deep search
+        sort,
+        offset: String(offset)
     });
     if (conditionMode === 'new') {
         params.set('condition', 'new');
@@ -127,7 +136,7 @@ async function searchMeli(query, countryCode = 'MX', options = {}) {
 
     const url = `${MELI_BASE}/sites/${siteId}/search?${params.toString()}`;
 
-    console.log(`[MELI API] Searching site=${siteId} q="${query}" limit=${limit}`);
+    console.log(`[MELI API] Searching site=${siteId} q="${query}" limit=${limit} offset=${offset} sort=${sort}`);
 
     try {
         const response = await fetchWithTimeout(url, {
@@ -160,7 +169,15 @@ async function searchMeli(query, countryCode = 'MX', options = {}) {
             item.available_quantity !== 0
         );
 
-        const normalised = validItems.map(item => normaliseMeliItem(item, siteId, currency, query));
+        const page = Math.floor(offset / Math.max(1, limit)) + 1;
+        const normalised = validItems.map(item => ({
+            ...normaliseMeliItem(item, siteId, currency, query),
+            _meliQuery: String(query).trim(),
+            _meliOffset: offset,
+            _meliLimit: limit,
+            _meliPage: page,
+            _meliSort: sort
+        }));
         console.log(`[MELI API] Got ${normalised.length} valid items for "${query}"`);
         return normalised;
 
