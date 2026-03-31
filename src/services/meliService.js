@@ -51,6 +51,7 @@ function computeTokenOverlap(query, title) {
 function normaliseMeliItem(item, siteId, currency, query) {
     const price = Number(item.price);
     const originalPrice = item.original_price ? Number(item.original_price) : null;
+    const hasDiscount = Number.isFinite(originalPrice) && originalPrice > price;
     const seller = item.seller?.nickname || item.seller_id || 'Mercado Libre';
     // Upgrade from tiny 30x30 (-I.jpg) to 270x270 (-O.jpg) thumbnail
     const rawThumb = item.thumbnail ? item.thumbnail.replace(/^http:\/\//, 'https://') : null;
@@ -72,13 +73,14 @@ function normaliseMeliItem(item, siteId, currency, query) {
         title: String(item.title || '').trim(),
         precio: price,
         price: price,
-        originalPrice: originalPrice,
+        originalPrice: hasDiscount ? originalPrice : null,
         moneda: currency,
         tienda: `Mercado Libre (${seller})`,
         source: 'Mercado Libre',
         urlOriginal: productUrl,
         url: productUrl,
         imagen: thumbnail,
+        snippet: hasDiscount ? `Oferta ${Math.round((1 - price / originalPrice) * 100)}% · Antes $${originalPrice}` : '',
         shippingText: shippingText || undefined,
         condition: conditionLabel,
         isLocalStore: false,
@@ -87,6 +89,10 @@ function normaliseMeliItem(item, siteId, currency, query) {
         priceConfidence: 0.95, // Direct API price is highly reliable
         priceSource: 'meli_api', // Prevents applyResultMetadata from overwriting confidence
         resultSource: 'meli_api',
+        discountPct: hasDiscount ? Math.round((1 - price / originalPrice) * 100) : 0,
+        isDealPrice: hasDiscount,
+        hasStrikeThroughPrice: hasDiscount,
+        couponApplied: false,
         matchScore: computeTokenOverlap(query, item.title),
         storeTier: 1, // MELI is a trusted tier-1 marketplace
         isKnownStoreDomain: true,

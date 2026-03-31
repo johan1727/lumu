@@ -11,12 +11,7 @@ function mountHomeScrollReveal() {
     if (!body.classList.contains('page-home')) return () => { };
     if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return () => { };
 
-    const targets = Array.from(document.querySelectorAll<HTMLElement>([
-        'main > section',
-        '#seo-guides-section',
-        '#seo-guides-section .grid > a',
-        '#seo-guides-section .mt-10.rounded-3xl'
-    ].join(', ')));
+    const targets = Array.from(document.querySelectorAll<HTMLElement>('main > section'));
 
     if (!targets.length) return () => { };
 

@@ -1,7 +1,7 @@
 {
   "name": "Lumu - Personal Shopper AI",
   "short_name": "Lumu",
-  "description": "Compara precios con IA en Amazon, Mercado Libre y tiendas locales de México",
+  "description": "Compara precios con IA en Amazon, Mercado Libre y tiendas locales de México, Chile, Colombia, Argentina, Perú y EE.UU.",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#ffffff",

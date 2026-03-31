@@ -24,7 +24,7 @@ if (process.env.SENTRY_DSN && Sentry) {
         dsn: process.env.SENTRY_DSN,
         environment: process.env.SENTRY_ENVIRONMENT || process.env.VERCEL_ENV || process.env.NODE_ENV || 'development',
         release: process.env.VERCEL_GIT_COMMIT_SHA || process.env.npm_package_version || 'unknown',
-        sendDefaultPii: true,
+        sendDefaultPii: false,
         tracesSampleRate: 0,
         beforeSend(event, hint) {
             const originalError = hint?.originalException;
@@ -155,8 +155,9 @@ const stripeController = require('../src/controllers/stripeController');
 app.post('/api/stripe/webhook', express.raw({ type: 'application/json' }), stripeController.handleWebhook);
 
 // Middleware para parsear JSON
-app.use(express.json({ limit: '2mb' }));
-app.use(express.urlencoded({ extended: false, limit: '1mb' }));
+app.use('/api/vision', express.json({ limit: '4mb' }));
+app.use(express.json({ limit: '500kb' }));
+app.use(express.urlencoded({ extended: false, limit: '200kb' }));
 
 // Servir archivos estáticos del frontend
 const path = require('path');

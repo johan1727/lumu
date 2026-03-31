@@ -206,6 +206,14 @@ async function searchAmazonSerpApi(query, countryCode = 'MX', signal) {
             || item?.prices?.[0]?.value
             || 0
         );
+        const originalPrice = Number(
+            item?.price?.before_discount_value
+            || item?.list_price?.value
+            || item?.prices?.[1]?.value
+            || item?.prices?.find?.((entry, index) => index > 0 && Number(entry?.value) > price)?.value
+            || 0
+        );
+        const hasDiscount = Number.isFinite(originalPrice) && originalPrice > price;
         const url = item?.link || item?.product_link || '';
         const shippingText = item?.shipping || item?.delivery || item?.extensions?.join(' ') || '';
         const couponText = item?.coupon_text || item?.coupon || '';
@@ -220,6 +228,11 @@ async function searchAmazonSerpApi(query, countryCode = 'MX', signal) {
             snippet: [shippingText, couponText].filter(Boolean).join(' · '),
             shippingText,
             couponText,
+            originalPrice: hasDiscount ? originalPrice : null,
+            discountPct: hasDiscount ? Math.round((1 - price / originalPrice) * 100) : 0,
+            isDealPrice: hasDiscount,
+            hasStrikeThroughPrice: hasDiscount,
+            couponApplied: /coupon applied|cup[oó]n aplicado/i.test(String(couponText || '')),
             observedPrices: [price].filter(Boolean),
             priceConfidence: 0.95,
             priceSource: 'amazon_serpapi',
@@ -290,6 +303,9 @@ async function searchAmazonPaapi(query, countryCode = 'MX', signal) {
     const items = Array.isArray(response.data?.SearchResult?.Items) ? response.data.SearchResult.Items : [];
     return items.map((item) => {
         const price = Number(item?.Offers?.Listings?.[0]?.Price?.Amount || item?.Offers?.Summaries?.[0]?.LowestPrice?.Amount || 0);
+        const originalPrice = Number(item?.Offers?.Listings?.[0]?.SavingBasis?.Amount || 0);
+        const savingsAmount = Number(item?.Offers?.Listings?.[0]?.Price?.Savings?.Amount || 0);
+        const hasDiscount = (Number.isFinite(originalPrice) && originalPrice > price) || (Number.isFinite(savingsAmount) && savingsAmount > 0);
         const url = item?.DetailPageURL || '';
         if (!item?.ItemInfo?.Title?.DisplayValue || !url || !Number.isFinite(price) || price <= 0) return null;
         return {
@@ -298,7 +314,14 @@ async function searchAmazonPaapi(query, countryCode = 'MX', signal) {
             url,
             source: String(countryCode || 'MX').toUpperCase() === 'US' ? 'Amazon' : 'Amazon MX',
             image: item?.Images?.Primary?.Medium?.URL || '',
-            rating: null
+            rating: null,
+            originalPrice: hasDiscount ? (originalPrice > price ? originalPrice : price + savingsAmount) : null,
+            discountPct: hasDiscount
+                ? Math.round((1 - (price / Math.max(price + savingsAmount, originalPrice || 0))) * 100)
+                : 0,
+            isDealPrice: hasDiscount,
+            hasStrikeThroughPrice: hasDiscount,
+            couponApplied: false
         };
     }).filter(Boolean);
 }
@@ -448,6 +471,9 @@ function mapMercadoLibreApiResults(data, sourceLabel) {
                 sellerPowerLevel,
                 installmentText,
                 hasInstallmentLanguage: Boolean(installments),
+                isDealPrice: hasDiscount,
+                hasStrikeThroughPrice: hasDiscount,
+                couponApplied: false,
                 observedPrices: [price].filter(Boolean),
                 priceConfidence: 0.95,
                 priceSource: 'ml_api_direct',
@@ -561,9 +587,10 @@ exports.scrapeMercadoLibreAPI = async (query, countryCode = 'MX', signal, condit
         const relevanceUrl = `https://api.mercadolibre.com/sites/${siteId}/search?q=${encodedQuery}${conditionParam}&limit=50`;
         console.log(`[ML API] Buscando en ${siteId} para ${normalizedCountry}: ${query} (precio + relevancia en paralelo, condition=${conditionMode || 'any'})`);
 
-        const priceRes = await fetchMercadoLibreApi(priceUrl, apiOpts, signal, 'price_asc');
-        await sleep(320);
-        const relevanceRes = await fetchMercadoLibreApi(relevanceUrl, apiOpts, signal, 'relevance');
+        const [priceRes, relevanceRes] = await Promise.all([
+            fetchMercadoLibreApi(priceUrl, apiOpts, signal, 'price_asc'),
+            fetchMercadoLibreApi(relevanceUrl, apiOpts, signal, 'relevance')
+        ]);
 
         const priceResults = mapMercadoLibreApiResults(priceRes?.data, sourceLabel);
         const relevanceResults = mapMercadoLibreApiResults(relevanceRes?.data, sourceLabel);
@@ -726,18 +753,31 @@ exports.scrapeAmazonDirect = async (query, countryCode = 'MX', signal) => {
             const title = $(element).find('h2 span').text().trim();
             const urlPath = $(element).find('h2').parent('a').attr('href') || $(element).find('h2 a').attr('href');
             const priceWhole = $(element).find('.a-price-whole').first().text().replace(/,/g, '');
+            const priceFraction = $(element).find('.a-price-fraction').first().text().trim();
+            const strikePriceRaw = $(element).find('.a-price.a-text-price .a-offscreen, .a-price[data-a-strike="true"] .a-offscreen').first().text().trim();
+            const couponText = $(element).find('[class*="coupon"], .s-coupon-unclipped, .couponBadge').first().text().trim();
             const imageNode = $(element).find('img.s-image').attr('src');
             // Also try to get rating info
             const ratingText = $(element).find('.a-icon-alt').first().text().trim();
+            const price = parseFloat(`${priceWhole}.${priceFraction || '00'}`);
+            const strikePrice = strikePriceRaw ? parseFloat(String(strikePriceRaw).replace(/[^0-9.]/g, '')) : NaN;
+            const hasDiscount = Number.isFinite(strikePrice) && strikePrice > price;
 
             if (title && priceWhole && urlPath) {
                 results.push({
                     title: title,
-                    price: parseFloat(priceWhole),
+                    price,
                     url: urlPath.startsWith('http') ? urlPath : `${amazonDomain}${urlPath}`,
                     source: sourceLabel,
                     image: imageNode || '',
-                    rating: ratingText || null
+                    rating: ratingText || null,
+                    couponText,
+                    originalPrice: hasDiscount ? strikePrice : null,
+                    discountPct: hasDiscount ? Math.round((1 - price / strikePrice) * 100) : 0,
+                    isDealPrice: hasDiscount,
+                    hasStrikeThroughPrice: hasDiscount,
+                    couponApplied: /coupon applied|cup[oó]n aplicado/i.test(String(couponText || '')),
+                    snippet: couponText || ''
                 });
             }
         });

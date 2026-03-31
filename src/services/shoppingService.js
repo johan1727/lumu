@@ -66,20 +66,39 @@ function extractAllSnippetPrices(text) {
     return [...new Set(parsed.map(value => Number(value.toFixed(2))))];
 }
 
-function resolvePriceMetadata({ primaryPrice = null, text = '', sourceType = 'unknown', isRedirect = false, isDirectProductPage = false }) {
+function resolvePriceMetadata({
+    primaryPrice = null,
+    text = '',
+    sourceType = 'unknown',
+    isRedirect = false,
+    isDirectProductPage = false,
+    originalPrice = null,
+    discountPct = 0,
+    isDealPrice = false,
+    couponApplied = false,
+    hasStrikeThroughPrice = false
+}) {
     const snippetPrices = extractAllSnippetPrices(text);
     const hasInstallmentLanguage = /meses|msi|mensual|mensualidades|quincena|quincenal|semanales|semana|por mes|desde\s+\$|pagos de|pay as low as|monthly/i.test(String(text || ''));
     const hasSaleLanguage = /ahora|rebaja|descuento|oferta|sale|promo|promoci[oó]n|precio final|antes|hot sale|buen fin|liquidaci[oó]n/i.test(String(text || ''));
     const hasCouponLanguage = /cup[oó]n|coupon|cup[oó]n aplicado|extra|save extra|promo code|c[oó]digo/i.test(String(text || ''));
     const hasShippingLanguage = /env[ií]o|shipping|llega|arrives|delivery|entrega|prime/i.test(String(text || ''));
+    const hasAppliedCouponLanguage = /cup[oó]n aplicado|coupon applied|descuento aplicado|ahorro aplicado|with coupon applied/i.test(String(text || ''));
     const sortedSnippetPrices = [...snippetPrices].sort((a, b) => a - b);
     const lowestSnippetPrice = sortedSnippetPrices[0] || null;
     const highestSnippetPrice = sortedSnippetPrices[sortedSnippetPrices.length - 1] || null;
+    const numericOriginalPrice = Number(originalPrice);
+    const resolvedOriginalPrice = Number.isFinite(numericOriginalPrice) && numericOriginalPrice > 0 ? numericOriginalPrice : null;
+    const resolvedDiscountPct = Number.isFinite(Number(discountPct)) && Number(discountPct) > 0 ? Number(discountPct) : 0;
+    const hasStrongDealSignal = Boolean(
+        isDealPrice || hasStrikeThroughPrice || (resolvedOriginalPrice && primaryPrice && resolvedOriginalPrice > primaryPrice)
+    );
+    const couponLooksAmbiguous = hasCouponLanguage && !couponApplied && !hasAppliedCouponLanguage;
 
     let price = Number.isFinite(primaryPrice) && primaryPrice > 0 ? primaryPrice : null;
     let priceSource = price != null ? sourceType : 'missing';
     let priceConfidence = sourceType === 'shopping_api'
-        ? (isRedirect ? 0.82 : 0.94)
+        ? (isRedirect ? 0.72 : 0.94)
         : sourceType === 'amazon_serpapi'
             ? 0.96
         : sourceType === 'official_web'
@@ -96,6 +115,7 @@ function resolvePriceMetadata({ primaryPrice = null, text = '', sourceType = 'un
 
     const observedPrices = [];
     if (Number.isFinite(primaryPrice) && primaryPrice > 0) observedPrices.push(Number(primaryPrice.toFixed(2)));
+    if (resolvedOriginalPrice) observedPrices.push(Number(resolvedOriginalPrice.toFixed(2)));
     observedPrices.push(...sortedSnippetPrices.filter(value => !observedPrices.includes(value)));
 
     if (!price && !hasInstallmentLanguage && lowestSnippetPrice) {
@@ -104,7 +124,12 @@ function resolvePriceMetadata({ primaryPrice = null, text = '', sourceType = 'un
         priceConfidence = Math.min(priceConfidence, sourceType === 'official_web' ? 0.62 : 0.44);
     }
 
-    if (price && lowestSnippetPrice && !hasInstallmentLanguage && hasSaleLanguage) {
+    if (price && hasStrongDealSignal) {
+        priceSource = `${sourceType}_deal`;
+        priceConfidence = Math.max(priceConfidence, sourceType === 'shopping_api' ? 0.82 : 0.9);
+    }
+
+    if (price && lowestSnippetPrice && !hasInstallmentLanguage && hasSaleLanguage && !hasStrongDealSignal && !couponLooksAmbiguous) {
         const gapRatio = Math.abs(price - lowestSnippetPrice) / Math.max(price, lowestSnippetPrice);
         if (lowestSnippetPrice < price && gapRatio >= 0.08) {
             price = lowestSnippetPrice;
@@ -118,19 +143,20 @@ function resolvePriceMetadata({ primaryPrice = null, text = '', sourceType = 'un
         : 0;
     const priceNeedsVerification = Boolean(
         hasInstallmentLanguage ||
+        couponLooksAmbiguous ||
         priceSpreadRatio >= 0.18 ||
-        (!isDirectProductPage && sourceType !== 'shopping_api' && sourceType !== 'direct_scraper')
+        (!isDirectProductPage && sourceType !== 'shopping_api' && sourceType !== 'direct_scraper' && !hasStrongDealSignal)
     );
 
     if (priceNeedsVerification) {
-        priceConfidence = Math.max(0.22, priceConfidence - (hasInstallmentLanguage ? 0.18 : 0.1) - (priceSpreadRatio >= 0.18 ? 0.08 : 0));
+        priceConfidence = Math.max(0.22, priceConfidence - (hasInstallmentLanguage ? 0.18 : 0.1) - (priceSpreadRatio >= 0.18 ? 0.08 : 0) - (couponLooksAmbiguous ? 0.08 : 0));
     }
 
     if (hasShippingLanguage && !priceNeedsVerification) {
         priceConfidence = Math.min(0.99, priceConfidence + 0.02);
     }
 
-    if (hasCouponLanguage && sourceType !== 'broad_web' && sourceType !== 'web_snippet') {
+    if (hasCouponLanguage && sourceType !== 'broad_web' && sourceType !== 'web_snippet' && !couponLooksAmbiguous) {
         priceConfidence = Math.min(0.99, priceConfidence + 0.02);
     }
 
@@ -140,6 +166,11 @@ function resolvePriceMetadata({ primaryPrice = null, text = '', sourceType = 'un
         priceConfidence: Number(Math.max(0, Math.min(0.99, priceConfidence)).toFixed(2)),
         observedPrices: observedPrices.slice(0, 4),
         priceNeedsVerification,
+        originalPrice: resolvedOriginalPrice,
+        discountPct: resolvedDiscountPct || (resolvedOriginalPrice && price ? Math.round((1 - (price / resolvedOriginalPrice)) * 100) : 0),
+        isDealPrice: Boolean(hasStrongDealSignal && price),
+        couponApplied: Boolean(couponApplied || hasAppliedCouponLanguage),
+        hasStrikeThroughPrice: Boolean(hasStrikeThroughPrice || (resolvedOriginalPrice && price && resolvedOriginalPrice > price)),
         hasSaleLanguage,
         hasInstallmentLanguage,
         hasCouponLanguage,
@@ -161,7 +192,12 @@ function applyResultMetadata(item = {}) {
         text: `${item.title || ''} ${item.snippet || ''}`,
         sourceType: item.isLocalStore ? 'local_extractor' : 'direct_scraper',
         isRedirect: Boolean(item.isGoogleRedirect || item.hasEphemeralRedirect),
-        isDirectProductPage: Boolean(item.isDirectProductPage)
+        isDirectProductPage: Boolean(item.isDirectProductPage),
+        originalPrice: item.originalPrice,
+        discountPct: item.discountPct,
+        isDealPrice: item.isDealPrice,
+        couponApplied: item.couponApplied,
+        hasStrikeThroughPrice: item.hasStrikeThroughPrice
     });
     return {
         ...item,
@@ -170,6 +206,11 @@ function applyResultMetadata(item = {}) {
         priceConfidence: metadata.priceConfidence,
         observedPrices: metadata.observedPrices,
         priceNeedsVerification: metadata.priceNeedsVerification,
+        originalPrice: metadata.originalPrice,
+        discountPct: metadata.discountPct,
+        isDealPrice: metadata.isDealPrice,
+        couponApplied: metadata.couponApplied,
+        hasStrikeThroughPrice: metadata.hasStrikeThroughPrice,
         hasInstallmentLanguage: metadata.hasInstallmentLanguage,
         hasCouponLanguage: metadata.hasCouponLanguage,
         hasShippingLanguage: metadata.hasShippingLanguage,
@@ -501,6 +542,8 @@ function buildMeliSearchVariants(query = '', alternativeQueries = [], conditionM
 
 function scoreMeliCandidate(result = {}, canonicalQuery = '', productCategory = '', countryCode = 'MX') {
     const title = String(result?.title || result?.titulo || '').trim();
+    const normalizedQuery = String(canonicalQuery || '').toLowerCase();
+    const normalizedCategory = String(productCategory || '').toLowerCase();
     const queryTokens = tokenizeMeliComparableText(canonicalQuery);
     const titleTokens = new Set(tokenizeMeliComparableText(title));
     const specificTokens = queryTokens.filter(token => /\d/.test(token) || /^(pro|max|mini|plus|ultra|oled|fe|air|128gb|256gb|512gb|1tb|16gb|8gb|4k)$/i.test(token) || /^[a-z]{1,4}\d{1,4}$/i.test(token));
@@ -515,12 +558,18 @@ function scoreMeliCandidate(result = {}, canonicalQuery = '', productCategory = 
     const accessoryPenalty = /\b(funda|case|mica|protector|display|pantalla|refaccion|refacci[oó]n|bateria|bater[ií]a|carcasa|compatible|reemplazo|cargador|charger|cable|glass|templado|housing|teclado|keyboard|mouse|adaptador|adapter|forro)\b/i.test(title)
         ? 0.65
         : 0;
+    const queryLooksLikeConsoleSearch = normalizedCategory === 'gaming' && /\b(xbox|series\s*[xs]|playstation|ps5|ps4|nintendo\s+switch|switch|steam\s*deck|consola)\b/i.test(normalizedQuery) && !/\b(juego|videojuego|game|bundle|pack|dlc|season\s+pass|codigo|c[oó]digo|key|gift\s*card|tarjeta\s+de\s+regalo)\b/i.test(normalizedQuery);
+    const gameContentPenalty = queryLooksLikeConsoleSearch && /\b(juego|videojuego|game\s+pass|game\s+key|gift\s*card|tarjeta\s+de\s+regalo|season\s+pass|dlc|expansi[oó]n|expansion|moneda\s+virtual|skin|c[oó]digo\s+digital|digital\s+key|c[oó]digo\s+de\s+activaci[oó]n|codigo\s+de\s+activacion)\b/i.test(title)
+        ? 0.62
+        : 0;
     const genericTitlePenalty = /\b(android|smartphone|telefono|celular)\b/i.test(title) && specificTokens.length >= 2 && exactModelScore < 0.5
         ? 0.22
         : 0;
     const categoryPenalty = ['smartphone', 'laptop', 'audio', 'gaming', 'tv'].includes(String(productCategory || '').toLowerCase())
         && /\b(refaccion|compatible|reemplazo|display|pantalla|funda|case|mica|protector)\b/i.test(title)
         ? 0.18
+        : normalizedCategory === 'gaming' && gameContentPenalty > 0
+            ? 0.22
         : 0;
     const sellerQualityScore = Math.min(1,
         (result._meliOfficialStoreId ? 0.34 : 0)
@@ -544,6 +593,7 @@ function scoreMeliCandidate(result = {}, canonicalQuery = '', productCategory = 
         + (sellerQualityScore * 0.14)
         + (listingQualityScore * 0.18)
         - accessoryPenalty
+        - gameContentPenalty
         - genericTitlePenalty
         - categoryPenalty
         - pagePenalty
@@ -555,6 +605,7 @@ function scoreMeliCandidate(result = {}, canonicalQuery = '', productCategory = 
         sellerQualityScore,
         listingQualityScore,
         accessoryPenalty,
+        gameContentPenalty,
         genericTitlePenalty,
         categoryPenalty,
         mlScore: Number(score.toFixed(3))
@@ -573,6 +624,7 @@ function rerankMeliCandidates(results = [], canonicalQuery = '', productCategory
             _meliSellerQualityScore: scores.sellerQualityScore,
             _meliListingQualityScore: scores.listingQualityScore,
             _meliAccessoryPenalty: scores.accessoryPenalty,
+            _meliGameContentPenalty: scores.gameContentPenalty,
             _meliGenericTitlePenalty: scores.genericTitlePenalty,
             _meliCategoryPenalty: scores.categoryPenalty,
             _meliScore: scores.mlScore,
@@ -1263,6 +1315,7 @@ exports.searchGoogleShopping = async (query, radius, lat, lng, intentType, abort
             scraperFunctions.push(
                 () => monitor.wrap(() => meliService.searchMeli(cleanQuery, countryCode, {
                     limit: meliResultLimit,
+                    sort: 'best_sellers',
                     signal: abortSignal,
                     conditionMode
                 }), deepSearchEnabled ? 'meli_api_deep' : 'meli_api_normal')
@@ -1384,6 +1437,10 @@ exports.searchGoogleShopping = async (query, radius, lat, lng, intentType, abort
             const aDirectness = Number(Boolean(a.isDirectProductPage || a.isOfficialBrandResult || a.resultSource === 'shopping_api'));
             const bDirectness = Number(Boolean(b.isDirectProductPage || b.isOfficialBrandResult || b.resultSource === 'shopping_api'));
             if (aDirectness !== bDirectness) return bDirectness - aDirectness;
+
+            const aRedirectPenalty = Number(Boolean(a.hasEphemeralRedirect && !a.isDirectProductPage));
+            const bRedirectPenalty = Number(Boolean(b.hasEphemeralRedirect && !b.isDirectProductPage));
+            if (aRedirectPenalty !== bRedirectPenalty) return aRedirectPenalty - bRedirectPenalty;
 
             const aConfidence = Number(a.priceConfidence || 0);
             const bConfidence = Number(b.priceConfidence || 0);

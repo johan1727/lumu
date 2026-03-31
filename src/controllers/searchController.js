@@ -224,7 +224,7 @@ async function createVipAutoAlert({ userId = null, product = null }) {
 function buildBestBuyScore(product = {}, deepMode = false) {
     const isVerifiedMeliApi = product.resultSource === 'meli_api';
     const meliPriorityBoost = Math.max(0, Number(product._meliPriorityBoost || 0));
-    const meliHardPenalty = Math.max(0, Number(product._meliAccessoryPenalty || 0)) + Math.max(0, Number(product._meliGenericTitlePenalty || 0)) + Math.max(0, Number(product._meliCategoryPenalty || 0));
+    const meliHardPenalty = Math.max(0, Number(product._meliAccessoryPenalty || 0)) + Math.max(0, Number(product._meliGameContentPenalty || 0)) + Math.max(0, Number(product._meliGenericTitlePenalty || 0)) + Math.max(0, Number(product._meliCategoryPenalty || 0));
     const priceConfidence = Math.min(1, Math.max(0, Number(product.priceConfidence || 0)));
     const matchScore = Math.min(1, Math.max(0, Number(product.matchScore || 0)));
     const modelMatchScore = Math.min(1, Math.max(0, Number(product._modelMatchScore != null ? product._modelMatchScore : 0.55)));
@@ -239,6 +239,11 @@ function buildBestBuyScore(product = {}, deepMode = false) {
     const trustScore = product.storeTier === 1 ? 1 : product.storeTier === 2 ? 0.72 : 0.38;
     const availabilityScore = product.isPotentiallyUnavailable ? 0.2 : (product.hasStockSignal ? 1 : 0.62);
     const ephemeralPenalty = product.hasEphemeralRedirect && !product.hasStockSignal && product.priceConfidence < 0.5 ? 0.22 : (product.hasEphemeralRedirect ? 0.08 : 0);
+    const titleText = String(product.titulo || product.title || '').toLowerCase();
+    const queryText = String(product.query || product.searchQuery || product.originalQuery || '').toLowerCase();
+    const productCategory = String(product.productCategory || '').toLowerCase();
+    const queryLooksLikeConsoleSearch = productCategory === 'gaming' && /\b(xbox|series\s*[xs]|playstation|ps5|ps4|nintendo\s+switch|switch|steam\s*deck|consola)\b/i.test(queryText) && !/\b(juego|videojuego|game|bundle|pack|dlc|season\s+pass|codigo|c[oó]digo|key|gift\s*card|tarjeta\s+de\s+regalo)\b/i.test(queryText);
+    const gameContentPenalty = !isVerifiedMeliApi && queryLooksLikeConsoleSearch && /\b(juego|videojuego|game\s+pass|game\s+key|gift\s*card|tarjeta\s+de\s+regalo|season\s+pass|dlc|expansi[oó]n|expansion|moneda\s+virtual|skin|c[oó]digo\s+digital|digital\s+key|c[oó]digo\s+de\s+activaci[oó]n|codigo\s+de\s+activacion)\b/i.test(titleText) ? 0.3 : 0;
     const shippingScore = product.shippingText
         ? (/env[ií]o gratis|llega hoy|llega ma[ñn]ana|same day|free shipping|arrives? tomorrow/i.test(String(product.shippingText)) ? 1 : 0.72)
         : 0.55;
@@ -259,6 +264,7 @@ function buildBestBuyScore(product = {}, deepMode = false) {
         + (!hasPurchasableSignal ? 0.18 : 0)
         + (isInformational ? 0.4 : 0)
         + (!product.isLocalStore && !product.precio && !product.price && !product.shippingText ? 0.16 : 0)
+        + gameContentPenalty
         + meliHardPenalty;
 
     if (deepMode) {
@@ -1907,6 +1913,8 @@ exports.searchProduct = async (req, res) => {
                 imagen: product.imagen || product.image || '',
                 currency: product.currency || regionCfg.currency,
                 countryCode: product.countryCode || countryCode,
+                originalQuery: product.originalQuery || shoppingBaseQuery || searchQuery,
+                productCategory: product.productCategory || llmAnalysis.productCategory || '',
                 _clonePenalty: clonePenalty,
                 _modelMatchScore: modelMatchScore,
                 _qualityFlags: qualityFlags

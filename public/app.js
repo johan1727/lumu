@@ -5193,13 +5193,18 @@ async function initApp() {
             const isUser = sender === 'user';
 
             const innerClass = isUser
-                ? 'bg-emerald-50 text-emerald-950 border border-emerald-100 rounded-[1.5rem] rounded-tr-sm px-5 py-3.5 shadow-sm max-w-[85%] sm:max-w-[75%]'
-                : 'bg-white/95 dark:bg-slate-800/95 text-slate-800 dark:text-slate-100 rounded-[1.5rem] rounded-tl-sm px-5 py-3.5 shadow-sm border border-slate-100 dark:border-slate-700/60 relative group backdrop-blur-sm max-w-[85%] sm:max-w-[75%]';
+                ? 'bg-emerald-50 text-emerald-950 border border-emerald-100 rounded-[1.5rem] rounded-tr-sm px-5 py-3.5 shadow-sm max-w-[90%] sm:max-w-[82%] lg:max-w-[78%]'
+                : 'bg-white/95 dark:bg-slate-800/95 text-slate-800 dark:text-slate-100 rounded-[1.5rem] rounded-tl-sm px-5 py-3.5 shadow-sm border border-slate-100 dark:border-slate-700/60 relative group backdrop-blur-sm max-w-[90%] sm:max-w-[82%] lg:max-w-[78%]';
 
             const iconHtml = isUser ? '' : `
                 <div class="flex-shrink-0 mr-3 mt-1 relative">
-                    <div class="bg-emerald-500 shadow-md shadow-emerald-500/20 rounded-2xl h-10 w-10 flex items-center justify-center text-white ring-2 ring-white dark:ring-slate-800">
-                        <svg class="w-5 h-5 drop-shadow-sm" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M13 10V3L4 14h7v7l9-11h-7z" /></svg>
+                    <div class="bg-gradient-to-br from-emerald-500 to-green-500 shadow-[0_10px_24px_rgba(16,185,129,0.24)] rounded-2xl h-10 w-10 flex items-center justify-center text-white ring-2 ring-white dark:ring-slate-800 overflow-hidden">
+                        <svg class="w-5 h-5 drop-shadow-sm" viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+                            <path d="M10 18h28l-3 22H13L10 18z" stroke="currentColor" stroke-width="2.5" stroke-linejoin="round" fill="none" />
+                            <path d="M17 18V14a7 7 0 0114 0v4" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" fill="none" />
+                            <path d="M18 30c0-2 1.5-3 3-3s3 1.5 3 3-1.5 3-3 3-3-1-3-3zm6 0c0-2 1.5-3 3-3s3 1.5 3 3-1.5 3-3 3-3-1-3-3z" stroke="currentColor" stroke-width="2" stroke-linecap="round" fill="none" />
+                            <path d="M36 10l.8 2L39 12.8l-2.2.8-.8 2.2-.8-2.2-2.2-.8 2.2-.8z" fill="currentColor" opacity="0.95" />
+                        </svg>
                     </div>
                     <span class="absolute -bottom-0.5 -right-0.5 w-3 h-3 bg-emerald-400 rounded-full border-2 border-white dark:border-slate-800 animate-pulse"></span>
                 </div>`;
@@ -5407,11 +5412,16 @@ async function initApp() {
 
             wrapper.innerHTML = `
                 <div class="flex-shrink-0 mr-3 mt-1">
-                    <div class="bg-emerald-500 shadow-md shadow-emerald-500/20 rounded-2xl h-10 w-10 flex items-center justify-center text-white ring-2 ring-white dark:ring-slate-800">
-                        <svg class="w-5 h-5 drop-shadow-sm" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z"/></svg>
+                    <div class="bg-gradient-to-br from-emerald-500 to-green-500 shadow-[0_10px_24px_rgba(16,185,129,0.24)] rounded-2xl h-10 w-10 flex items-center justify-center text-white ring-2 ring-white dark:ring-slate-800 overflow-hidden">
+                        <svg class="w-5 h-5 drop-shadow-sm" viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+                            <path d="M10 18h28l-3 22H13L10 18z" stroke="currentColor" stroke-width="2.5" stroke-linejoin="round" fill="none" />
+                            <path d="M17 18V14a7 7 0 0114 0v4" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" fill="none" />
+                            <path d="M18 30c0-2 1.5-3 3-3s3 1.5 3 3-1.5 3-3 3-3-1-3-3zm6 0c0-2 1.5-3 3-3s3 1.5 3 3-1.5 3-3 3-3-1-3-3z" stroke="currentColor" stroke-width="2" stroke-linecap="round" fill="none" />
+                            <path d="M36 10l.8 2L39 12.8l-2.2.8-.8 2.2-.8-2.2-2.2-.8 2.2-.8z" fill="currentColor" opacity="0.95" />
+                        </svg>
                     </div>
                 </div>
-                <div class="bg-white/95 dark:bg-slate-800/95 rounded-[1.5rem] rounded-tl-sm shadow-sm border border-slate-100 dark:border-slate-700/60 backdrop-blur-sm max-w-[92%] sm:max-w-[85%] overflow-hidden">
+                <div class="bg-white/95 dark:bg-slate-800/95 rounded-[1.5rem] rounded-tl-sm shadow-sm border border-slate-100 dark:border-slate-700/60 backdrop-blur-sm max-w-[94%] sm:max-w-[88%] lg:max-w-[82%] overflow-hidden">
                     <div class="px-4 pt-3.5 pb-2 flex items-center justify-between border-b border-slate-100 dark:border-slate-700/40">
                         <div class="flex items-center gap-2">
                             <span class="text-xs font-black text-emerald-600 uppercase tracking-wider">Top ${products.length > 5 ? 5 : products.length} mejores precios</span>
@@ -6055,6 +6065,12 @@ async function initApp() {
                 // Local store: price can be null
                 const isLocal = product.isLocalStore;
                 const hasUsableOnlinePrice = !isLocal && precioNumerico > 0;
+                const originalPriceNumeric = parseProductPriceValue(product.originalPrice || 0);
+                const hasStructuredDeal = !isLocal
+                    && Boolean(product.isDealPrice)
+                    && Number.isFinite(originalPriceNumeric)
+                    && originalPriceNumeric > precioNumerico;
+                const discountPct = Number(product.discountPct || 0);
                 let priceDisplay;
                 if (isLocal) {
                     priceDisplay = `<span class="text-base md:text-lg font-black text-amber-600">${isUS ? 'Check in-store price' : 'Ver precio en tienda'}</span>`;
@@ -6071,6 +6087,13 @@ async function initApp() {
                     const explicitCurrencyCode = getProductCurrencyCode(product);
                     
                     priceDisplay = `<span class="text-xs md:text-sm font-bold text-slate-500">${currencySymbol}</span><span class="text-[1.7rem] md:text-3xl font-black text-slate-900 leading-none">${integerPart}</span><span class="text-xs md:text-sm font-bold text-slate-900">.${decimalPart}</span><span class="ml-2 text-[10px] md:text-xs font-black uppercase tracking-[0.18em] text-slate-400">${explicitCurrencyCode}</span>`;
+                    if (hasStructuredDeal) {
+                        const originalPriceLabel = formatCurrencyByCode(originalPriceNumeric, String(product.countryCode || product.country || product.region || currentRegion || 'MX').trim().toUpperCase());
+                        priceDisplay += `<span class="ml-1 text-xs md:text-sm font-bold text-slate-400 line-through decoration-2 decoration-slate-300">${originalPriceLabel}</span>`;
+                        if (discountPct > 0) {
+                            priceDisplay += `<span class="ml-2 inline-flex items-center rounded-full bg-rose-50 px-2 py-0.5 text-[10px] md:text-xs font-black uppercase tracking-wider text-rose-700 ring-1 ring-rose-200">-${discountPct}%</span>`;
+                        }
+                    }
                     
                     if (product.isSuspicious) {
                         priceDisplay += `<div class="mt-2 inline-flex items-center gap-1.5 px-2 py-1 rounded-md bg-rose-50 border border-rose-200 text-rose-700 text-[10px] font-black uppercase tracking-wider tooltip" data-tip="${isUS ? 'The price is unusually low compared to the market' : 'El precio es anormalmente bajo comparado con el mercado'}"><span class="text-xs">⚠️</span> ${isUS ? 'SUSPICIOUS' : 'SOSPECHOSO'}</div>`;
@@ -6215,27 +6238,6 @@ async function initApp() {
                     }
                 }
 
-                // Fase 6: FOMO Timer
-                let fomoHtml = '';
-                if (!isLocal && precioNumerico > 0) {
-                    let hash = 0;
-                    const str = sanitize(product.titulo || 'lumu');
-                    for (let i = 0; i < str.length; i++) hash = str.charCodeAt(i) + ((hash << 5) - hash);
-                    const hours = (Math.abs(hash) % 11) + 1;
-                    const mins = Math.abs(hash >> 2) % 60;
-                    const secs = Math.abs(hash >> 4) % 60;
-                    const pad = (n) => n.toString().padStart(2, '0');
-                    fomoHtml = `
-                    <div class="mt-2 w-full flex items-center justify-between p-2 bg-gradient-to-r from-rose-50 to-orange-50 border border-rose-100/60 rounded-xl relative overflow-hidden group">
-                        <div class="absolute inset-0 bg-[url('data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjAiIGhlaWdodD0iMjAiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+PGNpcmNsZSBjeD0iMiIgY3k9IjIiIHI9IjIiIGZpbGw9IiNmZWMwYTIiIGZpbGwtb3BhY2l0eT0iMC4yIi8+PC9zdmc+')] opacity-50"></div>
-                        <span class="text-[10px] font-black text-rose-600 uppercase tracking-widest flex items-center gap-1.5 relative z-10">
-                            <svg class="w-3.5 h-3.5 animate-pulse text-rose-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
-                            ${isUS ? 'Ends in' : 'Expira en'}
-                        </span>
-                        <span class="text-[11px] font-mono font-bold text-rose-700 bg-white/80 backdrop-blur px-2 py-0.5 rounded-md shadow-sm border border-rose-100/80 relative z-10">${pad(hours)}h ${pad(mins)}m ${pad(secs)}s</span>
-                    </div>`;
-                }
-
                 // Local store extra details
                 const localMeta = product.localDetails || {};
                 const localDetailHtml = isLocal ? `
@@ -6303,12 +6305,21 @@ async function initApp() {
                 // Price confidence warning
                 const priceConfidence = Number(product.priceConfidence || 0);
                 const priceNeedsVerification = Boolean(product.priceNeedsVerification);
+                const observedPrices = Array.isArray(product.observedPrices)
+                    ? product.observedPrices.map(value => Number(value)).filter(value => Number.isFinite(value) && value > 0)
+                    : [];
+                const observedMinPrice = observedPrices.length > 0 ? Math.min(...observedPrices) : null;
+                const observedMaxPrice = observedPrices.length > 1 ? Math.max(...observedPrices) : null;
                 let priceWarningHtml = '';
+                let observedRangeHtml = '';
                 if (!isLocal && precioNumerico > 0) {
                     if (priceConfidence < 0.6) {
-                        priceWarningHtml = `<span class="text-[9px] font-bold text-amber-700 bg-amber-50 px-2 py-0.5 rounded-full ring-1 ring-amber-200" title="${isUS ? 'Approximate price - verify in store' : 'Precio aproximado - verificar en tienda'}">⚠️ ${isUS ? 'APPROX' : 'APROX'}</span>`;
-                    } else if (priceNeedsVerification) {
+                        priceWarningHtml = `<span class="text-[9px] font-bold text-amber-800 bg-amber-50 px-2 py-0.5 rounded-full ring-1 ring-amber-200" title="${isUS ? 'Approximate price detected - open the store to verify the final amount' : 'Precio aproximado detectado - abre la tienda para confirmar el monto final'}">⚠️ ${isUS ? 'VERIFY PRICE' : 'VER PRECIO REAL'}</span>`;
+                    } else if (priceNeedsVerification && !hasStructuredDeal) {
                         priceWarningHtml = `<span class="text-[9px] font-bold text-slate-600 bg-slate-100 px-2 py-0.5 rounded-full ring-1 ring-slate-200" title="${isUS ? 'Verify final price in store' : 'Verificar precio final en tienda'}">ℹ️ ${isUS ? 'VERIFY' : 'VERIFICAR'}</span>`;
+                    }
+                    if (priceNeedsVerification && observedMinPrice && observedMaxPrice && observedMaxPrice > observedMinPrice) {
+                        observedRangeHtml = `<div class="mt-2 inline-flex items-center gap-1.5 text-[11px] font-bold text-amber-700 bg-amber-50 px-2.5 py-1 rounded-lg ring-1 ring-amber-200 shadow-sm">🔎 <span>${isUS ? 'Seen between' : 'Visto entre'} ${formatCurrencyByCode(observedMinPrice, String(product.countryCode || product.country || product.region || currentRegion || 'MX').trim().toUpperCase())} ${isUS ? 'and' : 'y'} ${formatCurrencyByCode(observedMaxPrice, String(product.countryCode || product.country || product.region || currentRegion || 'MX').trim().toUpperCase())}</span></div>`;
                     }
                 }
                 const verifiedDeltaLabel = product.verifiedPriceDelta?.label
@@ -6367,11 +6378,11 @@ async function initApp() {
                         <div class="flex items-baseline gap-0.5 mb-1 flex-wrap">
                             ${priceDisplay}
                         </div>
+                        ${observedRangeHtml}
                         ${verifiedPriceBadgeHtml}
                         ${trendHtml}
                         ${dealVerdictHtml}
                         ${historyInsightHtml}
-                        ${fomoHtml}
                         ${couponHtml}
                         
                         <div class="flex flex-col gap-2 mt-3 w-full">
