@@ -1491,6 +1491,7 @@ exports.searchProduct = async (req, res) => {
 
         const rawIntentQuery = String(llmAnalysis.searchQuery || query || '').trim();
         const isBroadBrowseIntent = isBrowseOrMultiCategoryIntent(rawIntentQuery);
+        const isCategoryOnlyPhrase = /^(para|de|algo para|productos para|cosas para|articulos para)\s+[a-z0-9áéíóúñü\s]+$/i.test(rawIntentQuery);
         const universalShoppingLike = llmAnalysis.universalQueryDomain === 'shopping' || llmAnalysis.universalQueryDomain === 'service_local';
         const lacksSearchDirection = !rawIntentQuery || (
             !llmAnalysis.productCategory &&
@@ -1502,6 +1503,7 @@ exports.searchProduct = async (req, res) => {
             isWeakCommerceIntent(rawIntentQuery) ||
             (!universalShoppingLike) ||
             llmAnalysis.needsDisambiguation ||
+            isCategoryOnlyPhrase ||
             (isBroadBrowseIntent && lacksSearchDirection && llmAnalysis.universalQueryDomain !== 'shopping') ||
             (llmAnalysis.isComparison && (!Array.isArray(llmAnalysis.comparisonProducts) || llmAnalysis.comparisonProducts.length === 0));
 
@@ -1921,8 +1923,11 @@ exports.searchProduct = async (req, res) => {
             };
         });
 
+        const queryStructuredTokens = extractStructuredProductTokens(searchQuery);
+        const isVagueQuery = tokenizeSearchText(searchQuery).length <= 3 && queryStructuredTokens.length === 0;
         const qualityFilteredResults = shoppingResults.filter(product => {
-            if (product._clonePenalty >= 0.5 && product._modelMatchScore <= 0.25) return false;
+            if (isVagueQuery) return true;
+            if (product._clonePenalty >= 0.65 && product._modelMatchScore <= 0.15) return false;
             return true;
         });
 

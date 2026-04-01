@@ -419,6 +419,9 @@ function isResultSellable(result = {}) {
     const hasSnippetPrice = Number.isFinite(extractSnippetPrice(snippet) ?? extractSnippetPrice(title));
     const isTrustedResult = isKnownMarketplace || result.isKnownStoreDomain || result.isDirectProductPage || result.isOfficialBrandResult;
     if (!isTrustedResult && !hasResolvedPrice && !hasSnippetPrice) return false;
+    if (result.resultSource === 'shopping_api') {
+        return !looksGenericListingTitleLocal(result);
+    }
     return !looksLikeGarbageTitleLocal(result.title || '') && !looksGenericListingTitleLocal(result);
 }
 
@@ -1374,7 +1377,15 @@ exports.searchGoogleShopping = async (query, radius, lat, lng, intentType, abort
     const seenUrls = new Set();
     const seenMeliItemIds = new Set();
     [...serperResults, ...directResults].map(applyResultMetadata).forEach(result => {
-        const key = String(result?.url || '').split('?')[0].toLowerCase();
+        const normalizedUrl = String(result?.url || '').trim().toLowerCase();
+        const isGoogleShoppingRedirect = result?.resultSource === 'shopping_api' || /google\.com\/search/i.test(normalizedUrl);
+        const key = isGoogleShoppingRedirect
+            ? [
+                String(result?.source || '').trim().toLowerCase(),
+                String(result?.title || '').trim().toLowerCase(),
+                Number.isFinite(Number(result?.price)) ? Number(result.price).toFixed(2) : 'noprice'
+            ].join('|')
+            : normalizedUrl.split('?')[0];
         const meliItemId = String(result?._meliItemId || '').trim();
         if (meliItemId && seenMeliItemIds.has(meliItemId)) {
             return;
@@ -1392,11 +1403,11 @@ exports.searchGoogleShopping = async (query, radius, lat, lng, intentType, abort
         countryCode
     );
     const mlByKey = new Map(rerankedMergedMeli.map(result => [String(result?._meliItemId || result?.url || '').toLowerCase(), result]));
-    const sortedResults = dedupedByUrl
-        .map(result => mlByKey.get(String(result?._meliItemId || result?.url || '').toLowerCase()) || result)
-        .filter(isResultSellable)
-        .filter(result => !(result._meliHardRejected && result.resultSource === 'meli_api'))
-        .filter(result => {
+    const mergedResults = dedupedByUrl
+        .map(result => mlByKey.get(String(result?._meliItemId || result?.url || '').toLowerCase()) || result);
+    const sellableResults = mergedResults.filter(isResultSellable);
+    const nonRejectedResults = sellableResults.filter(result => !(result._meliHardRejected && result.resultSource === 'meli_api'));
+    const validResultShape = nonRejectedResults.filter(result => {
             // Reject results with invalid or missing URLs
             const url = String(result?.url || '').trim();
             if (!url || /^(undefined|null|#|javascript:|about:)$/i.test(url)) {
@@ -1421,7 +1432,9 @@ exports.searchGoogleShopping = async (query, radius, lat, lng, intentType, abort
                 }
             }
             return true;
-        })
+        });
+    console.log(`[ShoppingService][Counts] query="${String(query || '').slice(0, 80)}" serper=${serperResults.length} direct=${directResults.length} dedup=${dedupedByUrl.length} merged=${mergedResults.length} sellable=${sellableResults.length} nonRejected=${nonRejectedResults.length} valid=${validResultShape.length}`);
+    const sortedResults = validResultShape
         .sort((a, b) => {
             const aHasPrice = Number.isFinite(Number(a.price)) && Number(a.price) > 0;
             const bHasPrice = Number.isFinite(Number(b.price)) && Number(b.price) > 0;
