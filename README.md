@@ -209,8 +209,8 @@ https://tu-dominio.vercel.app/api/stripe/webhook
 ## 📊 Rate Limits
 
 - **Plan Gratis:** 3 búsquedas/día
-- **Plan VIP:** 500 búsquedas/mes
-- **Plan B2B:** 5000 búsquedas/mes
+- **Plan VIP:** 40 búsquedas/mes
+- **Plan B2B:** 200 búsquedas/mes
 - **Rate limit global:** 10 requests/min por IP
 
 ## 🔧 Scripts Disponibles

@@ -15,6 +15,7 @@ const analyticsController = require('../controllers/analyticsController');
 const priceHistoryController = require('../controllers/priceHistoryController');
 const autocompleteController = require('../controllers/autocompleteController');
 const supplierChecker = require('../services/supplierChecker');
+const meliService = require('../services/meliService');
 
 // --- Anti-burst rate limiter por IP (in-memory, serverless-safe) ---
 // Bloquea IPs que envían más de BURST_MAX requests en BURST_WINDOW_MS a /api/buscar
@@ -100,6 +101,22 @@ router.post('/track', authMiddleware, validateBody(trackEventSchema), analyticsC
 
 // GET /api/price-history — Public price trends (cached)
 router.get('/price-history', priceHistoryController.getPriceHistory);
+
+router.get('/deals', async (req, res) => {
+    try {
+        const country = String(req.query.country || req.app?.locals?.detectedCountry || 'MX').trim().toUpperCase();
+        const deals = await meliService.getFlashDeals(country, 8);
+        res.set('Cache-Control', 'public, max-age=1800');
+        res.json({
+            ok: true,
+            country,
+            deals
+        });
+    } catch (error) {
+        console.error('[Deals API] Error loading deals:', error.message);
+        res.status(500).json({ ok: false, deals: [], error: 'No se pudieron cargar las ofertas.' });
+    }
+});
 
 // POST /api/buscar — authMiddleware verifies JWT and sets req.userId
 router.post('/buscar', burstRateLimiter, authMiddleware, validateBody(searchProductSchema), searchController.searchProduct);

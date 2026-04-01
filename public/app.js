@@ -4,6 +4,7 @@ let supabaseClient = null;
 let stripePaymentLink = null;
 let currentUser = null;
 let _allProducts = [];
+let latestFlashDealsRequestId = 0;
 
 function trackMetaEventSafe(eventName, params = {}) {
     if (typeof window.trackMetaEvent === 'function') {
@@ -1404,6 +1405,113 @@ function formatProductPriceLabel(amount, product = {}) {
     return `${formatted} ${currencyCode}`.trim();
 }
 
+function getFlashDealsLoadingMarkup() {
+    return Array.from({ length: 4 }).map(() => `
+        <div class="w-64 flex-shrink-0 snap-start sm:w-auto rounded-2xl border border-slate-200 bg-white p-4 shadow-sm animate-pulse">
+            <div class="aspect-[4/3] rounded-xl bg-slate-100 mb-4"></div>
+            <div class="h-3 w-16 rounded bg-slate-100 mb-2"></div>
+            <div class="h-4 w-full rounded bg-slate-100 mb-2"></div>
+            <div class="h-4 w-4/5 rounded bg-slate-100 mb-3"></div>
+            <div class="h-6 w-24 rounded bg-slate-100 mb-2"></div>
+            <div class="h-9 w-full rounded-full bg-slate-100"></div>
+        </div>
+    `).join('');
+}
+
+function triggerFlashDealSearch(query = '') {
+    const normalizedQuery = String(query || '').trim();
+    if (!normalizedQuery || !searchInput || !searchForm) return;
+    searchInput.value = normalizedQuery;
+    searchInput.focus();
+    searchForm.dispatchEvent(new Event('submit', { cancelable: true, bubbles: true }));
+}
+
+function renderFlashDeals(deals = []) {
+    const flashDealsGrid = document.getElementById('flash-deals-grid');
+    const flashDealsSection = document.getElementById('flash-deals-section');
+    if (!flashDealsGrid || !flashDealsSection) return;
+
+    if (!Array.isArray(deals) || deals.length === 0) {
+        flashDealsSection.classList.add('hidden');
+        flashDealsGrid.innerHTML = '';
+        return;
+    }
+
+    flashDealsSection.classList.remove('hidden');
+    flashDealsGrid.innerHTML = deals.map((deal) => {
+        const safeTitle = sanitize(deal.title || 'Oferta');
+        const safeSource = sanitize(deal.source || 'Mercado Libre');
+        const safeImage = sanitize(deal.image || '/logo.png');
+        const currentPrice = formatProductPriceLabel(deal.price || 0, deal);
+        const originalPrice = deal.originalPrice ? formatProductPriceLabel(deal.originalPrice, deal) : '';
+        const metaLabel = deal.shipping
+            ? (currentRegion === 'US' ? 'Free shipping' : deal.shipping)
+            : (currentRegion === 'US' ? 'Verified deal today' : 'Oferta verificada hoy');
+
+        return `
+            <article class="w-64 flex-shrink-0 snap-start sm:w-auto bg-white rounded-2xl p-4 border border-slate-200 shadow-sm hover:shadow-xl hover:-translate-y-1 transition-all duration-300 group">
+                <div class="relative w-full aspect-[4/3] bg-slate-50/80 rounded-xl mb-4 flex items-center justify-center overflow-hidden p-4 cursor-pointer" data-flash-deal-query="${safeTitle}">
+                    <div class="absolute top-2 left-2 bg-rose-500 text-white text-[10px] font-black px-2.5 py-1 rounded-full z-10 shadow-sm tracking-[0.14em] uppercase">-${Math.max(1, Number(deal.discountPct || 0))}%</div>
+                    <img src="${safeImage}" alt="${safeTitle}" referrerpolicy="no-referrer" loading="lazy"
+                        class="w-full h-full object-contain group-hover:scale-110 transition-transform duration-500 drop-shadow-md"
+                        onerror="this.onerror=null; this.src='/logo.png';">
+                </div>
+                <div class="text-[10px] uppercase font-bold text-slate-400 mb-1 tracking-widest">${safeSource}</div>
+                <h4 class="font-bold text-slate-800 text-sm mb-3 line-clamp-2 leading-tight group-hover:text-emerald-700 transition-colors min-h-[2.5rem] cursor-pointer" data-flash-deal-query="${safeTitle}">${safeTitle}</h4>
+                <div class="flex items-end gap-2 mb-1 flex-wrap">
+                    <span class="text-2xl font-black text-slate-900">${currentPrice}</span>
+                    ${originalPrice ? `<span class="text-xs font-bold text-slate-400 line-through mb-1">${originalPrice}</span>` : ''}
+                </div>
+                <div class="text-[11px] ${deal.shipping ? 'text-emerald-600 bg-emerald-50' : 'text-blue-600 bg-blue-50'} font-bold w-fit px-2 py-0.5 rounded-md mt-2 tracking-wide">${sanitize(metaLabel)}</div>
+                <button type="button" class="mt-4 w-full rounded-full bg-slate-900 text-white font-black text-[11px] uppercase tracking-[0.16em] px-4 py-3 hover:bg-emerald-600 transition-colors" data-flash-deal-query="${safeTitle}">⚡ ${currentRegion === 'US' ? 'Find cheaper price' : 'Buscar precio más barato'}</button>
+            </article>
+        `;
+    }).join('');
+}
+
+async function loadFlashDeals(options = {}) {
+    const flashDealsGrid = document.getElementById('flash-deals-grid');
+    const flashDealsSection = document.getElementById('flash-deals-section');
+    const flashDealsButton = document.getElementById('flash-deals-view-all');
+    if (!flashDealsGrid || !flashDealsSection) return;
+
+    const supportedRegions = ['MX', 'US', 'CL', 'CO', 'AR', 'PE', 'BR'];
+    if (!supportedRegions.includes(String(currentRegion || 'MX').toUpperCase())) {
+        flashDealsSection.classList.add('hidden');
+        return;
+    }
+
+    const requestId = ++latestFlashDealsRequestId;
+    flashDealsSection.classList.remove('hidden');
+    flashDealsGrid.innerHTML = getFlashDealsLoadingMarkup();
+    if (flashDealsButton) {
+        flashDealsButton.disabled = true;
+        flashDealsButton.classList.add('opacity-60', 'pointer-events-none');
+    }
+
+    try {
+        const cacheBust = options.force ? `&t=${Date.now()}` : '';
+        const response = await fetch(`/api/deals?country=${encodeURIComponent(currentRegion || 'MX')}${cacheBust}`);
+        const payload = await response.json().catch(() => ({ deals: [] }));
+        if (requestId !== latestFlashDealsRequestId) return;
+        if (!response.ok) {
+            throw new Error(payload.error || 'deals_error');
+        }
+        renderFlashDeals(Array.isArray(payload.deals) ? payload.deals.slice(0, 8) : []);
+    } catch (error) {
+        console.error('Flash deals error:', error);
+        if (requestId === latestFlashDealsRequestId) {
+            flashDealsSection.classList.add('hidden');
+            flashDealsGrid.innerHTML = '';
+        }
+    } finally {
+        if (requestId === latestFlashDealsRequestId && flashDealsButton) {
+            flashDealsButton.disabled = false;
+            flashDealsButton.classList.remove('opacity-60', 'pointer-events-none');
+        }
+    }
+}
+
 function getStoredOnboardingPreference() {
     return String(localStorage.getItem(ONBOARDING_PREF_KEY) || '').trim().toLowerCase();
 }
@@ -1827,8 +1935,19 @@ function applyRegionalCopy() {
     }
 
     const flashDealsSection = document.getElementById('flash-deals-section');
+    const flashDealsLivePill = document.getElementById('flash-deals-live-pill');
+    const flashDealsRefreshButton = document.getElementById('flash-deals-view-all');
     if (flashDealsSection) {
-        flashDealsSection.classList.toggle('hidden', !['MX', 'US'].includes(currentRegion));
+        flashDealsSection.classList.toggle('hidden', !['MX', 'US', 'CL', 'CO', 'AR', 'PE', 'BR'].includes(currentRegion));
+    }
+    if (flashDealsLivePill) {
+        flashDealsLivePill.textContent = isEnglish ? '🔴 Live · Today' : '🔴 En vivo · Hoy';
+    }
+    if (flashDealsRefreshButton) {
+        flashDealsRefreshButton.textContent = isEnglish ? 'Refresh' : 'Actualizar';
+    }
+    if (document.getElementById('flash-deals-grid')) {
+        loadFlashDeals();
     }
 
     document.querySelectorAll('.region-option-btn').forEach((button) => {
@@ -3048,9 +3167,24 @@ async function initApp() {
         const conditionChips = document.querySelectorAll('[data-condition]');
         applyRegionalCopy();
         applyOnboardingPreference(getStoredOnboardingPreference());
+        loadFlashDeals();
         const categoryBtns = document.querySelectorAll('[data-macro-category]');
         const btnLoginHeader = document.getElementById('btn-login');
         const homeLogoLink = document.getElementById('home-logo-link');
+        const flashDealsGrid = document.getElementById('flash-deals-grid');
+        const flashDealsRefreshButton = document.getElementById('flash-deals-view-all');
+
+        if (flashDealsGrid) {
+            flashDealsGrid.addEventListener('click', (event) => {
+                const target = event.target.closest('[data-flash-deal-query]');
+                if (!target) return;
+                const query = target.getAttribute('data-flash-deal-query') || '';
+                triggerFlashDealSearch(query);
+            });
+        }
+        if (flashDealsRefreshButton) {
+            flashDealsRefreshButton.addEventListener('click', () => loadFlashDeals({ force: true }));
+        }
 
         // --- RIPPLE EFFECT ---
         function initRippleButtons() {
@@ -4910,6 +5044,29 @@ async function initApp() {
 
                     if (data.top_5_baratos && data.top_5_baratos.length > 0) {
                         await renderProducts(data.top_5_baratos);
+                        if (data.ai_pick && resultsContainer) {
+                            const aiPickCard = document.createElement('div');
+                            const aiPickText = sanitize(String(data.ai_pick.recommendation || data.ai_pick.reasoning || '').trim().slice(0, 220));
+                            const aiPickComparison = sanitize(String(data.ai_pick.price_comparison || '').trim().slice(0, 140));
+                            aiPickCard.className = 'col-span-full mb-4 rounded-3xl border border-emerald-200 bg-gradient-to-r from-emerald-50 via-white to-emerald-50 px-5 py-4 shadow-sm';
+                            aiPickCard.innerHTML = `
+                                <div class="flex items-start gap-3">
+                                    <div class="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-2xl bg-emerald-500 text-white shadow-md shadow-emerald-500/20">
+                                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M13 10V3L4 14h7v7l9-11h-7z" /></svg>
+                                    </div>
+                                    <div class="min-w-0">
+                                        <div class="flex flex-wrap items-center gap-2">
+                                            <span class="inline-flex items-center rounded-full bg-emerald-100 px-2.5 py-1 text-[11px] font-black uppercase tracking-wide text-emerald-700">${getLocalizedText('Recomendación IA', 'AI Pick')}</span>
+                                            ${Number.isFinite(Number(data.ai_pick.best_option_rank)) ? `<span class="text-xs font-bold text-emerald-700">${getLocalizedText(`Top #${Number(data.ai_pick.best_option_rank)}`, `Top #${Number(data.ai_pick.best_option_rank)}`)}</span>` : ''}
+                                        </div>
+                                        <p class="mt-2 text-sm font-semibold leading-relaxed text-slate-800">${aiPickText}</p>
+                                        ${aiPickComparison ? `<p class="mt-1 text-xs font-medium text-slate-500">${aiPickComparison}</p>` : ''}
+                                    </div>
+                                </div>
+                            `;
+                            resultsContainer.insertBefore(aiPickCard, resultsContainer.firstChild);
+                            observeSearchFlowElement(aiPickCard, 0);
+                        }
                         if (window.innerWidth < 768) {
                             resultsWrapper.scrollIntoView({ behavior: 'smooth', block: 'start' });
                         }

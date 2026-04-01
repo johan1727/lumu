@@ -20,6 +20,106 @@ const activeCoupons = [
         verified: true,
         source_url: 'https://www.elektra.com.mx/',
         disclaimer: 'Verifica vigencia y categorías participantes directamente en la tienda.'
+    },
+    {
+        store: 'amazon',
+        code: 'MSI AMAZON',
+        discount: 'Promociones frecuentes con meses sin intereses y ofertas relámpago en productos seleccionados',
+        expires_at: '2026-04-30',
+        country: 'MX',
+        verified: true,
+        source_url: 'https://www.amazon.com.mx/',
+        disclaimer: 'Verifica vigencia, banco participante y monto mínimo directamente en Amazon.'
+    },
+    {
+        store: 'walmart',
+        code: 'APP WALMART',
+        discount: 'Descuentos exclusivos en app y campañas activas de Walmart',
+        expires_at: '2026-04-30',
+        country: 'MX',
+        verified: true,
+        source_url: 'https://www.walmart.com.mx/',
+        disclaimer: 'Verifica vigencia y productos participantes directamente en la tienda.'
+    },
+    {
+        store: 'liverpool',
+        code: 'APP LIVERPOOL',
+        discount: 'Promociones exclusivas de app y descuentos temporales en categorías seleccionadas',
+        expires_at: '2026-04-30',
+        country: 'MX',
+        verified: true,
+        source_url: 'https://www.liverpool.com.mx/',
+        disclaimer: 'Verifica vigencia y restricciones directamente en Liverpool.'
+    },
+    {
+        store: 'best buy mx',
+        code: 'PROMO TECH',
+        discount: 'Promociones recurrentes en tecnología y accesorios seleccionados',
+        expires_at: '2026-04-30',
+        country: 'MX',
+        verified: true,
+        source_url: 'https://www.bestbuy.com.mx/',
+        disclaimer: 'Verifica disponibilidad y vigencia directamente en la tienda.'
+    },
+    {
+        store: 'shein mx',
+        code: 'SHEIN20',
+        discount: 'Hasta 20% de descuento en campañas y categorías participantes',
+        expires_at: '2026-04-30',
+        country: 'MX',
+        verified: true,
+        source_url: 'https://mx.shein.com/',
+        disclaimer: 'Verifica vigencia, mínimo de compra y exclusiones directamente en Shein.'
+    },
+    {
+        store: 'temu',
+        code: 'TEMU10',
+        discount: 'Descuento de bienvenida o promociones activas en productos seleccionados',
+        expires_at: '2026-04-30',
+        country: 'MX',
+        verified: true,
+        source_url: 'https://www.temu.com/',
+        disclaimer: 'Verifica elegibilidad de cuenta y restricciones directamente en Temu.'
+    },
+    {
+        store: "sam's club mx",
+        code: 'SOCIO SAMS',
+        discount: 'Beneficios y promociones exclusivas para socios en artículos participantes',
+        expires_at: '2026-04-30',
+        country: 'MX',
+        verified: true,
+        source_url: 'https://www.sams.com.mx/',
+        disclaimer: 'Verifica membresía requerida y vigencia directamente en Sam\'s Club.'
+    },
+    {
+        store: 'bodega aurrera',
+        code: 'APP BODEGA',
+        discount: 'Ofertas y descuentos visibles en app para productos seleccionados',
+        expires_at: '2026-04-30',
+        country: 'MX',
+        verified: true,
+        source_url: 'https://www.bodegaaurrera.com.mx/',
+        disclaimer: 'Verifica vigencia y cobertura directamente en la tienda.'
+    },
+    {
+        store: 'linio mx',
+        code: 'LINIO10',
+        discount: 'Descuentos estacionales y promociones activas en artículos participantes',
+        expires_at: '2026-04-30',
+        country: 'MX',
+        verified: true,
+        source_url: 'https://www.linio.com.mx/',
+        disclaimer: 'Verifica vigencia y monto mínimo directamente en Linio.'
+    },
+    {
+        store: 'claro shop',
+        code: 'CLARO10',
+        discount: 'Cupones recurrentes y campañas temporales en productos seleccionados',
+        expires_at: '2026-04-30',
+        country: 'MX',
+        verified: true,
+        source_url: 'https://www.claroshop.com/',
+        disclaimer: 'Verifica vigencia y restricciones directamente en Claro Shop.'
     }
 ];
 
@@ -32,6 +132,13 @@ function normalizeStoreName(name) {
     if (lower.includes('aliexpress')) return 'aliexpress';
     if (lower.includes('coppel')) return 'coppel';
     if (lower.includes('elektra')) return 'elektra';
+    if (lower.includes('liverpool')) return 'liverpool';
+    if (lower.includes('best buy')) return 'best buy mx';
+    if (lower.includes('shein')) return 'shein mx';
+    if (lower.includes("sam's") || lower.includes('sams')) return "sam's club mx";
+    if (lower.includes('bodega aurrera')) return 'bodega aurrera';
+    if (lower.includes('linio')) return 'linio mx';
+    if (lower.includes('claro shop') || lower.includes('claroshop')) return 'claro shop';
     if (lower.includes('falabella')) return 'falabella';
     if (lower.includes('ripley')) return 'ripley';
     if (lower.includes('paris')) return 'paris';

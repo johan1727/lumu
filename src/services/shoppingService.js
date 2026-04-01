@@ -6,7 +6,7 @@ const regionConfigService = require('./regionConfigService');
 const meliService = require('./meliService');
 
 // Timeout por defecto para Serper API
-const SERPER_TIMEOUT = 6000;
+const SERPER_TIMEOUT = 12000;
 const SERPER_MAX_RETRIES = 1;
 const LOCAL_FAST_TIMEOUT = 4000;
 
@@ -776,13 +776,13 @@ exports.searchGoogleShopping = async (query, radius, lat, lng, intentType, abort
         // Flujo normal: Google Shopping + Web en PARALELO para máxima velocidad y variedad
         const skippedCalls = isSpecificProduct ? ' [COST-OPT: skipping broadWeb/officialWeb/mlPriority/altShopping]' : '';
         console.log(`[ShoppingService] Ejecutando Serper Shopping + Web para: "${shoppingQuery}" (${searchConditionMode}, queryType=${queryType})${skippedCalls}`);
-        const shoppingNum = deepSearchEnabled ? 100 : (isVipSearch ? 80 : 50);
-        const webNum = deepSearchEnabled ? (countryCode === 'US' ? 60 : 45) : (isVipSearch ? (countryCode === 'US' ? 50 : 35) : (countryCode === 'US' ? 30 : 20));
+        const shoppingNum = deepSearchEnabled ? 100 : (isVipSearch ? 100 : 80);
+        const webNum = deepSearchEnabled ? 100 : (isVipSearch ? 80 : 50);
         const broadWebNum = deepSearchEnabled ? 30 : (isVipSearch ? 20 : 10);
         const officialWebNum = deepSearchEnabled ? 30 : (isVipSearch ? 20 : 10);
         const marketplaceNum = deepSearchEnabled ? 30 : (isVipSearch ? 20 : 10);
         const mlPriorityNum = deepSearchEnabled ? 30 : (isVipSearch ? 20 : 12);
-        const altShoppingNum = deepSearchEnabled ? 50 : (isVipSearch ? 40 : (isBroadExploration ? 30 : 20));
+        const altShoppingNum = deepSearchEnabled ? 50 : (isVipSearch ? 40 : 30);
         
         const shoppingPromise = fetchWithRetry({
             method: 'post',
@@ -820,7 +820,7 @@ exports.searchGoogleShopping = async (query, radius, lat, lng, intentType, abort
             signal: abortSignal
         }, serperRetries).catch(err => { console.error('Error Serper Web:', err.message); return null; });
 
-        const broadWebPromise = (isVipSearch || shouldQueryBroadWeb)
+        const broadWebPromise = !isSpecificProduct
             ? fetchWithRetry({
                 method: 'post',
                 url: 'https://google.serper.dev/search',
@@ -893,18 +893,18 @@ exports.searchGoogleShopping = async (query, radius, lat, lng, intentType, abort
                 signal: abortSignal
             }, serperRetries).catch(err => { console.error('Error Serper MercadoLibre Priority:', err.message); return null; });
 
-        const serperAltQueryCount = isSpecificProduct ? 0 : (deepSearchEnabled ? 6 : (isVipSearch ? 4 : (isBroadExploration ? 2 : 1)));
+        const serperAltQueryCount = isSpecificProduct ? 0 : (deepSearchEnabled ? 6 : (isVipSearch ? 5 : 2));
         const plannedAltShoppingCalls = Math.min((alternativeQueries || []).filter(Boolean).length, serperAltQueryCount);
         const expectedSerperCallCount = [
             1,
             1,
-            (isVipSearch || shouldQueryBroadWeb) ? 1 : 0,
+            !isSpecificProduct ? 1 : 0,
             shouldQueryOfficialWeb ? 1 : 0,
             shouldQueryMlAmazon ? 1 : 0,
             shouldQueryMlPriority ? 1 : 0,
             plannedAltShoppingCalls
         ].reduce((sum, value) => sum + value, 0);
-        console.log(`[ShoppingService] Serper call plan: ${expectedSerperCallCount} (tier=${searchTier}, shopping=1, web=1, broad=${(isVipSearch || shouldQueryBroadWeb) ? 1 : 0}, official=${shouldQueryOfficialWeb ? 1 : 0}, mlAmazon=${shouldQueryMlAmazon ? 1 : 0}, mlPriority=${shouldQueryMlPriority ? 1 : 0}, alt=${plannedAltShoppingCalls})`);
+        console.log(`[ShoppingService] Serper call plan: ${expectedSerperCallCount} (tier=${searchTier}, shopping=1, web=1, broad=${!isSpecificProduct ? 1 : 0}, official=${shouldQueryOfficialWeb ? 1 : 0}, mlAmazon=${shouldQueryMlAmazon ? 1 : 0}, mlPriority=${shouldQueryMlPriority ? 1 : 0}, alt=${plannedAltShoppingCalls})`);
         const altShoppingPromises = (alternativeQueries || [])
             .filter(Boolean)
             .slice(0, serperAltQueryCount)

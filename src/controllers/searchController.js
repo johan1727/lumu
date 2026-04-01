@@ -1575,7 +1575,7 @@ exports.searchProduct = async (req, res) => {
             .map(value => stripSearchOperators(value))
             .filter(Boolean)
             .filter((value, index, arr) => arr.indexOf(value) === index)
-            .slice(0, deepSearchEnabled ? 14 : (isVipSearch ? 8 : 6));
+            .slice(0, deepSearchEnabled ? 14 : (isVipSearch ? 12 : 8));
 
         const isLocalFastMode = process.env.NODE_ENV !== 'production';
         const preSearchTimeoutMs = isLocalFastMode ? 1200 : 4000;
@@ -1940,7 +1940,7 @@ exports.searchProduct = async (req, res) => {
             } else {
                 const dynamicCoupon = await couponService.getBestCouponForStore(tienda, countryCode, {
                     vipOnly: isVipSearch,
-                    allowLiveLookup: isVipSearch
+                    allowLiveLookup: true
                 });
                 if (dynamicCoupon) {
                     injectedCoupon = dynamicCoupon.code;
@@ -2014,12 +2014,18 @@ exports.searchProduct = async (req, res) => {
         });
 
         finalProductsConCupones.sort((a, b) => Number(b.bestBuyScore || 0) - Number(a.bestBuyScore || 0));
+        const balancedProducts = selectBalancedResults(
+            finalProductsConCupones,
+            buildBroadSearchProfile(searchQuery),
+            36,
+            isVipSearch ? 8 : 5
+        );
 
         // Deep Research: AI-powered comparative analysis and variant suggestions
         let deepResearchEnhancements = null;
-        if (deepSearchEnabled && finalProductsConCupones.length > 0) {
+        if (balancedProducts.length > 0) {
             try {
-                const enhancementResult = await deepResearchEnhancer.enhanceResults(finalProductsConCupones, {
+                const enhancementResult = await deepResearchEnhancer.enhanceResults(balancedProducts, {
                     query: searchQuery,
                     deepSearchEnabled,
                     countryCode,
@@ -2033,10 +2039,10 @@ exports.searchProduct = async (req, res) => {
         }
 
         let vipAutoAlert = null;
-        if (isVipSearch && userId && finalProductsConCupones.length > 0) {
+        if (isVipSearch && userId && balancedProducts.length > 0) {
             vipAutoAlert = await createVipAutoAlert({
                 userId,
-                product: finalProductsConCupones[0]
+                product: balancedProducts[0]
             });
         }
 
@@ -2054,7 +2060,7 @@ exports.searchProduct = async (req, res) => {
         logSearchCostMetrics('search.results', costMetrics, {
             query: searchQuery,
             userId: Boolean(userId),
-            resultCount: finalProductsConCupones.length
+            resultCount: balancedProducts.length
         });
         return res.json({
             tipo_respuesta: 'resultados',
@@ -2083,6 +2089,14 @@ exports.searchProduct = async (req, res) => {
                 estimated_cost_breakdown: buildCostBreakdown(costMetrics)
             },
             deep_research_analysis: deepResearchEnhancements?.comparativeAnalysis || null,
+            ai_pick: deepResearchEnhancements?.comparativeAnalysis
+                ? {
+                    best_option_rank: deepResearchEnhancements.comparativeAnalysis.bestOptionRank,
+                    reasoning: deepResearchEnhancements.comparativeAnalysis.reasoning,
+                    price_comparison: deepResearchEnhancements.comparativeAnalysis.priceComparison,
+                    recommendation: deepResearchEnhancements.comparativeAnalysis.recommendation
+                }
+                : null,
             suggested_variants: deepResearchEnhancements?.suggestedVariants || null,
             best_buy_pick: finalProductsConCupones.length > 0
                 ? {
@@ -2100,13 +2114,11 @@ exports.searchProduct = async (req, res) => {
                 locale: regionCfg.locale,
                 label: regionCfg.regionLabel
             },
-            top_5_baratos: finalProductsConCupones,
-            sugerencias: buildFallbackSuggestions(searchQuery, llmAnalysis.alternativeQueries, countryCode),
-            advertencia_uso: usageWarning,
-            lumu_coins_awarded: (userId && finalProductsConCupones.length > 2) ? 1 : 0,
-            vip_auto_alert: vipAutoAlert
+            top_5_baratos: balancedProducts,
+            top_resultados: [],
+            vip_auto_alert: vipAutoAlert,
+            advertencia_uso: usageWarning
         });
-
     } catch (error) {
         // Clear timeout on error
         if (typeof timeoutId !== 'undefined') clearTimeout(timeoutId);

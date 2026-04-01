@@ -9,6 +9,7 @@
 const fetchWithTimeout = require('../utils/fetchWithTimeout');
 
 const MELI_APP_ID = process.env.MERCADOLIBRE_APP_ID;
+const flashDealsCache = new Map();
 
 // Maps ISO country code → MELI site_id
 const COUNTRY_TO_SITE_ID = {
@@ -27,6 +28,10 @@ const COUNTRY_TO_SITE_ID = {
 };
 
 const MELI_BASE = 'https://api.mercadolibre.com';
+
+function getCurrencyByCountry(countryCode = 'MX') {
+    return countryCode === 'AR' ? 'ARS' : countryCode === 'CO' ? 'COP' : countryCode === 'CL' ? 'CLP' : countryCode === 'BR' ? 'BRL' : countryCode === 'PE' ? 'PEN' : 'MXN';
+}
 
 /**
  * Compute a normalised [0,1] token overlap score between two strings.
@@ -122,7 +127,7 @@ async function searchMeli(query, countryCode = 'MX', options = {}) {
     const limit = Math.min(Number(options.limit) || 50, 50); // API cap is 50 per call
     const offset = Math.max(0, Number(options.offset) || 0);
     const sort = String(options.sort || 'price_asc').trim() || 'price_asc';
-    const currency = countryCode === 'AR' ? 'ARS' : countryCode === 'CO' ? 'COP' : countryCode === 'CL' ? 'CLP' : countryCode === 'BR' ? 'BRL' : 'MXN';
+    const currency = getCurrencyByCountry(countryCode);
     const conditionMode = String(options.conditionMode || 'all').toLowerCase();
 
     const params = new URLSearchParams({
@@ -197,4 +202,108 @@ async function searchMeli(query, countryCode = 'MX', options = {}) {
     }
 }
 
-module.exports = { searchMeli };
+async function fetchMeliSearch(url, signal) {
+    const response = await fetchWithTimeout(url, {
+        method: 'GET',
+        headers: {
+            'Accept': 'application/json',
+            'User-Agent': 'consiguemelo/1.0'
+        },
+        timeout: 10000,
+        signal
+    });
+
+    if (!response.ok) {
+        throw new Error(`meli_status_${response.status}`);
+    }
+
+    return response.json();
+}
+
+function mapFlashDealItem(item, siteId, currency, countryCode) {
+    const price = Number(item?.price);
+    const originalPrice = Number(item?.original_price);
+    if (!Number.isFinite(price) || price <= 0 || !Number.isFinite(originalPrice) || originalPrice <= price) {
+        return null;
+    }
+
+    const discountPct = Math.round((1 - price / originalPrice) * 100);
+    const rawThumb = item.thumbnail ? String(item.thumbnail).replace(/^http:\/\//, 'https://') : '';
+    const image = rawThumb ? rawThumb.replace(/-I(\.jpg)$/i, '-O$1') : '';
+
+    return {
+        id: item.id,
+        title: String(item.title || '').trim(),
+        price,
+        originalPrice,
+        discountPct,
+        image,
+        url: item.permalink || `https://www.mercadolibre.com/p/${item.id}`,
+        source: 'Mercado Libre',
+        shipping: item.shipping?.free_shipping ? 'Envío gratis' : '',
+        currencyCode: currency,
+        countryCode: String(countryCode || 'MX').toUpperCase(),
+        soldQuantity: Number(item.sold_quantity || 0)
+    };
+}
+
+async function getFlashDeals(countryCode = 'MX', limit = 8, signal) {
+    const normalizedCountry = String(countryCode || 'MX').toUpperCase();
+    const siteId = COUNTRY_TO_SITE_ID[normalizedCountry] || 'MLM';
+    const currency = getCurrencyByCountry(normalizedCountry);
+    const normalizedLimit = Math.max(1, Math.min(Number(limit) || 8, 12));
+    const cacheKey = `deals:${siteId}`;
+    const cached = flashDealsCache.get(cacheKey);
+
+    if (cached && (Date.now() - cached.createdAt) < (30 * 60 * 1000)) {
+        return cached.items.slice(0, normalizedLimit);
+    }
+
+    const dealParams = new URLSearchParams({
+        tag: 'deal_of_the_day',
+        sort: 'relevance',
+        limit: '20'
+    });
+    const fallbackParams = new URLSearchParams({
+        q: normalizedCountry === 'US' ? 'deals' : 'ofertas',
+        sort: 'best_sellers',
+        limit: '30'
+    });
+    if (MELI_APP_ID) {
+        dealParams.set('app_id', MELI_APP_ID);
+        fallbackParams.set('app_id', MELI_APP_ID);
+    }
+
+    const dealUrl = `${MELI_BASE}/sites/${siteId}/search?${dealParams.toString()}`;
+    const fallbackUrl = `${MELI_BASE}/sites/${siteId}/search?${fallbackParams.toString()}`;
+
+    try {
+        let data = await fetchMeliSearch(dealUrl, signal).catch(() => null);
+        let items = Array.isArray(data?.results) ? data.results : [];
+        let mapped = items
+            .map(item => mapFlashDealItem(item, siteId, currency, normalizedCountry))
+            .filter(Boolean)
+            .sort((a, b) => (b.discountPct - a.discountPct) || (b.soldQuantity - a.soldQuantity));
+
+        if (mapped.length === 0) {
+            data = await fetchMeliSearch(fallbackUrl, signal).catch(() => null);
+            items = Array.isArray(data?.results) ? data.results : [];
+            mapped = items
+                .map(item => mapFlashDealItem(item, siteId, currency, normalizedCountry))
+                .filter(Boolean)
+                .sort((a, b) => (b.discountPct - a.discountPct) || (b.soldQuantity - a.soldQuantity));
+        }
+
+        const trimmed = mapped.slice(0, normalizedLimit).map(({ soldQuantity, ...item }) => item);
+        flashDealsCache.set(cacheKey, {
+            createdAt: Date.now(),
+            items: trimmed
+        });
+        return trimmed;
+    } catch (err) {
+        console.error(`[MELI API] Error loading flash deals for ${siteId}:`, err.message);
+        return [];
+    }
+}
+
+module.exports = { searchMeli, getFlashDeals };

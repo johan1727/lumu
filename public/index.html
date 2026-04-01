@@ -1894,107 +1894,43 @@
             <div class="flex items-center justify-between mb-6">
                 <div class="flex items-center gap-3">
                     <h3 id="flash-deals-title" class="text-2xl font-display font-black text-slate-900">Ofertas Relámpago</h3>
+                    <span id="flash-deals-live-pill" class="inline-flex items-center rounded-full bg-rose-50 px-3 py-1 text-[10px] font-black uppercase tracking-[0.18em] text-rose-600">🔴 En vivo · Hoy</span>
                 </div>
-                <button id="flash-deals-view-all" class="text-primary font-bold text-sm hover:underline hidden sm:block">Ver todas</button>
+                <button id="flash-deals-view-all" class="text-primary font-bold text-sm hover:underline hidden sm:block">Actualizar</button>
             </div>
 
-            <div class="flex gap-4 overflow-x-auto pb-4 snap-x snap-mandatory -mx-4 px-4 sm:mx-0 sm:px-0 sm:grid sm:grid-cols-2 lg:grid-cols-4 sm:overflow-visible sm:pb-0">
-                <!-- Oferta 1 -->
-                <div class="w-64 flex-shrink-0 snap-start sm:w-auto sm:flex-shrink bg-white rounded-2xl p-4 border border-slate-200 shadow-sm hover:shadow-xl hover:-translate-y-1 transition-all duration-300 cursor-pointer group"
-                    onclick="document.getElementById('search-input').value='iPhone 15 Pro 256GB'; document.getElementById('search-form').dispatchEvent(new Event('submit', { cancelable: true, bubbles: true }));">
-                    <div
-                        class="relative w-full aspect-[4/3] bg-slate-50/80 rounded-xl mb-4 flex items-center justify-center overflow-hidden p-4">
-                        <div id="flash-deal-badge-1"
-                            class="absolute top-2 left-2 bg-emerald-100 text-emerald-800 text-[10px] font-bold px-2.5 py-1 rounded-full z-10 shadow-sm tracking-wide">
-                            MÁS BUSCADO</div>
-                        <img src="/images/iphone15pro.png" alt="iPhone 15 Pro" referrerpolicy="no-referrer"
-                            loading="lazy"
-                            class="w-full h-full object-contain group-hover:scale-110 transition-transform duration-500 drop-shadow-md"
-                            onerror="this.onerror=null; this.src='/logo.png';">
-                    </div>
-                    <div class="text-[10px] uppercase font-bold text-slate-400 mb-1 tracking-widest">Apple</div>
-                    <h4
-                        class="font-bold text-slate-800 text-sm mb-3 line-clamp-2 leading-tight group-hover:text-emerald-700 transition-colors h-10">
-                        iPhone 15 Pro 256GB Titanio</h4>
-                    <div class="flex items-end gap-2 mb-1">
-                        <span class="text-2xl font-black text-slate-900">$21,499</span>
-                        <span class="text-xs font-bold text-slate-400 line-through mb-1">$23,999</span>
-                    </div>
-                    <div
-                        class="text-[11px] text-emerald-600 font-bold bg-emerald-50 w-fit px-2 py-0.5 rounded-md mt-2 tracking-wide">
-                        Llega gratis mañana</div>
+            <div id="flash-deals-grid" class="flex gap-4 overflow-x-auto pb-4 snap-x snap-mandatory -mx-4 px-4 sm:mx-0 sm:px-0 sm:grid sm:grid-cols-2 lg:grid-cols-4 sm:overflow-visible sm:pb-0">
+                <div class="w-64 flex-shrink-0 snap-start sm:w-auto rounded-2xl border border-slate-200 bg-white p-4 shadow-sm animate-pulse">
+                    <div class="aspect-[4/3] rounded-xl bg-slate-100 mb-4"></div>
+                    <div class="h-3 w-16 rounded bg-slate-100 mb-2"></div>
+                    <div class="h-4 w-full rounded bg-slate-100 mb-2"></div>
+                    <div class="h-4 w-4/5 rounded bg-slate-100 mb-3"></div>
+                    <div class="h-6 w-24 rounded bg-slate-100 mb-2"></div>
+                    <div class="h-9 w-full rounded-full bg-slate-100"></div>
                 </div>
-
-                <!-- Oferta 2 -->
-                <div class="w-64 flex-shrink-0 snap-start sm:w-auto sm:flex-shrink bg-white rounded-2xl p-4 border border-slate-200 shadow-sm hover:shadow-xl hover:-translate-y-1 transition-all duration-300 cursor-pointer group"
-                    onclick="document.getElementById('search-input').value='Nintendo Switch OLED'; document.getElementById('search-form').dispatchEvent(new Event('submit', { cancelable: true, bubbles: true }));">
-                    <div
-                        class="relative w-full aspect-[4/3] bg-slate-50/80 rounded-xl mb-4 flex items-center justify-center overflow-hidden p-4">
-                        <div id="flash-deal-badge-2"
-                            class="absolute top-2 left-2 bg-emerald-100 text-emerald-800 text-[10px] font-bold px-2.5 py-1 rounded-full z-10 shadow-sm tracking-wide">
-                            OFERTA DEL DÍA</div>
-                        <img src="/images/switch.png" alt="Switch OLED" referrerpolicy="no-referrer" loading="lazy"
-                            class="w-full h-full object-contain group-hover:scale-110 transition-transform duration-500 drop-shadow-md"
-                            onerror="this.onerror=null; this.src='/logo.png';">
-                    </div>
-                    <div class="text-[10px] uppercase font-bold text-slate-400 mb-1 tracking-widest">Nintendo</div>
-                    <h4
-                        class="font-bold text-slate-800 text-sm mb-3 line-clamp-2 leading-tight group-hover:text-emerald-700 transition-colors h-10">
-                        Consola Nintendo Switch OLED 64GB</h4>
-                    <div class="flex items-end gap-2 mb-1">
-                        <span class="text-2xl font-black text-slate-900">$5,399</span>
-                        <span class="text-xs font-bold text-slate-400 line-through mb-1">$6,999</span>
-                    </div>
-                    <div
-                        class="text-[11px] text-emerald-600 font-bold bg-emerald-50 w-fit px-2 py-0.5 rounded-md mt-2 tracking-wide">
-                        Llega gratis mañana</div>
+                <div class="w-64 flex-shrink-0 snap-start sm:w-auto rounded-2xl border border-slate-200 bg-white p-4 shadow-sm animate-pulse">
+                    <div class="aspect-[4/3] rounded-xl bg-slate-100 mb-4"></div>
+                    <div class="h-3 w-16 rounded bg-slate-100 mb-2"></div>
+                    <div class="h-4 w-full rounded bg-slate-100 mb-2"></div>
+                    <div class="h-4 w-4/5 rounded bg-slate-100 mb-3"></div>
+                    <div class="h-6 w-24 rounded bg-slate-100 mb-2"></div>
+                    <div class="h-9 w-full rounded-full bg-slate-100"></div>
                 </div>
-
-                <!-- Oferta 3 -->
-                <div class="w-64 flex-shrink-0 snap-start sm:w-auto sm:flex-shrink bg-white rounded-2xl p-4 border border-slate-200 shadow-sm hover:shadow-xl hover:-translate-y-1 transition-all duration-300 cursor-pointer group"
-                    onclick="document.getElementById('search-input').value='Audífonos Sony WH-1000XM5'; document.getElementById('search-form').dispatchEvent(new Event('submit', { cancelable: true, bubbles: true }));">
-                    <div
-                        class="relative w-full aspect-[4/3] bg-slate-50/80 rounded-xl mb-4 flex items-center justify-center overflow-hidden p-4">
-                        <img src="/images/sonywh.png" alt="Sony Headphones" referrerpolicy="no-referrer" loading="lazy"
-                            class="w-full h-full object-contain group-hover:scale-110 transition-transform duration-500 drop-shadow-md"
-                            onerror="this.onerror=null; this.src='/logo.png';">
-                    </div>
-                    <div class="text-[10px] uppercase font-bold text-slate-400 mb-1 tracking-widest">Sony</div>
-                    <h4
-                        class="font-bold text-slate-800 text-sm mb-3 line-clamp-2 leading-tight group-hover:text-emerald-700 transition-colors h-10">
-                        Audífonos Diadema Inalámbricos WH-1000XM5</h4>
-                    <div class="flex items-end gap-2 mb-1">
-                        <span class="text-2xl font-black text-slate-900">$5,999</span>
-                        <span class="text-xs font-bold text-slate-400 line-through mb-1">$7,499</span>
-                    </div>
-                    <div id="flash-deal-meta-3"
-                        class="text-[11px] text-blue-600 font-bold bg-blue-50 w-fit px-2 py-0.5 rounded-md mt-2 tracking-wide">
-                        Importación segura</div>
+                <div class="w-64 flex-shrink-0 snap-start sm:w-auto rounded-2xl border border-slate-200 bg-white p-4 shadow-sm animate-pulse">
+                    <div class="aspect-[4/3] rounded-xl bg-slate-100 mb-4"></div>
+                    <div class="h-3 w-16 rounded bg-slate-100 mb-2"></div>
+                    <div class="h-4 w-full rounded bg-slate-100 mb-2"></div>
+                    <div class="h-4 w-4/5 rounded bg-slate-100 mb-3"></div>
+                    <div class="h-6 w-24 rounded bg-slate-100 mb-2"></div>
+                    <div class="h-9 w-full rounded-full bg-slate-100"></div>
                 </div>
-
-                <!-- Oferta 4 -->
-                <div class="w-64 flex-shrink-0 snap-start sm:w-auto sm:flex-shrink bg-white rounded-2xl p-4 border border-slate-200 shadow-sm hover:shadow-xl hover:-translate-y-1 transition-all duration-300 cursor-pointer group"
-                    onclick="document.getElementById('search-input').value='Freidora de Aire Ninja'; document.getElementById('search-form').dispatchEvent(new Event('submit', { cancelable: true, bubbles: true }));">
-                    <div
-                        class="relative w-full aspect-[4/3] bg-slate-50/80 rounded-xl mb-4 flex items-center justify-center overflow-hidden p-4">
-                        <div id="flash-deal-badge-4"
-                            class="absolute top-2 left-2 bg-gradient-to-r from-emerald-600 to-green-500 text-white text-[10px] font-black px-2.5 py-1 rounded-full z-10 shadow-[0_8px_20px_rgba(16,185,129,0.25)] tracking-[0.14em] uppercase">
-                            LIQUIDACIÓN</div>
-                        <img src="/images/ninja.png" alt="Freidora Ninja" referrerpolicy="no-referrer" loading="lazy"
-                            class="w-full h-full object-contain group-hover:scale-110 transition-transform duration-500 drop-shadow-md"
-                            onerror="this.onerror=null; this.src='/logo.png';">
-                    </div>
-                    <div class="text-[10px] uppercase font-bold text-slate-400 mb-1 tracking-widest">Ninja</div>
-                    <h4
-                        class="font-bold text-slate-800 text-sm mb-3 line-clamp-2 leading-tight group-hover:text-emerald-700 transition-colors h-10">
-                        Freidora de Aire AF101, 3.7 Litros</h4>
-                    <div class="flex items-end gap-2 mb-1">
-                        <span class="text-2xl font-black text-slate-900">$1,899</span>
-                        <span class="text-xs font-bold text-slate-400 line-through mb-1">$2,999</span>
-                    </div>
-                    <div id="flash-deal-meta-4"
-                        class="text-[11px] text-rose-600 font-bold bg-rose-50 w-fit px-2 py-0.5 rounded-md mt-2 tracking-wide">
-                        Últimas 5 unidades</div>
+                <div class="w-64 flex-shrink-0 snap-start sm:w-auto rounded-2xl border border-slate-200 bg-white p-4 shadow-sm animate-pulse">
+                    <div class="aspect-[4/3] rounded-xl bg-slate-100 mb-4"></div>
+                    <div class="h-3 w-16 rounded bg-slate-100 mb-2"></div>
+                    <div class="h-4 w-full rounded bg-slate-100 mb-2"></div>
+                    <div class="h-4 w-4/5 rounded bg-slate-100 mb-3"></div>
+                    <div class="h-6 w-24 rounded bg-slate-100 mb-2"></div>
+                    <div class="h-9 w-full rounded-full bg-slate-100"></div>
                 </div>
             </div>
         </div>

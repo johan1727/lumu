@@ -82,13 +82,15 @@ function generateProductVariants(query, productCategory) {
  * Generate AI-powered comparative analysis for top results
  * Only runs in Deep Research mode
  */
-async function generateComparativeAnalysis(topResults, query, countryCode, currency) {
+async function generateComparativeAnalysis(topResults, query, countryCode, currency, options = {}) {
     if (!GEMINI_API_KEY || !topResults || topResults.length < 2) {
         return null;
     }
 
     try {
-        const productsForAnalysis = topResults.slice(0, 5).map((p, idx) => ({
+        const maxProducts = Number(options.maxProducts) > 0 ? Number(options.maxProducts) : 5;
+        const requestTimeout = Number(options.timeoutMs) > 0 ? Number(options.timeoutMs) : 8000;
+        const productsForAnalysis = topResults.slice(0, maxProducts).map((p, idx) => ({
             rank: idx + 1,
             title: p.titulo || p.title || 'Sin título',
             price: p.precio || p.price,
@@ -139,7 +141,7 @@ Criterios:
                     responseMimeType: 'application/json'
                 }
             }),
-            timeout: 8000
+            timeout: requestTimeout
         });
 
         if (!response.ok) {
@@ -179,23 +181,28 @@ Criterios:
 async function enhanceResults(results, searchContext) {
     const { query, deepSearchEnabled, countryCode, currency, productCategory } = searchContext;
 
-    if (!deepSearchEnabled || !results || results.length === 0) {
+    if (!results || results.length === 0) {
         return { results, enhancements: null };
     }
 
-    console.log('[Deep Research] Enhancing results with AI analysis...');
+    console.log(deepSearchEnabled
+        ? '[Deep Research] Enhancing results with AI analysis...'
+        : '[Search Enhancer] Generating lightweight AI analysis...');
 
     const enhancements = {};
 
     // Generate comparative analysis
-    const analysis = await generateComparativeAnalysis(results, query, countryCode, currency);
+    const analysis = await generateComparativeAnalysis(results, query, countryCode, currency, {
+        maxProducts: deepSearchEnabled ? 5 : 3,
+        timeoutMs: deepSearchEnabled ? 8000 : 6000
+    });
     if (analysis) {
         enhancements.comparativeAnalysis = analysis;
-        console.log(`[Deep Research] AI recommends option #${analysis.bestOptionRank}: ${analysis.reasoning}`);
+        console.log(`${deepSearchEnabled ? '[Deep Research]' : '[Search Enhancer]'} AI recommends option #${analysis.bestOptionRank}: ${analysis.reasoning}`);
     }
 
     // Generate product variants for future searches
-    const variants = generateProductVariants(query, productCategory);
+    const variants = deepSearchEnabled ? generateProductVariants(query, productCategory) : [];
     if (variants.length > 0) {
         enhancements.suggestedVariants = variants;
         console.log(`[Deep Research] Generated ${variants.length} product variants`);
