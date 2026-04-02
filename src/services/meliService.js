@@ -9,7 +9,10 @@
 const fetchWithTimeout = require('../utils/fetchWithTimeout');
 
 const MELI_APP_ID = process.env.MERCADOLIBRE_APP_ID;
+const MELI_ACCESS_TOKEN = process.env.MELI_ACCESS_TOKEN;
 const flashDealsCache = new Map();
+const searchCache = new Map();
+const SEARCH_CACHE_TTL_MS = 20 * 60 * 1000;
 
 // Maps ISO country code → MELI site_id
 const COUNTRY_TO_SITE_ID = {
@@ -31,6 +34,54 @@ const MELI_BASE = 'https://api.mercadolibre.com';
 
 function getCurrencyByCountry(countryCode = 'MX') {
     return countryCode === 'AR' ? 'ARS' : countryCode === 'CO' ? 'COP' : countryCode === 'CL' ? 'CLP' : countryCode === 'BR' ? 'BRL' : countryCode === 'PE' ? 'PEN' : 'MXN';
+}
+
+function getSearchCacheKey(query, countryCode, options = {}) {
+    return JSON.stringify({
+        q: String(query || '').trim().toLowerCase(),
+        cc: String(countryCode || 'MX').toUpperCase(),
+        limit: Number(options.limit) || 50,
+        offset: Number(options.offset) || 0,
+        sort: String(options.sort || 'price_asc').trim() || 'price_asc',
+        conditionMode: String(options.conditionMode || 'all').toLowerCase()
+    });
+}
+
+function getCachedSearch(cacheKey) {
+    const entry = searchCache.get(cacheKey);
+    if (!entry) return null;
+    if ((Date.now() - entry.createdAt) > SEARCH_CACHE_TTL_MS) {
+        searchCache.delete(cacheKey);
+        return null;
+    }
+    return entry.data;
+}
+
+function setCachedSearch(cacheKey, data) {
+    if (!Array.isArray(data) || data.length === 0) return;
+    searchCache.set(cacheKey, {
+        createdAt: Date.now(),
+        data
+    });
+    if (searchCache.size > 200) {
+        const oldestKey = searchCache.keys().next().value;
+        if (oldestKey) searchCache.delete(oldestKey);
+    }
+}
+
+function getMeliHeaders(siteId) {
+    const headers = {
+        'Accept': 'application/json',
+        'Content-Type': 'application/json',
+        'User-Agent': 'lumu-backend/1.0 (https://lumu.dev)',
+        'Accept-Language': siteId === 'MLC' ? 'es-CL,es;q=0.9,en;q=0.7' : 'es-MX,es;q=0.9,en;q=0.7',
+        'Origin': 'https://www.mercadolibre.com',
+        'Referer': 'https://www.mercadolibre.com/'
+    };
+    if (MELI_ACCESS_TOKEN) {
+        headers.Authorization = `Bearer ${MELI_ACCESS_TOKEN}`;
+    }
+    return headers;
 }
 
 /**
@@ -58,6 +109,8 @@ function normaliseMeliItem(item, siteId, currency, query) {
     const originalPrice = item.original_price ? Number(item.original_price) : null;
     const hasDiscount = Number.isFinite(originalPrice) && originalPrice > price;
     const seller = item.seller?.nickname || item.seller_id || 'Mercado Libre';
+    const sellerReputationLevel = String(item.seller?.seller_reputation?.level_id || '');
+    const isTrustedSeller = /^(5_|4_)/.test(sellerReputationLevel) || Boolean(item.official_store_id);
     // Upgrade from tiny 30x30 (-I.jpg) to 270x270 (-O.jpg) thumbnail
     const rawThumb = item.thumbnail ? item.thumbnail.replace(/^http:\/\//, 'https://') : null;
     const thumbnail = rawThumb ? rawThumb.replace(/-I(\.jpg)$/i, '-O$1') : null;
@@ -107,7 +160,9 @@ function normaliseMeliItem(item, siteId, currency, query) {
         _meliSoldQuantity: Number(item.sold_quantity || 0),
         _meliCatalogListing: Boolean(item.catalog_listing),
         _meliOfficialStoreId: item.official_store_id || null,
-        _meliThumbnailId: rawThumb || null
+        _meliThumbnailId: rawThumb || null,
+        _meliSellerReputationLevel: sellerReputationLevel || null,
+        _meliTrustedSeller: isTrustedSeller
     };
 }
 
@@ -129,6 +184,13 @@ async function searchMeli(query, countryCode = 'MX', options = {}) {
     const sort = String(options.sort || 'price_asc').trim() || 'price_asc';
     const currency = getCurrencyByCountry(countryCode);
     const conditionMode = String(options.conditionMode || 'all').toLowerCase();
+    const cacheKey = getSearchCacheKey(query, countryCode, { limit, offset, sort, conditionMode });
+    const cached = getCachedSearch(cacheKey);
+
+    if (cached) {
+        console.log(`[MELI API Cache Hit] site=${siteId} q="${query}" limit=${limit} offset=${offset} sort=${sort}`);
+        return cached;
+    }
 
     const params = new URLSearchParams({
         q: String(query).trim(),
@@ -152,10 +214,7 @@ async function searchMeli(query, countryCode = 'MX', options = {}) {
     try {
         const response = await fetchWithTimeout(url, {
             method: 'GET',
-            headers: {
-                'Accept': 'application/json',
-                'User-Agent': 'consiguemelo/1.0'
-            },
+            headers: getMeliHeaders(siteId),
             timeout: 10000,
             signal: options.signal
         });
@@ -188,7 +247,16 @@ async function searchMeli(query, countryCode = 'MX', options = {}) {
             _meliLimit: limit,
             _meliPage: page,
             _meliSort: sort
-        }));
+        })).sort((a, b) => {
+            const trustDelta = Number(Boolean(b._meliTrustedSeller)) - Number(Boolean(a._meliTrustedSeller));
+            if (trustDelta !== 0) return trustDelta;
+            const catalogDelta = Number(Boolean(b._meliCatalogListing)) - Number(Boolean(a._meliCatalogListing));
+            if (catalogDelta !== 0) return catalogDelta;
+            const soldDelta = Number(b._meliSoldQuantity || 0) - Number(a._meliSoldQuantity || 0);
+            if (soldDelta !== 0) return soldDelta;
+            return Number(a.price || Number.MAX_SAFE_INTEGER) - Number(b.price || Number.MAX_SAFE_INTEGER);
+        });
+        setCachedSearch(cacheKey, normalised);
         console.log(`[MELI API] Got ${normalised.length} valid items for "${query}"`);
         return normalised;
 
@@ -205,10 +273,7 @@ async function searchMeli(query, countryCode = 'MX', options = {}) {
 async function fetchMeliSearch(url, signal) {
     const response = await fetchWithTimeout(url, {
         method: 'GET',
-        headers: {
-            'Accept': 'application/json',
-            'User-Agent': 'consiguemelo/1.0'
-        },
+        headers: getMeliHeaders('MLM'),
         timeout: 10000,
         signal
     });

@@ -607,7 +607,7 @@ function getCategoryDomains(countryCode, category, limit = 8) {
 
 function buildCategoryWebSearchQuery(query, countryCode, category) {
     const config = getRegionConfig(countryCode);
-    const domains = getCategoryDomains(countryCode, category);
+    const domains = getCategoryDomains(countryCode, category, 5);
     const siteFilters = domains.map(d => `site:${d}`).join(' OR ');
     return `${query} ${config.searchSuffix} ${siteFilters}`;
 }

@@ -666,7 +666,7 @@ async function fetchExpandedVipMeliResults({ query = '', alternativeQueries = []
     const firstPassFns = variants.map((variant, index) => () => meliService.searchMeli(variant, countryCode, {
         limit,
         offset: 0,
-        sort: index === 0 ? 'price_asc' : 'price_asc',
+        sort: index === 0 ? 'best_sellers' : 'price_asc',
         signal,
         conditionMode
     }));
@@ -786,6 +786,7 @@ exports.searchGoogleShopping = async (query, radius, lat, lng, intentType, abort
         const marketplaceNum = deepSearchEnabled ? 30 : (isVipSearch ? 20 : 10);
         const mlPriorityNum = deepSearchEnabled ? 30 : (isVipSearch ? 20 : 12);
         const altShoppingNum = deepSearchEnabled ? 50 : (isVipSearch ? 40 : 30);
+        const amazonSpecificShoppingNum = deepSearchEnabled ? 30 : (isVipSearch ? 24 : 20);
         
         const shoppingPromise = fetchWithRetry({
             method: 'post',
@@ -810,18 +811,36 @@ exports.searchGoogleShopping = async (query, radius, lat, lng, intentType, abort
         const mainWebAlreadyTargetsAmazon = /site:amazon\.(com|com\.mx)/i.test(normalizedWebSearchQ);
         const mainWebAlreadyTargetsMercadoLibre = /site:mercadolibre\./i.test(normalizedWebSearchQ);
         const shouldQueryMlAmazon = !isSpecificProduct && !(mainWebAlreadyTargetsAmazon && mainWebAlreadyTargetsMercadoLibre);
+        const amazonSpecificDomain = countryCode === 'US' ? 'amazon.com' : 'amazon.com.mx';
+        const amazonSpecificShoppingPromise = !isSpecificProduct
+            ? Promise.resolve(null)
+            : fetchWithRetry({
+                method: 'post',
+                url: 'https://google.serper.dev/shopping',
+                headers: { 'X-API-KEY': apiKey, 'Content-Type': 'application/json' },
+                data: JSON.stringify({
+                    q: `${shoppingQuery} site:${amazonSpecificDomain}`,
+                    gl: regionCfg.gl,
+                    hl: regionCfg.hl,
+                    num: amazonSpecificShoppingNum
+                }),
+                timeout: serperTimeout,
+                signal: abortSignal
+            }, serperRetries).catch(err => { console.error('Error Amazon Specific Shopping:', err.message); return null; });
 
-        const webPromise = fetchWithRetry({
-            method: 'post',
-            url: 'https://google.serper.dev/search',
-            headers: { 'X-API-KEY': apiKey, 'Content-Type': 'application/json' },
-            data: JSON.stringify({
-                q: webSearchQ,
-                gl: regionCfg.gl, hl: regionCfg.hl, num: webNum
-            }),
-            timeout: serperTimeout,
-            signal: abortSignal
-        }, serperRetries).catch(err => { console.error('Error Serper Web:', err.message); return null; });
+        const webPromise = isSpecificProduct
+            ? Promise.resolve(null)
+            : fetchWithRetry({
+                method: 'post',
+                url: 'https://google.serper.dev/search',
+                headers: { 'X-API-KEY': apiKey, 'Content-Type': 'application/json' },
+                data: JSON.stringify({
+                    q: webSearchQ,
+                    gl: regionCfg.gl, hl: regionCfg.hl, num: webNum
+                }),
+                timeout: serperTimeout,
+                signal: abortSignal
+            }, serperRetries).catch(err => { console.error('Error Serper Web:', err.message); return null; });
 
         const broadWebPromise = !isSpecificProduct
             ? fetchWithRetry({
@@ -900,14 +919,15 @@ exports.searchGoogleShopping = async (query, radius, lat, lng, intentType, abort
         const plannedAltShoppingCalls = Math.min((alternativeQueries || []).filter(Boolean).length, serperAltQueryCount);
         const expectedSerperCallCount = [
             1,
-            1,
+            isSpecificProduct ? 0 : 1,
+            isSpecificProduct ? 1 : 0,
             !isSpecificProduct ? 1 : 0,
             shouldQueryOfficialWeb ? 1 : 0,
             shouldQueryMlAmazon ? 1 : 0,
             shouldQueryMlPriority ? 1 : 0,
             plannedAltShoppingCalls
         ].reduce((sum, value) => sum + value, 0);
-        console.log(`[ShoppingService] Serper call plan: ${expectedSerperCallCount} (tier=${searchTier}, shopping=1, web=1, broad=${!isSpecificProduct ? 1 : 0}, official=${shouldQueryOfficialWeb ? 1 : 0}, mlAmazon=${shouldQueryMlAmazon ? 1 : 0}, mlPriority=${shouldQueryMlPriority ? 1 : 0}, alt=${plannedAltShoppingCalls})`);
+        console.log(`[ShoppingService] Serper call plan: ${expectedSerperCallCount} (tier=${searchTier}, shopping=1, web=${isSpecificProduct ? 0 : 1}, amazonSpecific=${isSpecificProduct ? 1 : 0}, broad=${!isSpecificProduct ? 1 : 0}, official=${shouldQueryOfficialWeb ? 1 : 0}, mlAmazon=${shouldQueryMlAmazon ? 1 : 0}, mlPriority=${shouldQueryMlPriority ? 1 : 0}, alt=${plannedAltShoppingCalls})`);
         const altShoppingPromises = (alternativeQueries || [])
             .filter(Boolean)
             .slice(0, serperAltQueryCount)
@@ -923,7 +943,7 @@ exports.searchGoogleShopping = async (query, radius, lat, lng, intentType, abort
                 return null;
             }));
 
-        const [shoppingRes, webRes, broadWebRes, officialWebRes, mlAmazonRes, ...altShoppingResponses] = await Promise.all([shoppingPromise, webPromise, broadWebPromise, officialWebPromise, mlAmazonPromise, ...altShoppingPromises]);
+        const [shoppingRes, webRes, amazonSpecificShoppingRes, broadWebRes, officialWebRes, mlAmazonRes, ...altShoppingResponses] = await Promise.all([shoppingPromise, webPromise, amazonSpecificShoppingPromise, broadWebPromise, officialWebPromise, mlAmazonPromise, ...altShoppingPromises]);
 
         // Check if Shopping API already returned ML results to skip mlPriority query
         let hasMercadoLibreInShopping = false;
@@ -1016,6 +1036,40 @@ exports.searchGoogleShopping = async (query, radius, lat, lng, intentType, abort
             });
             serperResults = [...serperResults, ...altMapped];
         });
+
+        if (amazonSpecificShoppingRes?.data?.shopping) {
+            const amazonSpecificMapped = amazonSpecificShoppingRes.data.shopping.map(item => {
+                let parsedPrice = null;
+                if (item.price != null) {
+                    const priceStr = String(item.price).replace(/[^0-9.,]/g, '').replace(/,/g, '');
+                    parsedPrice = parseFloat(priceStr);
+                    if (!Number.isFinite(parsedPrice)) parsedPrice = null;
+                }
+                const isGoogleRedirect = (item.link || '').includes('google.com/search');
+                const priceMeta = resolvePriceMetadata({
+                    primaryPrice: parsedPrice,
+                    text: `${item.title || ''} ${item.snippet || ''}`,
+                    sourceType: 'shopping_api',
+                    isRedirect: isGoogleRedirect,
+                    isDirectProductPage: true
+                });
+                return {
+                    title: item.title || 'Sin Título',
+                    price: priceMeta.price,
+                    url: item.link || '',
+                    source: item.source || 'Amazon',
+                    image: normalizeIncomingImage(item.imageUrl || ''),
+                    isGoogleRedirect,
+                    snippet: item.snippet || '',
+                    isAmazonSpecificBoost: true,
+                    ...priceMeta,
+                    resultSource: 'amazon_specific_shopping',
+                    isDirectProductPage: true
+                };
+            });
+            serperResults = [...serperResults, ...amazonSpecificMapped];
+            console.log(`[Serper Amazon Specific] Encontró ${amazonSpecificMapped.length} resultados dedicados de Amazon`);
+        }
 
         // Procesar Web complementario
         if (webRes?.data?.organic) {
@@ -1295,7 +1349,7 @@ exports.searchGoogleShopping = async (query, radius, lat, lng, intentType, abort
         // Strip Google-only negative keywords (-funda -case etc.) since direct scrapers use URL search params
         const cleanQuery = query.replace(/\s+-\w+/g, '').trim();
         const hasProxy = Boolean(process.env.SCRAPER_PROXIES);
-        const meliResultLimit = deepSearchEnabled ? 40 : 25;
+        const meliResultLimit = deepSearchEnabled ? 50 : (isVipSearch ? 50 : 40);
         console.log(`Ejecutando scrapers directos rápidos para ${countryCode}: ${cleanQuery} ...${hasProxy ? '' : ' [sin proxy — solo API scrapers]'}`);
 
         scraperFunctions = [
@@ -1323,6 +1377,16 @@ exports.searchGoogleShopping = async (query, radius, lat, lng, intentType, abort
                     conditionMode
                 }), deepSearchEnabled ? 'meli_api_deep' : 'meli_api_normal')
             );
+            if (isSpecificProduct || isVipSearch) {
+                scraperFunctions.push(
+                    () => monitor.wrap(() => meliService.searchMeli(cleanQuery, countryCode, {
+                        limit: meliResultLimit,
+                        sort: 'price_asc',
+                        signal: abortSignal,
+                        conditionMode
+                    }), 'meli_api_price_asc')
+                );
+            }
         }
 
         if (hasProxy) {
