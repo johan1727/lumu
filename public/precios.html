@@ -214,6 +214,29 @@
             border-color: rgba(255, 255, 255, .06) !important;
         }
 
+        .dark details.group.bg-white.dark\:bg-slate-900\/50 {
+            background: rgba(15, 23, 42, 0.84) !important;
+            border-color: rgba(148, 163, 184, 0.22) !important;
+            box-shadow: 0 12px 28px rgba(0, 0, 0, 0.22) !important;
+        }
+
+        .dark details.group.bg-white.dark\:bg-slate-900\/50 summary {
+            color: #f8fafc !important;
+        }
+
+        .dark details.group.bg-white.dark\:bg-slate-900\/50 summary:hover {
+            color: #a7f3d0 !important;
+        }
+
+        .dark details.group.bg-white.dark\:bg-slate-900\/50 .i18n-faq-a,
+        .dark details.group.bg-white.dark\:bg-slate-900\/50 p.text-slate-500 {
+            color: rgba(226, 232, 240, 0.88) !important;
+        }
+
+        .dark details.group.bg-white.dark\:bg-slate-900\/50 svg {
+            color: rgba(148, 163, 184, 0.92) !important;
+        }
+
         .plan-card {
             transition: transform 0.3s ease, box-shadow 0.3s ease;
         }
@@ -510,83 +533,84 @@
             </div>
 
             <!-- FAQ Section -->
-            <div class="mt-20 max-w-2xl mx-auto">
-                <h2 id="i18n-faq-title" class="text-2xl font-display font-black text-slate-900 text-center mb-8">Preguntas Frecuentes</h2>
+            <div class="mt-20 max-w-2xl mx-auto rounded-[2rem] px-5 py-7 border border-white/10" style="background: linear-gradient(180deg, rgba(8, 15, 31, 0.96) 0%, rgba(3, 7, 18, 0.98) 100%); box-shadow: 0 24px 60px rgba(0, 0, 0, 0.28); position: relative; z-index: 20; opacity: 1;">
+                <h2 id="i18n-faq-title" class="text-2xl font-display font-black text-slate-900 dark:text-slate-50 text-center mb-6" style="color: #f8fafc; letter-spacing: -0.02em; opacity: 1; position: relative; z-index: 21;">Preguntas Frecuentes</h2>
                 <div class="space-y-4">
                     <details
-                        class="group bg-white dark:bg-slate-900/50 rounded-2xl border border-slate-200 dark:border-slate-800 p-5">
-                        <summary class="cursor-pointer font-bold text-slate-800 flex justify-between items-center">
+                        class="group rounded-2xl border p-5 transition-all duration-200" style="background: linear-gradient(180deg, rgba(15, 23, 42, 0.96) 0%, rgba(9, 16, 30, 0.98) 100%); border-color: rgba(71, 85, 105, 0.65); box-shadow: inset 0 1px 0 rgba(255,255,255,0.03); position: relative; z-index: 21; opacity: 1;">
+                        <summary class="cursor-pointer font-bold flex justify-between items-center gap-4" style="color: #f8fafc; opacity: 1; list-style: none;">
                             <span class="i18n-faq-q" data-i="0">¿Puedo cancelar en cualquier momento?</span>
-                            <svg class="w-5 h-5 text-slate-400 group-open:rotate-180 transition-transform" fill="none"
+                            <svg class="w-5 h-5 group-open:rotate-180 transition-transform duration-200" fill="none" style="color: #94a3b8; opacity: 1; flex-shrink: 0;"
                                 stroke="currentColor" viewBox="0 0 24 24">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
                                     d="M19 9l-7 7-7-7" />
                             </svg>
                         </summary>
-                        <p id="i18n-faq-a-0" class="text-slate-500 text-sm mt-3 leading-relaxed i18n-faq-a" data-i="0">Sí, puedes cancelar tu suscripción en
+                        <p id="i18n-faq-a-0" class="text-sm mt-3 leading-relaxed i18n-faq-a" data-i="0" style="color: #cbd5e1; opacity: 1; line-height: 1.7;">Sí, puedes cancelar tu suscripción en
                             cualquier momento desde tu perfil. Sin compromisos, sin cargos ocultos. Tu plan seguirá
                             activo hasta el final del período pagado.</p>
                     </details>
                     <details
-                        class="group bg-white dark:bg-slate-900/50 rounded-2xl border border-slate-200 dark:border-slate-800 p-5">
-                        <summary class="cursor-pointer font-bold text-slate-800 flex justify-between items-center">
+                        class="group rounded-2xl border p-5 transition-all duration-200" style="background: linear-gradient(180deg, rgba(15, 23, 42, 0.96) 0%, rgba(9, 16, 30, 0.98) 100%); border-color: rgba(71, 85, 105, 0.65); box-shadow: inset 0 1px 0 rgba(255,255,255,0.03); position: relative; z-index: 21; opacity: 1;">
+                        <summary class="cursor-pointer font-bold flex justify-between items-center gap-4" style="color: #f8fafc; opacity: 1; list-style: none;">
                             <span id="i18n-faq-q-1" class="i18n-faq-q" data-i="1">¿Qué métodos de pago aceptan?</span>
-                            <svg class="w-5 h-5 text-slate-400 group-open:rotate-180 transition-transform" fill="none"
+                            <svg class="w-5 h-5 group-open:rotate-180 transition-transform duration-200" fill="none" style="color: #94a3b8; opacity: 1; flex-shrink: 0;"
                                 stroke="currentColor" viewBox="0 0 24 24">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
                                     d="M19 9l-7 7-7-7" />
                             </svg>
                         </summary>
-                        <p id="i18n-faq-a-1" class="text-slate-500 text-sm mt-3 leading-relaxed i18n-faq-a" data-i="1">Aceptamos tarjetas de crédito y débito
+                        <p id="i18n-faq-a-1" class="text-sm mt-3 leading-relaxed i18n-faq-a" data-i="1" style="color: #cbd5e1; opacity: 1; line-height: 1.7;">Aceptamos tarjetas de crédito y débito
                             (Visa, Mastercard, AMEX) a través de Stripe. Todos los pagos son seguros y encriptados.</p>
                     </details>
                     <details
-                        class="group bg-white dark:bg-slate-900/50 rounded-2xl border border-slate-200 dark:border-slate-800 p-5">
-                        <summary class="cursor-pointer font-bold text-slate-800 flex justify-between items-center">
+                        class="group rounded-2xl border p-5 transition-all duration-200" style="background: linear-gradient(180deg, rgba(15, 23, 42, 0.96) 0%, rgba(9, 16, 30, 0.98) 100%); border-color: rgba(71, 85, 105, 0.65); box-shadow: inset 0 1px 0 rgba(255,255,255,0.03); position: relative; z-index: 21; opacity: 1;">
+                        <summary class="cursor-pointer font-bold flex justify-between items-center gap-4" style="color: #f8fafc; opacity: 1; list-style: none;">
                             <span id="i18n-faq-q-2" class="i18n-faq-q" data-i="2">¿Qué pasa si se me acaban las búsquedas?</span>
-                            <svg class="w-5 h-5 text-slate-400 group-open:rotate-180 transition-transform" fill="none"
+                            <svg class="w-5 h-5 group-open:rotate-180 transition-transform duration-200" fill="none" style="color: #94a3b8; opacity: 1; flex-shrink: 0;"
                                 stroke="currentColor" viewBox="0 0 24 24">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
                                     d="M19 9l-7 7-7-7" />
                             </svg>
                         </summary>
-                        <p id="i18n-faq-a-2" class="text-slate-500 text-sm mt-3 leading-relaxed i18n-faq-a" data-i="2">En el plan Gratis, el límite se reinicia
+                        <p id="i18n-faq-a-2" class="text-sm mt-3 leading-relaxed i18n-faq-a" data-i="2" style="color: #cbd5e1; opacity: 1; line-height: 1.7;">En el plan Gratis, el límite se reinicia
                             cada día. En los planes de pago, el límite se reinicia cada mes. Si necesitas más, puedes
                             mejorar tu plan en cualquier momento.</p>
                     </details>
                     <details
-                        class="group bg-white dark:bg-slate-900/50 rounded-2xl border border-slate-200 dark:border-slate-800 p-5">
-                        <summary class="cursor-pointer font-bold text-slate-800 flex justify-between items-center">
+                        class="group rounded-2xl border p-5 transition-all duration-200" style="background: linear-gradient(180deg, rgba(15, 23, 42, 0.96) 0%, rgba(9, 16, 30, 0.98) 100%); border-color: rgba(71, 85, 105, 0.65); box-shadow: inset 0 1px 0 rgba(255,255,255,0.03); position: relative; z-index: 21; opacity: 1;">
+                        <summary class="cursor-pointer font-bold flex justify-between items-center gap-4" style="color: #f8fafc; opacity: 1; list-style: none;">
                             <span id="i18n-faq-q-3" class="i18n-faq-q" data-i="3">¿Los favoritos son gratis?</span>
-                            <svg class="w-5 h-5 text-slate-400 group-open:rotate-180 transition-transform" fill="none"
+                            <svg class="w-5 h-5 group-open:rotate-180 transition-transform duration-200" fill="none" style="color: #94a3b8; opacity: 1; flex-shrink: 0;"
                                 stroke="currentColor" viewBox="0 0 24 24">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
                                     d="M19 9l-7 7-7-7" />
                             </svg>
                         </summary>
-                        <p id="i18n-faq-a-3" class="text-slate-500 text-sm mt-3 leading-relaxed i18n-faq-a" data-i="3">¡Sí! Guardar favoritos es gratis para
+                        <p id="i18n-faq-a-3" class="text-sm mt-3 leading-relaxed i18n-faq-a" data-i="3" style="color: #cbd5e1; opacity: 1; line-height: 1.7;">¡Sí! Guardar favoritos es gratis para
                             todos los usuarios con cuenta. Solo necesitas iniciar sesión con Google o correo
                             electrónico.</p>
                     </details>
                 </div>
             </div>
+
         </section>
     </main>
 
-    <!-- Footer -->
-    <footer
-        class="w-full py-8 mt-auto border-t border-slate-100 dark:border-slate-800 bg-white/50 dark:bg-slate-900/50">
-        <div
-            class="max-w-5xl mx-auto px-4 flex flex-col md:flex-row justify-between items-center gap-4 text-slate-500 text-sm font-medium">
-            <div class="flex items-center gap-6">
-                <span id="i18n-footer-copy"> 2026 Lumu AI.</span>
-                <a id="i18n-footer-terms" href="https://www.lumu.dev/terminos.html" class="hover:text-primary transition-colors">Términos</a>
-                <a id="i18n-footer-privacy" href="https://www.lumu.dev/privacidad.html" class="hover:text-primary transition-colors">Privacidad</a>
-                <a href="https://www.lumu.dev/sobre-nosotros.html" class="hover:text-primary transition-colors">Nosotros</a>
-                <a href="https://www.lumu.dev/resenas.html" class="hover:text-primary transition-colors">Reseñas</a>
-            </div>
-        </div>
-    </footer>
+            <!-- Footer -->
+            <footer
+                class="w-full py-8 mt-auto border-t border-slate-100 dark:border-slate-800 bg-white/50 dark:bg-slate-900/50">
+                <div
+                    class="max-w-5xl mx-auto px-4 flex flex-col md:flex-row justify-between items-center gap-4 text-slate-500 text-sm font-medium">
+                    <div class="flex items-center gap-6">
+                        <span id="i18n-footer-copy"> 2026 Lumu AI.</span>
+                        <a id="i18n-footer-terms" href="https://www.lumu.dev/terminos.html" class="hover:text-primary transition-colors">Términos</a>
+                        <a id="i18n-footer-privacy" href="https://www.lumu.dev/privacidad.html" class="hover:text-primary transition-colors">Privacidad</a>
+                        <a href="https://www.lumu.dev/sobre-nosotros.html" class="hover:text-primary transition-colors">Nosotros</a>
+                        <a href="https://www.lumu.dev/resenas.html" class="hover:text-primary transition-colors">Reseñas</a>
+                    </div>
+                </div>
+            </footer>
 
     <script>
         // Dark mode toggle

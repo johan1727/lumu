@@ -60,13 +60,13 @@ self.addEventListener('fetch', (event) => {
             caches.match(request).then(cached => {
                 if (cached) {
                     // Return cached, but update in background (stale-while-revalidate)
-                    const fetchPromise = fetch(request).then(response => {
+                    event.waitUntil(fetch(request).then(response => {
                         if (response.ok) {
                             const clone = response.clone();
                             caches.open(CACHE_NAME).then(cache => cache.put(request, clone));
                         }
                         return response;
-                    }).catch(() => cached);
+                    }).catch(() => cached));
 
                     return cached;
                 }

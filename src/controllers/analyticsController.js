@@ -130,9 +130,8 @@ async function trackEvent(req, res) {
             session_id: normalizeText(session_id, 120),
             search_id: normalizeText(search_id, 120),
             engagement_ms: clampNumber(engagement_ms, { min: 0, max: 86400000 }),
-            action_context: normalizeText(action_context, 80),
             price: clampNumber(price, { min: 0, max: 999999999 }),
-            feedback_label: normalizeText(feedback_label, 120),
+            feedback_label: normalizeText(feedback_label || action_context, 120),
             brand: normalizeText(brand, 120)
         };
 

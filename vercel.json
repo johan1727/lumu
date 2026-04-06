@@ -91,6 +91,22 @@
         {
             "source": "/buscar",
             "destination": "/api/index.js"
+        },
+        {
+            "source": "/precio-hoy/(.*)",
+            "destination": "/api/index.js"
+        },
+        {
+            "source": "/precio-hoy",
+            "destination": "/api/index.js"
+        },
+        {
+            "source": "/comparativas/(.*)",
+            "destination": "/api/index.js"
+        },
+        {
+            "source": "/comparativas",
+            "destination": "/api/index.js"
         }
     ]
 }
