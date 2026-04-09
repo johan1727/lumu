@@ -7049,6 +7049,23 @@ if ('serviceWorker' in navigator) {
             .then(reg => {
                 console.log('[SW] Registered:', reg.scope);
                 window.__swRegistration = reg;
+
+                // Listen for new service worker activation and reload
+                navigator.serviceWorker.addEventListener('controllerchange', () => {
+                    console.log('[SW] New version activated, reloading...');
+                    window.location.reload();
+                });
+
+                // Listen for messages from service worker
+                navigator.serviceWorker.addEventListener('message', (event) => {
+                    if (event.data && event.data.type === 'SW_ACTIVATED') {
+                        console.log('[SW] New version available:', event.data.version);
+                        // Only reload if this isn't the first load
+                        if (navigator.serviceWorker.controller) {
+                            window.location.reload();
+                        }
+                    }
+                });
             })
             .catch(err => console.warn('[SW] Registration failed:', err.message));
     });

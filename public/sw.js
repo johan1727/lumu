@@ -21,7 +21,7 @@ self.addEventListener('install', (event) => {
     );
 });
 
-// Activate: Clean old caches
+// Activate: Clean old caches and notify clients
 self.addEventListener('activate', (event) => {
     event.waitUntil(
         caches.keys().then(keys =>
@@ -31,6 +31,13 @@ self.addEventListener('activate', (event) => {
             )
         ).then(() => self.clients.claim())
     );
+
+    // Notify all clients that a new version is available
+    self.clients.matchAll({ type: 'window' }).then(clients => {
+        clients.forEach(client => {
+            client.postMessage({ type: 'SW_ACTIVATED', version: CACHE_VERSION });
+        });
+    });
 });
 
 // Fetch: Cache-first for static assets, network-first for API calls
