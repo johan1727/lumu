@@ -1,0 +1,115 @@
+# Windsurf Rules for Lumu Project
+# Cascade (Windsurf AI) will read this file automatically
+
+## Project Context
+- This is a price comparison web app with AI
+- Stack: Vanilla JS, Tailwind CSS, Supabase, Vercel
+- Dark mode is the default and preferred theme
+- PWA with Service Worker caching
+
+## Cascade Behavior Rules
+
+### Before Making Changes
+1. Always check CLAUDE.md for project conventions
+2. Check MEMORY.md for recent decisions and patterns
+3. Prefer minimal changes over large refactors
+4. If unsure about intent, ask for clarification
+
+### Code Style Preferences
+- Use single quotes for strings in JS
+- Use 4 spaces for indentation
+- Add trailing commas in multi-line objects/arrays
+- Keep functions under 50 lines when possible
+- Always handle errors with try/catch for localStorage and network calls
+
+### When Writing Code
+- Prefer existing patterns from the codebase
+- Never use `var`, always `const` or `let`
+- Use template literals for string concatenation
+- Prefix console logs with module name: `[Module] message`
+- Use early returns to reduce nesting
+
+### UI/UX Guidelines
+- Dark mode first: assume dark theme unless specified
+- Use Tailwind classes from existing patterns
+- Emerald (green) is the primary brand color: `emerald-500`, `emerald-600`
+- Rounded corners: `rounded-xl`, `rounded-2xl` for cards
+- Shadows: use existing shadow patterns like `shadow-[0_12px_26px_rgba(16,185,129,0.24)]`
+
+### LocalStorage Rules
+- Always prefix keys with `lumu_`
+- Compress data before storing (limit fields, slice strings)
+- Handle QuotaExceededError gracefully
+- Max 20 items for snapshots, max 4MB total
+
+### SEO Requirements
+- Every page needs: title, description, canonical, Open Graph tags
+- Use proper heading hierarchy (h1 → h2 → h3)
+- Add structured data (Schema.org JSON-LD) for articles
+- Include hreflang for internationalization
+
+### Git Commit Style
+- Use conventional commits: `type(scope): description`
+- Types: feat, fix, chore, refactor, docs, test
+- Keep first line under 72 characters
+- Add body for complex changes explaining why
+
+### Testing Approach
+- Before suggesting destructive changes, warn the user
+- After making changes, suggest verification steps
+- Provide copy-paste commands when possible for testing
+
+### Response Style
+- Be terse and direct
+- Use Spanish if the user writes in Spanish
+- Reference file paths with line numbers when showing code
+- Use bullet points for lists, avoid long paragraphs
+
+## Common Tasks
+
+### When User Says "Fix Dark Mode"
+1. Check if html has `class="dark"`
+2. Check if `styles.css` is loading
+3. Verify Tailwind dark mode classes are applied
+4. Check for inline styles overriding CSS
+
+### When User Says "Fix localStorage Error"
+1. Check current storage usage
+2. Implement compression for data
+3. Add QuotaExceededError handling
+4. Update cache busting version in index.html
+
+### When User Says "SEO Fix"
+1. Add missing meta tags
+2. Verify Open Graph tags (og:title, og:description, og:url)
+3. Add Schema.org JSON-LD structured data
+4. Check canonical URL matches current page
+
+## Important Reminders
+- NEVER hardcode API keys
+- NEVER use `eval()` or `innerHTML` with user data
+- ALWAYS sanitize user inputs before display
+- ALWAYS handle network errors gracefully
+- Prefer `textContent` over `innerHTML` for security
+
+## Quick Commands for User
+```bash
+# Hard reload to clear cache
+Ctrl+Shift+R
+
+# Check localStorage usage
+localStorage.length
+
+# Unregister Service Worker
+navigator.serviceWorker.getRegistrations().then(regs => {
+  regs.forEach(r => r.unregister());
+});
+```
+
+## File Locations
+- Main app logic: /public/app.js
+- Styles: /public/styles.css (Tailwind build)
+- HTML pages: /public/*.html
+- API routes: /src/api/*.js
+- Memory: /MEMORY.md
+- Rules: /CLAUDE.md and /.windsurfrules
