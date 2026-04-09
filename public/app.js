@@ -2335,14 +2335,83 @@ function getSearchSnapshot(query) {
     return getSearchSnapshots()[String(query).trim().toLowerCase()] || null;
 }
 
+function compressProductForSnapshot(product) {
+    if (!product || typeof product !== 'object') return null;
+    return {
+        titulo: String(product.titulo || product.title || '').slice(0, 200),
+        precio: Number(product.precio || product.price || 0),
+        tienda: String(product.tienda || product.store || '').slice(0, 100),
+        urlMonetizada: String(product.urlMonetizada || product.url || '').slice(0, 500),
+        urlOriginal: String(product.urlOriginal || product.sourceUrl || '').slice(0, 500),
+        imagen: String(product.imagen || product.image || product.imageUrl || '').slice(0, 500),
+        bestBuyScore: typeof product.bestBuyScore === 'number' ? product.bestBuyScore : undefined,
+        bestBuyLabel: product.bestBuyLabel ? String(product.bestBuyLabel).slice(0, 50) : undefined,
+        resultSource: product.resultSource ? String(product.resultSource).slice(0, 50) : undefined,
+        storeTier: Number(product.storeTier || 0) || undefined,
+        shippingText: product.shippingText ? String(product.shippingText).slice(0, 100) : undefined,
+        condicion: product.condicion ? String(product.condicion).slice(0, 50) : undefined,
+        currencyCode: product.currencyCode ? String(product.currencyCode).slice(0, 10) : undefined,
+        storeCanonical: product.storeCanonical ? String(product.storeCanonical).slice(0, 100) : undefined
+    };
+}
+
+const MAX_SNAPSHOTS = 20;
+const MAX_SNAPSHOT_SIZE_BYTES = 4000000;
+
+function pruneOldestSnapshots(snapshots, maxCount = MAX_SNAPSHOTS) {
+    const entries = Object.entries(snapshots);
+    if (entries.length <= maxCount) return snapshots;
+    entries.sort((a, b) => {
+        const dateA = new Date(a[1]?.savedAt || 0).getTime();
+        const dateB = new Date(b[1]?.savedAt || 0).getTime();
+        return dateA - dateB;
+    });
+    const pruned = entries.slice(-maxCount);
+    return Object.fromEntries(pruned);
+}
+
 function saveSearchSnapshot(snapshot) {
     if (!snapshot?.query || !Array.isArray(snapshot?.results)) return;
-    const snapshots = getSearchSnapshots();
-    snapshots[String(snapshot.query).trim().toLowerCase()] = {
-        ...snapshot,
+    const queryKey = String(snapshot.query).trim().toLowerCase();
+    const compressedResults = snapshot.results
+        .map(compressProductForSnapshot)
+        .filter(p => p !== null)
+        .slice(0, 10);
+    const newSnapshot = {
+        query: snapshot.query,
+        radius: snapshot.radius,
+        safeStoresOnly: snapshot.safeStoresOnly,
+        includeKnownMarketplaces: snapshot.includeKnownMarketplaces,
+        includeHighRiskMarketplaces: snapshot.includeHighRiskMarketplaces,
+        conditionMode: snapshot.conditionMode,
+        results: compressedResults,
         savedAt: snapshot.savedAt || new Date().toISOString()
     };
-    localStorage.setItem(SEARCH_SNAPSHOTS_KEY, JSON.stringify(snapshots));
+    let snapshots = getSearchSnapshots();
+    snapshots[queryKey] = newSnapshot;
+    snapshots = pruneOldestSnapshots(snapshots, MAX_SNAPSHOTS);
+    const json = JSON.stringify(snapshots);
+    if (json.length > MAX_SNAPSHOT_SIZE_BYTES) {
+        snapshots = pruneOldestSnapshots(snapshots, Math.floor(MAX_SNAPSHOTS / 2));
+    }
+    try {
+        localStorage.setItem(SEARCH_SNAPSHOTS_KEY, JSON.stringify(snapshots));
+    } catch (err) {
+        if (err && (err.name === 'QuotaExceededError' || err.code === 22 || err.code === 1014 || String(err.message || '').toLowerCase().includes('quota'))) {
+            console.warn('[Snapshots] Quota exceeded, pruning aggressively and retrying...', err);
+            snapshots = pruneOldestSnapshots(snapshots, Math.max(3, Math.floor(MAX_SNAPSHOTS / 4)));
+            try {
+                localStorage.setItem(SEARCH_SNAPSHOTS_KEY, JSON.stringify(snapshots));
+            } catch (err2) {
+                console.error('[Snapshots] Failed to save even after aggressive pruning', err2);
+                if (typeof window.Sentry !== 'undefined' && window.Sentry.captureMessage) {
+                    window.Sentry.captureMessage('localStorage quota exceeded for search snapshots', 'warning');
+                }
+            }
+        } else {
+            console.error('[Snapshots] Failed to save', err);
+        }
+    }
 }
 
 function buildFallbackProductImage(label = 'Lumu') {
