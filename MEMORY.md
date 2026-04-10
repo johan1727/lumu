@@ -6,6 +6,40 @@
 
 ## 📋 Historial de Sesiones
 
+### 2026-04-10 - SEO Técnico Implementado (Fases 1 & 2)
+**Resumen**: Implementado plan técnico SEO para arreglar indexación y Core Web Vitals.
+
+**Problemas identificados**:
+- 42 de 59 páginas sin indexar (71% del sitio invisible)
+- `robots.txt` tenía `Crawl-delay: 1` que ralentizaba Google
+- Sitemap faltaba ~15 páginas nuevas
+- Sin Schema.org structured data
+
+**Cambios implementados**:
+- ✅ Eliminado `Crawl-delay` de robots.txt
+- ✅ Agregadas URLs faltantes a sitemap.xml (404.html, privacy, terms, admin)
+- ✅ Implementado Schema.org WebSite con SearchAction
+- ✅ Agregados preload hints para CSS crítico y fuentes
+- ✅ Preparado para optimizaciones LCP/CLS
+
+**Herramientas usadas**:
+- Google Search Console (diagnóstico)
+- Plan técnico seo-technical-optimization-d14143.md
+
+**Resultados esperados**:
+- Mejor crawl rate de Google en 1-2 semanas
+- Rich snippets en SERPs
+- Mejores Core Web Vitals scores
+
+**KPIs a monitorear**:
+- % páginas indexadas (meta: 80%+ en 30 días)
+- LCP < 2.5s
+- CLS < 0.1
+
+**Tags**: `#seo` `#technical-seo` `#indexation` `#core-web-vitals` `#2026-04-10`
+
+---
+
 ### 2026-04-09 - Sistema de Reglas y Documentación para IA
 **Resumen**: Creado sistema completo de reglas y memoria para mejorar vibecoding con Cascade/Windsurf.
 
