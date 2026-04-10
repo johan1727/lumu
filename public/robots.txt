@@ -4,7 +4,6 @@ Disallow: /api/
 Disallow: /*?code=*
 Disallow: /*?token=*
 Disallow: /admin/
-Crawl-delay: 1
 
 Allow: /sobre-nosotros.html
 Allow: /privacidad.html

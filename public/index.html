@@ -36,6 +36,37 @@
     <link rel="alternate" hreflang="es" href="https://www.lumu.dev/">
     <link rel="alternate" hreflang="en-US" href="https://www.lumu.dev/en/">
     <link rel="alternate" hreflang="x-default" href="https://www.lumu.dev/">
+    
+    <!-- Preload Critical Resources for LCP -->
+    <link rel="preload" href="/styles.css?v=sw_auto_reload_v2" as="style">
+    <link rel="preload" href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800;900&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" as="style">
+    
+    <!-- Schema.org Structured Data -->
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@type": "WebSite",
+      "name": "Lumu",
+      "url": "https://www.lumu.dev/",
+      "potentialAction": {
+        "@type": "SearchAction",
+        "target": {
+          "@type": "EntryPoint",
+          "urlTemplate": "https://www.lumu.dev/?q={search_term_string}"
+        },
+        "query-input": "required name=search_term_string"
+      },
+      "publisher": {
+        "@type": "Organization",
+        "name": "Lumu AI",
+        "logo": {
+          "@type": "ImageObject",
+          "url": "https://www.lumu.dev/images/icon-192.png"
+        }
+      }
+    }
+    </script>
+    
     <link rel="icon" type="image/svg+xml"
         href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 48 48' fill='none'><path d='M10 18h28l-3 22H13L10 18z' stroke='%2310B981' stroke-width='3' stroke-linejoin='round'/><path d='M17 18V14a7 7 0 0114 0v4' stroke='%2310B981' stroke-width='3' stroke-linecap='round'/></svg>">
     <!-- Tailwind CSS (local build) -->
