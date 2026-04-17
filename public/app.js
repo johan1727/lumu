@@ -97,10 +97,30 @@ let includeKnownMarketplacesInput = null;
 let includeHighRiskMarketplacesInput = null;
 let currentRegion = 'MX';
 let serverDetectedRegion = null;
+let _lastSearchPolicy = { preferredStoreKey: '', preferredStoreKeys: [], preferredStoreMode: 'prefer' };
+let _selectedStoreFocusKeys = [];
 const SEARCH_SNAPSHOTS_KEY = 'lumu_search_snapshots';
 const REGION_OVERRIDE_KEY = 'lumu_region_override';
 const ONBOARDING_V3_KEY = 'lumu_onboarding_v3';
 const ONBOARDING_PREF_KEY = 'lumu_onboarding_preference';
+
+const STORE_FOCUS_OPTIONS = {
+    MX: [
+        { key: 'amazon', label: 'Amazon' },
+        { key: 'mercado libre', label: 'Mercado Libre' },
+        { key: 'walmart', label: 'Walmart' },
+        { key: 'liverpool', label: 'Liverpool' },
+        { key: 'coppel', label: 'Coppel' },
+        { key: 'costco', label: 'Costco' }
+    ],
+    US: [
+        { key: 'amazon', label: 'Amazon' },
+        { key: 'walmart', label: 'Walmart' },
+        { key: 'target', label: 'Target' },
+        { key: 'best buy', label: 'Best Buy' },
+        { key: 'costco', label: 'Costco' }
+    ]
+};
 
 const REGION_LABELS = {
     MX: {
@@ -2253,7 +2273,7 @@ function applyRegionalCopy() {
     syncLocationFilterLabels();
 }
 
-function renderSearchContext({ query = '', radius = 'global', safeStoresOnly = false, resultCount = 0 } = {}) {
+function renderSearchContext({ query = '', radius = 'global', safeStoresOnly = false, preferredStoreKey = '', preferredStoreKeys = [], preferredStoreMode = 'prefer', resultCount = 0 } = {}) {
     const config = getRegionConfig();
     const panel = document.getElementById('search-context-panel');
     const scopePill = document.getElementById('search-scope-pill');
@@ -2278,7 +2298,110 @@ function renderSearchContext({ query = '', radius = 'global', safeStoresOnly = f
         chips.push(`<span class="inline-flex items-center rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-xs font-bold text-emerald-700 shadow-sm">${config.activeSafe}</span>`);
     }
 
+    const effectivePreferredStoreKeys = Array.isArray(preferredStoreKeys) && preferredStoreKeys.length > 0
+        ? preferredStoreKeys
+        : (preferredStoreKey ? [preferredStoreKey] : []);
+    if (effectivePreferredStoreKeys.length > 0) {
+        const focusLabel = preferredStoreMode === 'exclusive'
+            ? getLocalizedText('Solo', 'Only')
+            : preferredStoreMode === 'compare'
+                ? getLocalizedText('Comparando', 'Comparing')
+                : getLocalizedText('Priorizando', 'Prioritizing');
+        const focusValue = effectivePreferredStoreKeys.map(store => sanitize(store)).join(', ');
+        chips.push(`<span class="inline-flex items-center rounded-full border border-indigo-200 bg-indigo-50 px-3 py-1 text-xs font-bold text-indigo-700 shadow-sm">🏪 ${focusLabel}: ${focusValue}</span>`);
+    }
+
     chipsContainer.innerHTML = chips.join('');
+}
+
+function normalizeStoreFocusKey(value = '') {
+    return String(value || '')
+        .toLowerCase()
+        .trim()
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .replace(/\b(mx|mxico|mexico|us|usa|cl|co|pe|ar)\b/g, '')
+        .replace(/[^a-z0-9]+/g, ' ')
+        .trim();
+}
+
+function getStoreFocusOptionsForRegion(regionCode = currentRegion) {
+    return STORE_FOCUS_OPTIONS[regionCode] || STORE_FOCUS_OPTIONS.MX;
+}
+
+function setSelectedStoreFocusKeys(values = []) {
+    _selectedStoreFocusKeys = [...new Set((Array.isArray(values) ? values : [])
+        .map(normalizeStoreFocusKey)
+        .filter(Boolean))].slice(0, 8);
+}
+
+function getSelectedStoreFocus() {
+    if (_selectedStoreFocusKeys.length === 0) {
+        const storeValue = document.getElementById('store-filter')?.value || 'all';
+        if (!storeValue || storeValue === 'all') {
+            return { preferredStoreKey: '', preferredStoreKeys: [], preferredStoreMode: 'prefer' };
+        }
+        return {
+            preferredStoreKey: storeValue,
+            preferredStoreKeys: [normalizeStoreFocusKey(storeValue)].filter(Boolean),
+            preferredStoreMode: 'exclusive'
+        };
+    }
+    return {
+        preferredStoreKey: _selectedStoreFocusKeys[0] || '',
+        preferredStoreKeys: [..._selectedStoreFocusKeys],
+        preferredStoreMode: 'exclusive'
+    };
+}
+
+function buildSearchFocusSignature(storeFocus = {}) {
+    const normalizedKeys = [...new Set((Array.isArray(storeFocus?.preferredStoreKeys) ? storeFocus.preferredStoreKeys : [storeFocus?.preferredStoreKey || ''])
+        .map(normalizeStoreFocusKey)
+        .filter(Boolean))].sort();
+    return `${normalizedKeys.join('+')}:${storeFocus?.preferredStoreMode || 'prefer'}`;
+}
+
+function renderStoreFocusChips() {
+    const chipBar = document.getElementById('store-focus-chip-bar');
+    const summary = document.getElementById('store-focus-summary');
+    const clearBtn = document.getElementById('clear-store-focus-btn');
+    if (!chipBar || !summary || !clearBtn) return;
+    const options = getStoreFocusOptionsForRegion();
+    chipBar.innerHTML = options.map(option => {
+        const normalizedKey = normalizeStoreFocusKey(option.key);
+        const isActive = _selectedStoreFocusKeys.includes(normalizedKey);
+        return `<button type="button" class="store-focus-chip inline-flex items-center rounded-full border px-3 py-2 text-xs font-black transition-all ${isActive ? 'border-indigo-300 bg-indigo-50 text-indigo-700 shadow-sm' : 'border-slate-200 bg-white text-slate-600 hover:border-slate-300 hover:bg-slate-50'}" data-store-key="${sanitize(normalizedKey)}">${sanitize(option.label)}</button>`;
+    }).join('');
+    const selectedLabels = options.filter(option => _selectedStoreFocusKeys.includes(normalizeStoreFocusKey(option.key))).map(option => option.label);
+    if (selectedLabels.length > 0) {
+        summary.textContent = getLocalizedText(`Se buscará solo en: ${selectedLabels.join(', ')}`, `Search will focus only on: ${selectedLabels.join(', ')}`);
+        summary.classList.remove('hidden');
+        clearBtn.classList.remove('hidden');
+    } else {
+        summary.classList.add('hidden');
+        clearBtn.classList.add('hidden');
+        summary.textContent = '';
+    }
+    chipBar.querySelectorAll('.store-focus-chip').forEach(button => {
+        button.addEventListener('click', () => {
+            const storeKey = normalizeStoreFocusKey(button.getAttribute('data-store-key') || '');
+            if (!storeKey) return;
+            if (_selectedStoreFocusKeys.includes(storeKey)) {
+                setSelectedStoreFocusKeys(_selectedStoreFocusKeys.filter(key => key !== storeKey));
+            } else {
+                setSelectedStoreFocusKeys([..._selectedStoreFocusKeys, storeKey]);
+            }
+            const storeSelect = document.getElementById('store-filter');
+            if (storeSelect) storeSelect.value = 'all';
+            renderStoreFocusChips();
+        });
+    });
+    clearBtn.onclick = () => {
+        setSelectedStoreFocusKeys([]);
+        const storeSelect = document.getElementById('store-filter');
+        if (storeSelect) storeSelect.value = 'all';
+        renderStoreFocusChips();
+    };
 }
 
 function updateCoinsProgress(totalSearches = 0) {
@@ -4753,16 +4876,20 @@ async function initApp() {
 
         let _lastSubmittedQuery = '';
         let _lastSubmittedAt = 0;
+        let _lastSubmittedFocusSignature = ':prefer';
 
         async function executeSearch(query, skipLLM = false, deepResearch = false) {
             // Dedup: prevent identical query within 3s (double-click / double-submit)
             const now = Date.now();
-            if (query === _lastSubmittedQuery && _lastSubmittedDeepResearch === Boolean(deepResearch) && (now - _lastSubmittedAt) < 3000) {
+            const selectedStoreFocus = getSelectedStoreFocus();
+            const currentFocusSignature = buildSearchFocusSignature(selectedStoreFocus);
+            if (query === _lastSubmittedQuery && _lastSubmittedDeepResearch === Boolean(deepResearch) && _lastSubmittedFocusSignature === currentFocusSignature && (now - _lastSubmittedAt) < 3000) {
                 console.log('[Search Dedup] Skipping duplicate query:', query);
                 return;
             }
             _lastSubmittedQuery = query;
             _lastSubmittedDeepResearch = Boolean(deepResearch);
+            _lastSubmittedFocusSignature = currentFocusSignature;
             _lastSubmittedAt = now;
 
             if (_isSearchInProgress && _activeSearchAbortController) {
@@ -4857,6 +4984,11 @@ async function initApp() {
                     includeHighRiskMarketplaces,
                     conditionMode: getConditionMode()
                 };
+                if (selectedStoreFocus.preferredStoreKey) {
+                    searchBody.preferredStoreKey = selectedStoreFocus.preferredStoreKey;
+                    searchBody.preferredStoreKeys = selectedStoreFocus.preferredStoreKeys || [selectedStoreFocus.preferredStoreKey];
+                    searchBody.preferredStoreMode = selectedStoreFocus.preferredStoreMode;
+                }
                 const parsedLat = parseFloat(lat);
                 const parsedLng = parseFloat(lng);
                 if (!isNaN(parsedLat)) searchBody.lat = parsedLat;
@@ -5093,6 +5225,9 @@ async function initApp() {
                         safeStoresOnly,
                         includeKnownMarketplaces,
                         includeHighRiskMarketplaces,
+                        preferredStoreKey: data.search_metadata?.preferred_store_key || selectedStoreFocus.preferredStoreKey || '',
+                        preferredStoreKeys: data.search_metadata?.preferred_store_keys || selectedStoreFocus.preferredStoreKeys || [],
+                        preferredStoreMode: data.search_metadata?.preferred_store_mode || selectedStoreFocus.preferredStoreMode || 'prefer',
                         resultCount: data.top_5_baratos?.length || 0
                     });
                     observeSearchFlowElement(document.getElementById('search-context-panel'), 40);
@@ -5100,6 +5235,13 @@ async function initApp() {
 
                     const searchTier = data.search_metadata?.search_tier || 'free';
                     const deepSearchEnabled = !!data.search_metadata?.deep_search_enabled;
+                    _lastSearchPolicy = {
+                        preferredStoreKey: data.search_metadata?.preferred_store_key || selectedStoreFocus.preferredStoreKey || '',
+                        preferredStoreKeys: data.search_metadata?.preferred_store_keys || selectedStoreFocus.preferredStoreKeys || [],
+                        preferredStoreMode: data.search_metadata?.preferred_store_mode || selectedStoreFocus.preferredStoreMode || 'prefer'
+                    };
+                    setSelectedStoreFocusKeys(_lastSearchPolicy.preferredStoreKeys || []);
+                    renderStoreFocusChips();
 
                     if (!data.top_5_baratos || data.top_5_baratos.length === 0) {
                         _trackEvent('zero_results', {
@@ -5112,7 +5254,11 @@ async function initApp() {
                     }
 
                     if (data.top_5_baratos && data.top_5_baratos.length > 0) {
-                        await renderProducts(data.top_5_baratos);
+                        await renderProducts(data.top_5_baratos, {
+                            preferredStoreKey: _lastSearchPolicy.preferredStoreKey,
+                            preferredStoreKeys: _lastSearchPolicy.preferredStoreKeys,
+                            preferredStoreMode: _lastSearchPolicy.preferredStoreMode
+                        });
                         if (data.ai_pick && resultsContainer) {
                             const aiPickCard = document.createElement('div');
                             const aiPickText = sanitize(String(data.ai_pick.recommendation || data.ai_pick.reasoning || '').trim().slice(0, 220));
@@ -6001,12 +6147,26 @@ async function initApp() {
 
         // Bind toolbar events
         document.getElementById('sort-select')?.addEventListener('change', applyFiltersAndSort);
-        document.getElementById('store-filter')?.addEventListener('change', applyFiltersAndSort);
+        document.getElementById('store-filter')?.addEventListener('change', async () => {
+            const selectedStoreFocus = getSelectedStoreFocus();
+            const previousFocusSignature = buildSearchFocusSignature(_lastSearchPolicy);
+            const currentFocusSignature = buildSearchFocusSignature(selectedStoreFocus);
+            if ((document.getElementById('store-filter')?.value || 'all') !== 'all') {
+                setSelectedStoreFocusKeys([]);
+                renderStoreFocusChips();
+            }
+            if (_lastSubmittedQuery && previousFocusSignature !== currentFocusSignature) {
+                await executeSearch(_lastSubmittedQuery, true, _deepResearchArmed);
+                return;
+            }
+            applyFiltersAndSort();
+        });
         document.getElementById('free-shipping-filter')?.addEventListener('change', applyFiltersAndSort);
         document.getElementById('price-filter-btn')?.addEventListener('click', applyFiltersAndSort);
         // Allow enter key in price inputs
         document.getElementById('price-min')?.addEventListener('keydown', e => { if (e.key === 'Enter') applyFiltersAndSort(); });
         document.getElementById('price-max')?.addEventListener('keydown', e => { if (e.key === 'Enter') applyFiltersAndSort(); });
+        renderStoreFocusChips();
 
         const parseProductPriceValue = (rawPrice) => {
             if (typeof rawPrice === 'number') {
@@ -6052,7 +6212,7 @@ async function initApp() {
             return currentRegion === 'US' ? `Verified ${diffDays}d ago` : `Verificado hace ${diffDays} d`;
         };
 
-        async function renderProducts(products) {
+        async function renderProducts(products, options = {}) {
             resultsContainer.innerHTML = '';
             
             // Show Deep Research banner if mode is active
@@ -6134,9 +6294,18 @@ async function initApp() {
             // Populate store filter
             const storeSelect = document.getElementById('store-filter');
             if (storeSelect) {
+                const previousStoreValue = storeSelect.value || 'all';
                 const stores = [...new Set(renderableProducts.map(p => p.tienda))].filter(Boolean).sort();
                 storeSelect.innerHTML = `<option value="all">${getLocalizedText('Todas las tiendas', 'All stores')}</option>` + 
                     stores.map(s => `<option value="${s}">${s}</option>`).join('');
+                const preferredStoreDisplays = stores.filter(storeName => (options.preferredStoreKeys || []).includes(normalizeStoreFocusKey(storeName)));
+                const preferredStoreDisplay = preferredStoreDisplays.length === 1
+                    ? preferredStoreDisplays[0]
+                    : (renderableProducts.find(p => normalizeStoreFocusKey(p.canonicalStore || p.tienda) === normalizeStoreFocusKey(options.preferredStoreKey || ''))?.tienda || '');
+                const desiredStoreValue = stores.includes(previousStoreValue)
+                    ? previousStoreValue
+                    : (preferredStoreDisplay && stores.includes(preferredStoreDisplay) ? preferredStoreDisplay : 'all');
+                storeSelect.value = desiredStoreValue;
             }
 
             // UX-5: Auto-fill price range placeholders from actual results

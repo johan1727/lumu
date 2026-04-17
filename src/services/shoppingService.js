@@ -4,6 +4,7 @@ const monitor = require('./scraperMonitor');
 const localPriceExtractor = require('./localPriceExtractor');
 const regionConfigService = require('./regionConfigService');
 const meliService = require('./meliService');
+const storeTrustService = require('./storeTrustService');
 
 // Timeout por defecto para Serper API
 const SERPER_TIMEOUT = 12000;
@@ -180,7 +181,23 @@ function resolvePriceMetadata({
 
 function applyResultMetadata(item = {}) {
     if (!item || typeof item !== 'object') return item;
-    if (item.resultSource && item.priceSource && item.priceConfidence != null) return item;
+    const enrichStoreMetadata = (result) => {
+        const storeTrust = result.storeTrust || storeTrustService.classifyStore({
+            title: result.title || '',
+            snippet: result.snippet || '',
+            source: result.source || result.store || '',
+            url: result.url || result.link || ''
+        });
+        return {
+            ...result,
+            storeTrust,
+            canonicalStore: result.canonicalStore || storeTrust.canonicalStore,
+            storeTier: result.storeTier || storeTrust.storeTier,
+            sellerModel: result.sellerModel || storeTrust.sellerModel,
+            trustLabel: result.trustLabel || storeTrust.trustLabel
+        };
+    };
+    if (item.resultSource && item.priceSource && item.priceConfidence != null) return enrichStoreMetadata(item);
     const inferredSource = item.isLocalStore
         ? 'places'
         : item.isDirectProductPage
@@ -199,7 +216,7 @@ function applyResultMetadata(item = {}) {
         couponApplied: item.couponApplied,
         hasStrikeThroughPrice: item.hasStrikeThroughPrice
     });
-    return {
+    return enrichStoreMetadata({
         ...item,
         price: metadata.price,
         priceSource: metadata.priceSource,
@@ -215,7 +232,116 @@ function applyResultMetadata(item = {}) {
         hasCouponLanguage: metadata.hasCouponLanguage,
         hasShippingLanguage: metadata.hasShippingLanguage,
         resultSource: inferredSource
+    });
+}
+
+function normalizeSearchPolicy(searchPolicy = {}) {
+    const preferredStoreKeys = [...new Set([
+        ...(Array.isArray(searchPolicy?.preferredStoreKeys) ? searchPolicy.preferredStoreKeys : []),
+        searchPolicy?.preferredStoreKey || ''
+    ].map(value => {
+        const canonicalValue = storeTrustService.canonicalizeStoreName(value || '', '');
+        return canonicalValue === 'desconocida' ? '' : canonicalValue;
+    }).filter(Boolean))].slice(0, 8);
+    return {
+        preferredStoreKey: preferredStoreKeys[0] || '',
+        preferredStoreKeys,
+        preferredStoreMode: ['prefer', 'exclusive', 'compare'].includes(searchPolicy?.preferredStoreMode)
+            ? searchPolicy.preferredStoreMode
+            : 'prefer',
+        safeStoresOnly: Boolean(searchPolicy?.safeStoresOnly),
+        includeKnownMarketplaces: searchPolicy?.includeKnownMarketplaces !== false,
+        includeHighRiskMarketplaces: Boolean(searchPolicy?.includeHighRiskMarketplaces)
     };
+}
+
+function resolvePreferredStoreDomains(countryCode = 'MX', preferredStoreKeys = []) {
+    const keys = Array.isArray(preferredStoreKeys) ? preferredStoreKeys.filter(Boolean) : [];
+    if (keys.length === 0) return [];
+    const config = regionConfigService.getRegionConfig(countryCode);
+    return [...new Set(Object.entries(config.storeMap || {})
+        .filter(([domain, storeName]) => {
+            const canonicalFromName = storeTrustService.canonicalizeStoreName(storeName, domain);
+            const canonicalFromDomain = storeTrustService.canonicalizeStoreName(domain, domain);
+            return keys.includes(canonicalFromName) || keys.includes(canonicalFromDomain);
+        })
+        .map(([domain]) => domain))];
+}
+
+function buildStoreFocusedShoppingQuery(query = '', countryCode = 'MX', searchPolicy = {}) {
+    const policy = normalizeSearchPolicy(searchPolicy);
+    const normalizedQuery = String(query || '').trim();
+    if (!policy.preferredStoreKeys.length) return normalizedQuery;
+    const preferredDomains = resolvePreferredStoreDomains(countryCode, policy.preferredStoreKeys);
+    if (policy.preferredStoreMode === 'exclusive' && preferredDomains.length > 0) {
+        return `${normalizedQuery} (${preferredDomains.map(domain => `site:${domain}`).join(' OR ')})`.trim();
+    }
+    if (policy.preferredStoreMode === 'prefer') {
+        const missingPreferredKeys = policy.preferredStoreKeys.filter(storeKey => !normalizedQuery.toLowerCase().includes(storeKey));
+        if (missingPreferredKeys.length > 0) {
+            return `${normalizedQuery} ${missingPreferredKeys.join(' ')}`.trim();
+        }
+    }
+    return normalizedQuery;
+}
+
+function filterResultsBySearchPolicy(results = [], searchPolicy = {}) {
+    const policy = normalizeSearchPolicy(searchPolicy);
+    return (results || []).filter(result => {
+        const storeTrust = result.storeTrust || storeTrustService.classifyStore({
+            title: result.title || '',
+            snippet: result.snippet || '',
+            source: result.source || result.store || '',
+            url: result.url || result.link || ''
+        });
+        const canonicalStore = result.canonicalStore || storeTrust.canonicalStore;
+        const isPreferredStore = policy.preferredStoreKeys.length > 0 && policy.preferredStoreKeys.includes(canonicalStore);
+
+        if (policy.preferredStoreKeys.length > 0 && policy.preferredStoreMode === 'exclusive' && !isPreferredStore) {
+            return false;
+        }
+        if (isPreferredStore) {
+            return true;
+        }
+        if (policy.safeStoresOnly && !storeTrustService.shouldAllowSafeStore({ ...result, storeTrust })) {
+            return false;
+        }
+        if (policy.includeKnownMarketplaces === false && storeTrust.sellerModel === 'marketplace') {
+            return false;
+        }
+        if (policy.includeHighRiskMarketplaces === false && storeTrust.isRiskyMarketplace) {
+            return false;
+        }
+        return true;
+    });
+}
+
+function getPreferredStoreAliases(preferredStoreKey = '') {
+    const aliasMap = {
+        amazon: ['amazon'],
+        'mercado libre': ['meli', 'mercadolibre', 'mercado libre'],
+        walmart: ['walmart'],
+        liverpool: ['liverpool'],
+        costco: ['costco'],
+        falabella: ['falabella'],
+        target: ['target'],
+        coppel: ['coppel'],
+        elektra: ['elektra']
+    };
+    return aliasMap[preferredStoreKey] || [preferredStoreKey];
+}
+
+function getStoreFocusSignal(item = {}, searchPolicy = {}) {
+    const policy = normalizeSearchPolicy(searchPolicy);
+    if (!policy.preferredStoreKeys.length) return 0;
+    const storeTrust = item.storeTrust || storeTrustService.classifyStore({
+        title: item.title || '',
+        snippet: item.snippet || '',
+        source: item.source || item.store || '',
+        url: item.url || item.link || ''
+    });
+    const canonicalStore = item.canonicalStore || storeTrust.canonicalStore;
+    return policy.preferredStoreKeys.includes(canonicalStore) ? 1 : 0;
 }
 
 function normalizeIncomingImage(value = '') {
@@ -711,7 +837,9 @@ exports.searchGoogleShopping = async (query, radius, lat, lng, intentType, abort
     let mlPrioritySkipped = false;
     let isService = intentType === 'servicio_local';
     const searchConditionMode = conditionMode || 'all';
-    const shoppingQuery = String(query || '').trim();
+    const searchPolicy = normalizeSearchPolicy(searchOptions?.searchPolicy || {});
+    const rawShoppingQuery = String(query || '').trim();
+    const shoppingQuery = buildStoreFocusedShoppingQuery(rawShoppingQuery, countryCode, searchPolicy);
     const webQuery = String(searchOptions.webQuery || query || '').trim();
     const isBroadExploration = Boolean(searchOptions?.broadProfile?.broad);
     const queryType = String(searchOptions?.queryType || 'generic').toLowerCase();
@@ -719,14 +847,15 @@ exports.searchGoogleShopping = async (query, radius, lat, lng, intentType, abort
     const isVipSearch = searchTier === 'vip';
     const deepSearchEnabled = Boolean(searchOptions?.deepSearchEnabled);
     const isSpecificProduct = queryType === 'brand_model' || queryType === 'comparison';
-    const shouldQueryBroadWeb = !isSpecificProduct && shouldRunBroadWebQuery(webQuery, {
+    const restrictToPreferredStore = searchPolicy.preferredStoreKeys.length > 0 && searchPolicy.preferredStoreMode === 'exclusive';
+    const shouldQueryBroadWeb = !restrictToPreferredStore && !isSpecificProduct && shouldRunBroadWebQuery(webQuery, {
         productCategory,
         preferredStoreKeys,
         isBroadExploration: isBroadExploration && !['smartphone', 'laptop', 'audio', 'tv'].includes(String(productCategory || '').toLowerCase()),
         alternativeQueries
     });
-    const shouldQueryOfficialWeb = !isSpecificProduct && (isVipSearch || shouldRunOfficialWebQuery(webQuery, brandOfficialQuery, countryCode));
-    const shouldQueryMlPriority = !isSpecificProduct && (isVipSearch || preferredStoreKeys.length === 0);
+    const shouldQueryOfficialWeb = !restrictToPreferredStore && !isSpecificProduct && (isVipSearch || shouldRunOfficialWebQuery(webQuery, brandOfficialQuery, countryCode));
+    const shouldQueryMlPriority = !restrictToPreferredStore && !isSpecificProduct && (isVipSearch || searchPolicy.preferredStoreKeys.length === 0);
     const shouldRunDirectScrapers = !isService
         && intentType !== 'mayoreo_perecedero'
         && (!isLocalFastMode || isBroadExploration || ['smartphone', 'laptop', 'audio', 'tv', 'fashion', 'home', 'appliance'].includes(String(productCategory || '').toLowerCase()));
@@ -800,7 +929,7 @@ exports.searchGoogleShopping = async (query, radius, lat, lng, intentType, abort
         // Build web query with priority: 1) intent-memory preferred stores, 2) category-specific domains, 3) general domains
         let webSearchQ;
         if (preferredStoreKeys.length > 0) {
-            webSearchQ = regionConfigService.buildAdaptiveWebSearchQuery(webQuery, countryCode, preferredStoreKeys);
+            webSearchQ = regionConfigService.buildAdaptiveWebSearchQuery(webQuery, countryCode, preferredStoreKeys, searchPolicy.preferredStoreMode);
         } else if (productCategory) {
             webSearchQ = regionConfigService.buildCategoryWebSearchQuery(webQuery, countryCode, productCategory);
         } else {
@@ -810,7 +939,7 @@ exports.searchGoogleShopping = async (query, radius, lat, lng, intentType, abort
         const normalizedWebSearchQ = String(webSearchQ || '').toLowerCase();
         const mainWebAlreadyTargetsAmazon = /site:amazon\.(com|com\.mx)/i.test(normalizedWebSearchQ);
         const mainWebAlreadyTargetsMercadoLibre = /site:mercadolibre\./i.test(normalizedWebSearchQ);
-        const shouldQueryMlAmazon = !isSpecificProduct && !(mainWebAlreadyTargetsAmazon && mainWebAlreadyTargetsMercadoLibre);
+        const shouldQueryMlAmazon = !restrictToPreferredStore && !isSpecificProduct && !(mainWebAlreadyTargetsAmazon && mainWebAlreadyTargetsMercadoLibre);
         const amazonSpecificDomain = countryCode === 'US' ? 'amazon.com' : 'amazon.com.mx';
         const amazonSpecificShoppingPromise = !isSpecificProduct
             ? Promise.resolve(null)
@@ -935,7 +1064,7 @@ exports.searchGoogleShopping = async (query, radius, lat, lng, intentType, abort
                 method: 'post',
                 url: 'https://google.serper.dev/shopping',
                 headers: { 'X-API-KEY': apiKey, 'Content-Type': 'application/json' },
-                data: JSON.stringify({ q: altQuery, gl: regionCfg.gl, hl: regionCfg.hl, num: altShoppingNum }),
+                data: JSON.stringify({ q: buildStoreFocusedShoppingQuery(altQuery, countryCode, searchPolicy), gl: regionCfg.gl, hl: regionCfg.hl, num: altShoppingNum }),
                 timeout: serperTimeout,
                 signal: abortSignal
             }, serperRetries).catch(err => {
@@ -1414,7 +1543,9 @@ exports.searchGoogleShopping = async (query, radius, lat, lng, intentType, abort
             }
         }
 
-        const preferredStores = getStorePriorityForCategory(productCategory, countryCode);
+        const preferredStores = searchPolicy.preferredStoreKeys.length > 0
+            ? [...searchPolicy.preferredStoreKeys, ...getStorePriorityForCategory(productCategory, countryCode).filter(store => !searchPolicy.preferredStoreKeys.includes(store))]
+            : getStorePriorityForCategory(productCategory, countryCode);
         if (preferredStores.length > 0) {
             scraperFunctions.sort((a, b) => {
                 const rankFor = (fn) => {
@@ -1423,6 +1554,13 @@ exports.searchGoogleShopping = async (query, radius, lat, lng, intentType, abort
                     return index === -1 ? 999 : index;
                 };
                 return rankFor(a) - rankFor(b);
+            });
+        }
+        if (restrictToPreferredStore) {
+            const preferredAliases = [...new Set(searchPolicy.preferredStoreKeys.flatMap(storeKey => getPreferredStoreAliases(storeKey)))];
+            scraperFunctions = scraperFunctions.filter(fn => {
+                const source = String(fn).toLowerCase();
+                return preferredAliases.some(alias => source.includes(String(alias).toLowerCase()));
             });
         }
         
@@ -1497,9 +1635,13 @@ exports.searchGoogleShopping = async (query, radius, lat, lng, intentType, abort
             }
             return true;
         });
-    console.log(`[ShoppingService][Counts] query="${String(query || '').slice(0, 80)}" serper=${serperResults.length} direct=${directResults.length} dedup=${dedupedByUrl.length} merged=${mergedResults.length} sellable=${sellableResults.length} nonRejected=${nonRejectedResults.length} valid=${validResultShape.length}`);
-    const sortedResults = validResultShape
+    const policyFilteredResults = filterResultsBySearchPolicy(validResultShape, searchPolicy);
+    console.log(`[ShoppingService][Counts] query="${String(query || '').slice(0, 80)}" serper=${serperResults.length} direct=${directResults.length} dedup=${dedupedByUrl.length} merged=${mergedResults.length} sellable=${sellableResults.length} nonRejected=${nonRejectedResults.length} valid=${validResultShape.length} policy=${policyFilteredResults.length}`);
+    const sortedResults = policyFilteredResults
         .sort((a, b) => {
+            const preferredStoreDelta = getStoreFocusSignal(b, searchPolicy) - getStoreFocusSignal(a, searchPolicy);
+            if (preferredStoreDelta !== 0) return preferredStoreDelta;
+
             const aHasPrice = Number.isFinite(Number(a.price)) && Number(a.price) > 0;
             const bHasPrice = Number.isFinite(Number(b.price)) && Number(b.price) > 0;
             if (aHasPrice !== bHasPrice) return aHasPrice ? -1 : 1;

@@ -1656,6 +1656,15 @@ qu
                         <span id="deep-research-badge" class="hidden items-center gap-1 rounded-full border border-violet-200 bg-violet-100 px-3 py-1 text-[10px] font-black uppercase tracking-[0.14em] text-violet-800">🔬 Búsqueda Profunda activa</span>
                     </div>
 
+                    <div class="px-4 md:px-5 pb-3 flex flex-col gap-2 border-b border-slate-100">
+                        <div class="flex flex-wrap items-center gap-2">
+                            <span id="store-focus-label" class="text-[11px] font-black uppercase tracking-[0.16em] text-slate-500">Buscar solo en tiendas</span>
+                            <button type="button" id="clear-store-focus-btn" class="hidden rounded-full border border-slate-200 bg-white px-3 py-1 text-[11px] font-bold text-slate-500 transition-colors hover:bg-slate-50 hover:text-slate-700">Limpiar</button>
+                        </div>
+                        <div id="store-focus-summary" class="hidden text-[12px] font-medium text-indigo-600"></div>
+                        <div id="store-focus-chip-bar" class="flex flex-wrap gap-2"></div>
+                    </div>
+
                     <div class="flex flex-col gap-3 px-2 md:px-1 pb-1 pt-3 border-t border-slate-100 md:flex-row md:items-center md:justify-between">
                         <div class="flex flex-wrap items-center gap-2.5 min-w-0 flex-1">
                             <input type="file" id="image-upload" class="hidden" accept="image/*">

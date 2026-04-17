@@ -320,6 +320,90 @@ function buildIntentMemoryMeta(storeKey = '', intentBoostMap = {}, intentSignalM
     };
 }
 
+function normalizeExplicitStoreKey(value = '') {
+    const normalized = String(value || '').trim();
+    if (!normalized) return '';
+    const canonical = storeTrustService.canonicalizeStoreName(normalized, '');
+    return canonical === 'desconocida' ? '' : canonical;
+}
+
+function normalizeExplicitStoreKeys(values = []) {
+    return [...new Set((Array.isArray(values) ? values : [])
+        .map(normalizeExplicitStoreKey)
+        .filter(Boolean))].slice(0, 8);
+}
+
+function buildSearchPolicy({ preferredStoreKey = '', preferredStoreKeys = [], preferredStoreMode = 'prefer', safeStoresOnly = false, includeKnownMarketplaces = true, includeHighRiskMarketplaces = false } = {}) {
+    const normalizedMode = ['prefer', 'exclusive', 'compare'].includes(preferredStoreMode)
+        ? preferredStoreMode
+        : 'prefer';
+    const normalizedPreferredStoreKeys = normalizeExplicitStoreKeys([
+        ...(Array.isArray(preferredStoreKeys) ? preferredStoreKeys : []),
+        preferredStoreKey
+    ]);
+    return {
+        preferredStoreKey: normalizedPreferredStoreKeys[0] || '',
+        preferredStoreKeys: normalizedPreferredStoreKeys,
+        preferredStoreMode: normalizedMode,
+        safeStoresOnly: Boolean(safeStoresOnly),
+        includeKnownMarketplaces: includeKnownMarketplaces !== false,
+        includeHighRiskMarketplaces: Boolean(includeHighRiskMarketplaces)
+    };
+}
+
+function classifySearchPolicyStore(product = {}) {
+    const source = product.tienda || product.fuente || product.source || '';
+    const url = product.urlOriginal || product.urlMonetizada || product.url || '';
+    return product.storeTrust || storeTrustService.classifyStore({
+        title: product.titulo || product.title || '',
+        snippet: product.shippingText || product.snippet || '',
+        source,
+        url
+    });
+}
+
+function applySearchPolicyFilters(products = [], searchPolicy = {}) {
+    return (products || []).filter(product => {
+        const storeTrust = classifySearchPolicyStore(product);
+        const canonicalStore = product.canonicalStore || storeTrust.canonicalStore;
+        const preferredStoreKeys = Array.isArray(searchPolicy.preferredStoreKeys) ? searchPolicy.preferredStoreKeys : [];
+        const isPreferredStore = preferredStoreKeys.length > 0 && preferredStoreKeys.includes(canonicalStore);
+
+        if (preferredStoreKeys.length > 0 && searchPolicy.preferredStoreMode === 'exclusive' && !isPreferredStore) {
+            return false;
+        }
+
+        if (isPreferredStore) {
+            return true;
+        }
+
+        if (searchPolicy.safeStoresOnly && !storeTrustService.shouldAllowSafeStore({ ...product, storeTrust })) {
+            return false;
+        }
+
+        if (searchPolicy.includeKnownMarketplaces === false && storeTrust.sellerModel === 'marketplace') {
+            return false;
+        }
+
+        if (searchPolicy.includeHighRiskMarketplaces === false && storeTrust.isRiskyMarketplace) {
+            return false;
+        }
+
+        return true;
+    });
+}
+
+function getSearchPolicyBoost(product = {}, searchPolicy = {}) {
+    const preferredStoreKeys = Array.isArray(searchPolicy.preferredStoreKeys) ? searchPolicy.preferredStoreKeys : [];
+    if (preferredStoreKeys.length === 0) return 0;
+    const storeTrust = classifySearchPolicyStore(product);
+    const canonicalStore = product.canonicalStore || storeTrust.canonicalStore;
+    if (!preferredStoreKeys.includes(canonicalStore)) return 0;
+    if (searchPolicy.preferredStoreMode === 'exclusive') return 0.22;
+    if (searchPolicy.preferredStoreMode === 'compare') return 0.08;
+    return 0.14;
+}
+
 function looksLikeUrlPlaceholder(text = '') {
     return /\[filtered url\]/i.test(String(text || ''));
 }
@@ -751,8 +835,16 @@ function getAffiliatePriorityMeta(item = {}, countryCode = 'MX') {
     return { rank: 9, boost: 0, capBoost: 0 };
 }
 
-function selectBalancedResults(sortedResults = [], broadProfile = {}, maxResults = 36, maxPerStore = 6) {
+function selectBalancedResults(sortedResults = [], broadProfile = {}, maxResults = 36, maxPerStore = 6, options = {}) {
     const rankedResults = [...sortedResults].sort((a, b) => {
+        const preferredStoreKey = String(options?.preferredStoreKey || '').trim().toLowerCase();
+        const aPreferred = preferredStoreKey && String(a.canonicalStore || '').toLowerCase() === preferredStoreKey ? 1 : 0;
+        const bPreferred = preferredStoreKey && String(b.canonicalStore || '').toLowerCase() === preferredStoreKey ? 1 : 0;
+        if (aPreferred !== bPreferred) return bPreferred - aPreferred;
+
+        const scoreDelta = Number(b.bestBuyScore || 0) - Number(a.bestBuyScore || 0);
+        if (Math.abs(scoreDelta) >= 0.04) return scoreDelta;
+
         const affiliateRankDelta = Number(a.affiliatePriorityRank || 9) - Number(b.affiliatePriorityRank || 9);
         if (affiliateRankDelta !== 0) return affiliateRankDelta;
 
@@ -1024,6 +1116,9 @@ exports.searchProduct = async (req, res) => {
             lng,
             skipLLM,
             deepResearch = false,
+            preferredStoreKey = '',
+            preferredStoreKeys = [],
+            preferredStoreMode = 'prefer',
             safeStoresOnly = false,
             includeKnownMarketplaces = true,
             includeHighRiskMarketplaces = false,
@@ -1047,6 +1142,15 @@ exports.searchProduct = async (req, res) => {
         if (!query) {
             return res.status(400).json({ error: 'Falta el texto de búsqueda (query) en el body.' });
         }
+
+        const searchPolicy = buildSearchPolicy({
+            preferredStoreKey,
+            preferredStoreKeys,
+            preferredStoreMode,
+            safeStoresOnly,
+            includeKnownMarketplaces,
+            includeHighRiskMarketplaces
+        });
 
         let usageWarning = null;
         let userProfile = null;
@@ -1595,7 +1699,8 @@ exports.searchProduct = async (req, res) => {
                     countryCode,
                     llmAnalysis.canonicalKey,
                     llmAnalysis.priceVolatility,
-                    llmAnalysis.queryType || 'generic'
+                    llmAnalysis.queryType || 'generic',
+                    searchPolicy
                 ),
                 null,
                 preSearchTimeoutMs
@@ -1651,12 +1756,12 @@ exports.searchProduct = async (req, res) => {
         let intentSignalMetaMap = resolvedIntentSignals?.signalMetaMap || {};
 
         if (cachedResults) {
-            const filteredCachedResults = cachedResults.filter(item => {
+            const filteredCachedResults = applySearchPolicyFilters(cachedResults.filter(item => {
                 const sourceText = `${item?.tienda || item?.source || ''} ${item?.urlOriginal || item?.url || ''}`.toLowerCase();
                 if (countryCode === 'MX' && /apple\.com\/(us-edu|ca|us-es)\//i.test(sourceText)) return false;
                 if (countryCode === 'MX' && (/apple\.com\/.+\/newsroom\//i.test(sourceText) || /apple\.com\/newsroom\//i.test(sourceText))) return false;
                 return true;
-            });
+            }), searchPolicy);
             await logSuccessfulSearchUsage({
                 userId,
                 query: searchQuery,
@@ -1676,6 +1781,9 @@ exports.searchProduct = async (req, res) => {
                     busqueda: searchQuery,
                     condicion: llmAnalysis.condition,
                     modo_condicion: conditionMode,
+                    tienda_preferida: searchPolicy.preferredStoreKey || null,
+                    tiendas_preferidas: searchPolicy.preferredStoreKeys || [],
+                    modo_tienda_preferida: (searchPolicy.preferredStoreKeys || []).length > 0 ? searchPolicy.preferredStoreMode : null,
                     desde_cache: true
                 },
                 search_metadata: {
@@ -1693,7 +1801,13 @@ exports.searchProduct = async (req, res) => {
                     reasoning: llmAnalysis.reasoning || null,
                     estimatedCostUsd: cacheEstimatedCostUsd,
                     search_tier: effectiveSearchTier,
-                    deep_search_enabled: deepSearchEnabled
+                    deep_search_enabled: deepSearchEnabled,
+                    preferred_store_key: searchPolicy.preferredStoreKey || null,
+                    preferred_store_keys: searchPolicy.preferredStoreKeys || [],
+                    preferred_store_mode: (searchPolicy.preferredStoreKeys || []).length > 0 ? searchPolicy.preferredStoreMode : null,
+                    safe_stores_only: searchPolicy.safeStoresOnly,
+                    include_known_marketplaces: searchPolicy.includeKnownMarketplaces,
+                    include_high_risk_marketplaces: searchPolicy.includeHighRiskMarketplaces
                 },
                 region: {
                     country: countryCode,
@@ -1714,7 +1828,13 @@ exports.searchProduct = async (req, res) => {
         }
 
         // Extract preferred store keys from intent memory for adaptive site: operators
-        const preferredStoreKeys = Object.keys(intentBoostMap).filter(k => intentBoostMap[k] < 0).slice(0, 4);
+        const memoryPreferredStoreKeys = Object.keys(intentBoostMap).filter(k => intentBoostMap[k] < 0).slice(0, 4);
+        const effectivePreferredStoreKeys = [...new Set([
+            ...(Array.isArray(searchPolicy.preferredStoreKeys) ? searchPolicy.preferredStoreKeys : []),
+            ...memoryPreferredStoreKeys
+        ])].filter(Boolean).slice(0, searchPolicy.preferredStoreMode === 'exclusive'
+            ? Math.max(1, (searchPolicy.preferredStoreKeys || []).length || 1)
+            : 4);
 
         bumpProviderCostMetrics(costMetrics, {
             intentType: llmAnalysis.intent_type,
@@ -1725,7 +1845,7 @@ exports.searchProduct = async (req, res) => {
             brandOfficialQuery: effectiveBrandOfficialQuery,
             alternativeQueries: cleanAlternativeQueries,
             productCategory: llmAnalysis.productCategory || '',
-            preferredStoreKeys,
+            preferredStoreKeys: effectivePreferredStoreKeys,
             queryType: llmAnalysis.queryType || 'generic'
         });
 
@@ -1743,14 +1863,15 @@ exports.searchProduct = async (req, res) => {
                 countryCode,
                 cleanAlternativeQueries,
                 llmAnalysis.productCategory || '',
-                preferredStoreKeys,
+                effectivePreferredStoreKeys,
                 effectiveBrandOfficialQuery,
                 {
                     webQuery: searchQuery,
                     broadProfile: llmAnalysis.broadProfile || null,
                     queryType: llmAnalysis.queryType || 'generic',
                     searchTier: effectiveSearchTier,
-                    deepSearchEnabled
+                    deepSearchEnabled,
+                    searchPolicy
                 }
             );
         } catch (shoppingError) {
@@ -1798,7 +1919,7 @@ exports.searchProduct = async (req, res) => {
                         label: `alternative_${index + 1}`,
                         query: altQuery,
                         alternativeQueries: [],
-                        preferredStoreKeys,
+                        preferredStoreKeys: effectivePreferredStoreKeys,
                         brandOfficialQuery: null
                     });
                 });
@@ -1808,7 +1929,7 @@ exports.searchProduct = async (req, res) => {
                     label: 'official',
                     query: effectiveBrandOfficialQuery,
                     alternativeQueries: [],
-                    preferredStoreKeys,
+                    preferredStoreKeys: effectivePreferredStoreKeys,
                     brandOfficialQuery: effectiveBrandOfficialQuery
                 });
             }
@@ -1828,14 +1949,14 @@ exports.searchProduct = async (req, res) => {
                     label: 'deep_meli_site',
                     query: `site:${meliDomain} "${searchQuery}" nuevo`,
                     alternativeQueries: [],
-                    preferredStoreKeys: [],
+                    preferredStoreKeys: effectivePreferredStoreKeys,
                     brandOfficialQuery: null
                 });
                 rescuedQueries.push({
                     label: 'deep_amazon_site',
                     query: `site:${amazonDomain} "${searchQuery}" nuevo`,
                     alternativeQueries: [],
-                    preferredStoreKeys: [],
+                    preferredStoreKeys: effectivePreferredStoreKeys,
                     brandOfficialQuery: null
                 });
             }
@@ -1874,7 +1995,7 @@ exports.searchProduct = async (req, res) => {
                     llmAnalysis.productCategory || '',
                     rescueStep.preferredStoreKeys || [],
                     rescueStep.brandOfficialQuery,
-                    { queryType: 'brand_model', rescue: true, searchTier: effectiveSearchTier, deepSearchEnabled }
+                    { queryType: 'brand_model', rescue: true, searchTier: effectiveSearchTier, deepSearchEnabled, searchPolicy }
                 ).catch(err => {
                     console.warn(`[Search Pipeline] Rescue "${rescueStep.label}" failed: ${err.message}`);
                     return [];
@@ -1901,6 +2022,12 @@ exports.searchProduct = async (req, res) => {
             const resolvedTitle = product.titulo || product.title || 'Sin título';
             const clonePenalty = computeClonePenalty(resolvedTitle, searchQuery);
             const modelMatchScore = computeModelMatchScore(resolvedTitle, searchQuery);
+            const storeTrust = storeTrustService.classifyStore({
+                title: resolvedTitle,
+                snippet: product.shippingText || product.snippet || '',
+                source: resolvedStore,
+                url: resolvedOriginalUrl
+            });
             const qualityFlags = [];
             if (clonePenalty >= 0.34) qualityFlags.push('likely_clone');
             if (modelMatchScore <= 0.35) qualityFlags.push('model_mismatch');
@@ -1917,15 +2044,22 @@ exports.searchProduct = async (req, res) => {
                 countryCode: product.countryCode || countryCode,
                 originalQuery: product.originalQuery || shoppingBaseQuery || searchQuery,
                 productCategory: product.productCategory || llmAnalysis.productCategory || '',
+                storeTrust,
+                canonicalStore: storeTrust.canonicalStore,
+                storeTier: storeTrust.storeTier,
+                sellerModel: storeTrust.sellerModel,
+                trustLabel: storeTrust.trustLabel,
+                isPreferredStoreResult: Array.isArray(searchPolicy.preferredStoreKeys) && searchPolicy.preferredStoreKeys.includes(storeTrust.canonicalStore),
                 _clonePenalty: clonePenalty,
                 _modelMatchScore: modelMatchScore,
-                _qualityFlags: qualityFlags
+                _priceValue: normalizedPrice,
             };
         });
 
         const queryStructuredTokens = extractStructuredProductTokens(searchQuery);
         const isVagueQuery = tokenizeSearchText(searchQuery).length <= 3 && queryStructuredTokens.length === 0;
-        const qualityFilteredResults = shoppingResults.filter(product => {
+        const policyFilteredResults = applySearchPolicyFilters(shoppingResults, searchPolicy);
+        const qualityFilteredResults = policyFilteredResults.filter(product => {
             if (isVagueQuery) return true;
             if (product._clonePenalty >= 0.65 && product._modelMatchScore <= 0.15) return false;
             return true;
@@ -1969,6 +2103,8 @@ exports.searchProduct = async (req, res) => {
                 product.couponSourceUrl = couponSourceUrl;
             }
             product.bestBuyScore = buildBestBuyScore(product);
+            product._searchPolicyBoost = getSearchPolicyBoost(product, searchPolicy);
+            product.bestBuyScore = Number(Math.min(1, product.bestBuyScore + product._searchPolicyBoost).toFixed(3));
             product.bestBuyLabel = buildBestBuyLabel(product.bestBuyScore);
             return product;
         }));
@@ -2023,7 +2159,8 @@ exports.searchProduct = async (req, res) => {
             finalProductsConCupones,
             buildBroadSearchProfile(searchQuery),
             36,
-            isVipSearch ? 8 : 5
+            isVipSearch ? 8 : 5,
+            { preferredStoreKey: searchPolicy.preferredStoreKey, preferredStoreKeys: searchPolicy.preferredStoreKeys || [] }
         );
 
         // Deep Research: AI-powered comparative analysis and variant suggestions
@@ -2056,6 +2193,23 @@ exports.searchProduct = async (req, res) => {
 
         // 6. Devolver respuesta estandarizada al frontend
         const estimatedCostUsd = estimateSearchCostUsd(costMetrics);
+        if (shouldUseCache && balancedProducts.length > 0) {
+            try {
+                await cacheService.saveToCache(
+                    searchQuery,
+                    radius,
+                    lat,
+                    lng,
+                    balancedProducts,
+                    countryCode,
+                    llmAnalysis.canonicalKey,
+                    llmAnalysis.priceVolatility,
+                    searchPolicy
+                );
+            } catch (cacheSaveError) {
+                console.warn('[Cache Save] Error saving search results:', cacheSaveError.message);
+            }
+        }
         await logSuccessfulSearchUsage({
             userId,
             query: searchQuery,
@@ -2072,7 +2226,10 @@ exports.searchProduct = async (req, res) => {
             intencion_detectada: {
                 busqueda: searchQuery,
                 condicion: llmAnalysis.condition,
-                modo_condicion: conditionMode
+                modo_condicion: conditionMode,
+                tienda_preferida: searchPolicy.preferredStoreKey || null,
+                tiendas_preferidas: searchPolicy.preferredStoreKeys || [],
+                modo_tienda_preferida: (searchPolicy.preferredStoreKeys || []).length > 0 ? searchPolicy.preferredStoreMode : null
             },
             search_metadata: {
                 canonical_key: llmAnalysis.canonicalKey,
@@ -2091,7 +2248,13 @@ exports.searchProduct = async (req, res) => {
                 deep_search_enabled: deepSearchEnabled,
                 billed_search_units: deepSearchEnabled ? 3 : 1,
                 estimated_cost_usd: estimatedCostUsd,
-                estimated_cost_breakdown: buildCostBreakdown(costMetrics)
+                estimated_cost_breakdown: buildCostBreakdown(costMetrics),
+                preferred_store_key: searchPolicy.preferredStoreKey || null,
+                preferred_store_keys: searchPolicy.preferredStoreKeys || [],
+                preferred_store_mode: (searchPolicy.preferredStoreKeys || []).length > 0 ? searchPolicy.preferredStoreMode : null,
+                safe_stores_only: searchPolicy.safeStoresOnly,
+                include_known_marketplaces: searchPolicy.includeKnownMarketplaces,
+                include_high_risk_marketplaces: searchPolicy.includeHighRiskMarketplaces
             },
             deep_research_analysis: deepResearchEnhancements?.comparativeAnalysis || null,
             ai_pick: deepResearchEnhancements?.comparativeAnalysis
@@ -2103,14 +2266,14 @@ exports.searchProduct = async (req, res) => {
                 }
                 : null,
             suggested_variants: deepResearchEnhancements?.suggestedVariants || null,
-            best_buy_pick: finalProductsConCupones.length > 0
+            best_buy_pick: balancedProducts.length > 0
                 ? {
-                    title: finalProductsConCupones[0].titulo,
-                    store: finalProductsConCupones[0].tienda,
-                    price: finalProductsConCupones[0].precio,
-                    score: finalProductsConCupones[0].bestBuyScore,
-                    label: finalProductsConCupones[0].bestBuyLabel,
-                    url: finalProductsConCupones[0].urlMonetizada || finalProductsConCupones[0].urlOriginal
+                    title: balancedProducts[0].titulo,
+                    store: balancedProducts[0].tienda,
+                    price: balancedProducts[0].precio,
+                    score: balancedProducts[0].bestBuyScore,
+                    label: balancedProducts[0].bestBuyLabel,
+                    url: balancedProducts[0].urlMonetizada || balancedProducts[0].urlOriginal
                 }
                 : null,
             region: {

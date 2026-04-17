@@ -40,10 +40,51 @@ const normalizeCanonicalKey = (value = '') => String(value || '')
     .replace(/^_+|_+$/g, '')
     .slice(0, 160);
 
+const normalizeStoreKey = (value = '') => String(value || '')
+    .toLowerCase()
+    .trim()
+    .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-z0-9]+/g, '_')
+    .replace(/^_+|_+$/g, '')
+    .slice(0, 80);
+
+const normalizeStoreKeys = (values = []) => [...new Set((Array.isArray(values) ? values : [])
+    .map(normalizeStoreKey)
+    .filter(Boolean))].slice(0, 8);
+
+function normalizeSearchPolicy(searchPolicy = {}) {
+    const preferredStoreMode = ['prefer', 'exclusive', 'compare'].includes(searchPolicy?.preferredStoreMode)
+        ? searchPolicy.preferredStoreMode
+        : 'prefer';
+    const preferredStoreKeys = normalizeStoreKeys([
+        ...(Array.isArray(searchPolicy?.preferredStoreKeys) ? searchPolicy.preferredStoreKeys : []),
+        searchPolicy?.preferredStoreKey || ''
+    ]);
+    return {
+        preferredStoreKey: preferredStoreKeys[0] || '',
+        preferredStoreKeys,
+        preferredStoreMode,
+        safeStoresOnly: Boolean(searchPolicy?.safeStoresOnly),
+        includeKnownMarketplaces: searchPolicy?.includeKnownMarketplaces !== false,
+        includeHighRiskMarketplaces: Boolean(searchPolicy?.includeHighRiskMarketplaces)
+    };
+}
+
+function serializeSearchPolicy(searchPolicy = {}) {
+    const normalized = normalizeSearchPolicy(searchPolicy);
+    return [
+        normalized.preferredStoreKeys.length > 0 ? normalized.preferredStoreKeys.join('+') : 'allstores',
+        normalized.preferredStoreMode,
+        normalized.safeStoresOnly ? 'safe' : 'mixed',
+        normalized.includeKnownMarketplaces ? 'known' : 'noknown',
+        normalized.includeHighRiskMarketplaces ? 'riskon' : 'riskoff'
+    ].join('_');
+}
+
 /**
  * Genera una key única basada en país, query normalizada, lat, lng y radius
  */
-const generateCacheKey = (query, radius, lat, lng, countryCode = 'MX') => {
+const generateCacheKey = (query, radius, lat, lng, countryCode = 'MX', searchPolicy = {}) => {
     let key = `ct_${String(countryCode || 'MX').toUpperCase()}_${normalizeQuery(query)}`;
     if (radius && radius !== 'global') {
         // Truncar lat/lng a 1 decimal (~11 km de precisión) para más cache hits
@@ -51,10 +92,11 @@ const generateCacheKey = (query, radius, lat, lng, countryCode = 'MX') => {
         const normLng = lng != null ? parseFloat(lng).toFixed(1) : '0';
         key += `_loc_${radius}_${normLat}_${normLng}`;
     }
+    key += `_pol_${serializeSearchPolicy(searchPolicy)}`;
     return key;
 };
 
-const generateCanonicalCacheKey = (canonicalKey, radius, lat, lng, countryCode = 'MX') => {
+const generateCanonicalCacheKey = (canonicalKey, radius, lat, lng, countryCode = 'MX', searchPolicy = {}) => {
     const normalizedCanonical = normalizeCanonicalKey(canonicalKey);
     if (!normalizedCanonical) return '';
     let key = `ctc_${String(countryCode || 'MX').toUpperCase()}_${normalizedCanonical}`;
@@ -63,6 +105,7 @@ const generateCanonicalCacheKey = (canonicalKey, radius, lat, lng, countryCode =
         const normLng = lng != null ? parseFloat(lng).toFixed(1) : '0';
         key += `_loc_${radius}_${normLat}_${normLng}`;
     }
+    key += `_pol_${serializeSearchPolicy(searchPolicy)}`;
     return key;
 };
 
@@ -206,12 +249,12 @@ async function getCachedResultsByKey(queryKey, priceVolatility = 'medium', query
     }
 }
 
-exports.getCachedResults = async (query, radius, lat, lng, countryCode = 'MX', canonicalKey = '', priceVolatility = 'medium', queryType = 'generic') => {
-    const queryKey = generateCacheKey(query, radius, lat, lng, countryCode);
+exports.getCachedResults = async (query, radius, lat, lng, countryCode = 'MX', canonicalKey = '', priceVolatility = 'medium', queryType = 'generic', searchPolicy = {}) => {
+    const queryKey = generateCacheKey(query, radius, lat, lng, countryCode, searchPolicy);
     const directHit = await getCachedResultsByKey(queryKey, priceVolatility, queryType);
     if (directHit) return directHit;
 
-    const canonicalCacheKey = generateCanonicalCacheKey(canonicalKey, radius, lat, lng, countryCode);
+    const canonicalCacheKey = generateCanonicalCacheKey(canonicalKey, radius, lat, lng, countryCode, searchPolicy);
     if (!canonicalCacheKey) return null;
     return getCachedResultsByKey(canonicalCacheKey, priceVolatility, queryType);
 };
@@ -253,13 +296,13 @@ async function persistCacheKey(queryKey, results, priceVolatility = 'medium') {
     }
 }
 
-exports.saveToCache = async (query, radius, lat, lng, results, countryCode = 'MX', canonicalKey = '', priceVolatility = 'medium') => {
+exports.saveToCache = async (query, radius, lat, lng, results, countryCode = 'MX', canonicalKey = '', priceVolatility = 'medium', searchPolicy = {}) => {
     if (!supabase) return;
 
-    const queryKey = generateCacheKey(query, radius, lat, lng, countryCode);
+    const queryKey = generateCacheKey(query, radius, lat, lng, countryCode, searchPolicy);
     await persistCacheKey(queryKey, results, priceVolatility);
 
-    const canonicalCacheKey = generateCanonicalCacheKey(canonicalKey, radius, lat, lng, countryCode);
+    const canonicalCacheKey = generateCanonicalCacheKey(canonicalKey, radius, lat, lng, countryCode, searchPolicy);
     if (canonicalCacheKey) {
         await persistCacheKey(canonicalCacheKey, results, priceVolatility);
     }

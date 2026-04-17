@@ -8,6 +8,8 @@
  * - Trust tier overrides per region
  */
 
+const storeTrustService = require('./storeTrustService');
+
 const REGION_CONFIGS = {
     MX: {
         countryCode: 'MX',
@@ -496,7 +498,7 @@ function buildBroadWebSearchQuery(query, countryCode) {
  * Maps store name keys (e.g. "amazon mx") back to domains, prioritizes them,
  * then fills remaining slots from the static list.
  */
-function buildAdaptiveWebSearchQuery(query, countryCode, preferredStoreKeys = []) {
+function buildAdaptiveWebSearchQuery(query, countryCode, preferredStoreKeys = [], preferredStoreMode = 'prefer') {
     const config = getRegionConfig(countryCode);
     if (!preferredStoreKeys || preferredStoreKeys.length === 0) {
         return buildWebSearchQuery(query, countryCode);
@@ -506,6 +508,10 @@ function buildAdaptiveWebSearchQuery(query, countryCode, preferredStoreKeys = []
     const reverseMap = {};
     for (const [domain, name] of Object.entries(config.storeMap)) {
         reverseMap[name.toLowerCase().trim()] = domain;
+        const canonicalName = storeTrustService.canonicalizeStoreName(name, domain);
+        if (canonicalName && canonicalName !== 'desconocida') {
+            reverseMap[canonicalName] = domain;
+        }
     }
 
     // Map preferred store keys to domains
@@ -518,9 +524,11 @@ function buildAdaptiveWebSearchQuery(query, countryCode, preferredStoreKeys = []
     // Fill remaining slots from static list (up to 10 total)
     const staticDomains = (config.webSearchDomains || []);
     const finalDomains = [...preferredDomains];
-    for (const d of staticDomains) {
-        if (finalDomains.length >= 10) break;
-        if (!finalDomains.includes(d)) finalDomains.push(d);
+    if (preferredStoreMode !== 'exclusive') {
+        for (const d of staticDomains) {
+            if (finalDomains.length >= 10) break;
+            if (!finalDomains.includes(d)) finalDomains.push(d);
+        }
     }
 
     const siteFilters = finalDomains.map(d => `site:${d}`).join(' OR ');
