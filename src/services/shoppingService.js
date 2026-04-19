@@ -326,7 +326,8 @@ function getPreferredStoreAliases(preferredStoreKey = '') {
         falabella: ['falabella'],
         target: ['target'],
         coppel: ['coppel'],
-        elektra: ['elektra']
+        elektra: ['elektra'],
+        'best buy': ['bestbuy', 'best_buy', 'best buy']
     };
     return aliasMap[preferredStoreKey] || [preferredStoreKey];
 }

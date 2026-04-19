@@ -2321,7 +2321,7 @@ function normalizeStoreFocusKey(value = '') {
         .normalize('NFD')
         .replace(/[\u0300-\u036f]/g, '')
         .replace(/\b(mx|mxico|mexico|us|usa|cl|co|pe|ar)\b/g, '')
-        .replace(/[^a-z0-9]+/g, ' ')
+        .replace(/[^a-z0-9']+/g, ' ')  // Preservar apóstrofes (ej: Sam's Club)
         .trim();
 }
 
@@ -2336,22 +2336,17 @@ function setSelectedStoreFocusKeys(values = []) {
 }
 
 function getSelectedStoreFocus() {
-    if (_selectedStoreFocusKeys.length === 0) {
-        const storeValue = document.getElementById('store-filter')?.value || 'all';
-        if (!storeValue || storeValue === 'all') {
-            return { preferredStoreKey: '', preferredStoreKeys: [], preferredStoreMode: 'prefer' };
-        }
+    // Chips tienen prioridad: si hay chips seleccionados, enviar exclusive al backend
+    if (_selectedStoreFocusKeys.length > 0) {
         return {
-            preferredStoreKey: storeValue,
-            preferredStoreKeys: [normalizeStoreFocusKey(storeValue)].filter(Boolean),
+            preferredStoreKey: _selectedStoreFocusKeys[0] || '',
+            preferredStoreKeys: [..._selectedStoreFocusKeys],
             preferredStoreMode: 'exclusive'
         };
     }
-    return {
-        preferredStoreKey: _selectedStoreFocusKeys[0] || '',
-        preferredStoreKeys: [..._selectedStoreFocusKeys],
-        preferredStoreMode: 'exclusive'
-    };
+    // Dropdown legacy: solo client-side, NO enviar al backend como exclusive
+    // El filtrado del dropdown se hace en renderProducts, no en la búsqueda
+    return { preferredStoreKey: '', preferredStoreKeys: [], preferredStoreMode: 'prefer' };
 }
 
 function buildSearchFocusSignature(storeFocus = {}) {

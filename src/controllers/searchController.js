@@ -1935,30 +1935,43 @@ exports.searchProduct = async (req, res) => {
             }
 
             if (deepSearchEnabled && shoppingResults.length <= 4) {
-                // Smart site: operator queries for deep mode — directly target marketplaces
-                const meliDomain = countryCode === 'US' ? 'mercadolibre.com'
-                    : countryCode === 'MX' ? 'mercadolibre.com.mx'
-                    : countryCode === 'AR' ? 'mercadolibre.com.ar'
-                    : countryCode === 'CO' ? 'mercadolibre.com.co'
-                    : countryCode === 'CL' ? 'mercadolibre.cl'
-                    : 'mercadolibre.com';
-                const amazonDomain = countryCode === 'US' ? 'amazon.com'
-                    : countryCode === 'MX' ? 'amazon.com.mx'
-                    : 'amazon.com';
-                rescuedQueries.push({
-                    label: 'deep_meli_site',
-                    query: `site:${meliDomain} "${searchQuery}" nuevo`,
-                    alternativeQueries: [],
-                    preferredStoreKeys: effectivePreferredStoreKeys,
-                    brandOfficialQuery: null
-                });
-                rescuedQueries.push({
-                    label: 'deep_amazon_site',
-                    query: `site:${amazonDomain} "${searchQuery}" nuevo`,
-                    alternativeQueries: [],
-                    preferredStoreKeys: effectivePreferredStoreKeys,
-                    brandOfficialQuery: null
-                });
+                // Smart site: operator queries for deep mode — solo si no hay exclusividad a otras tiendas
+                const userExplicitStores = searchPolicy.preferredStoreKeys || [];
+                const hasExplicitStoreSelection = userExplicitStores.length > 0 && searchPolicy.preferredStoreMode === 'exclusive';
+
+                // Solo agregar rescue de Mercado Libre si el usuario no tiene exclusividad a otras tiendas, o si incluye ML
+                const includeMeli = !hasExplicitStoreSelection || userExplicitStores.some(k => /mercado|meli/i.test(k));
+                // Solo agregar rescue de Amazon si el usuario no tiene exclusividad a otras tiendas, o si incluye Amazon
+                const includeAmazon = !hasExplicitStoreSelection || userExplicitStores.some(k => /amazon/i.test(k));
+
+                if (includeMeli) {
+                    const meliDomain = countryCode === 'US' ? 'mercadolibre.com'
+                        : countryCode === 'MX' ? 'mercadolibre.com.mx'
+                        : countryCode === 'AR' ? 'mercadolibre.com.ar'
+                        : countryCode === 'CO' ? 'mercadolibre.com.co'
+                        : countryCode === 'CL' ? 'mercadolibre.cl'
+                        : 'mercadolibre.com';
+                    rescuedQueries.push({
+                        label: 'deep_meli_site',
+                        query: `site:${meliDomain} "${searchQuery}" nuevo`,
+                        alternativeQueries: [],
+                        preferredStoreKeys: effectivePreferredStoreKeys,
+                        brandOfficialQuery: null
+                    });
+                }
+
+                if (includeAmazon) {
+                    const amazonDomain = countryCode === 'US' ? 'amazon.com'
+                        : countryCode === 'MX' ? 'amazon.com.mx'
+                        : 'amazon.com';
+                    rescuedQueries.push({
+                        label: 'deep_amazon_site',
+                        query: `site:${amazonDomain} "${searchQuery}" nuevo`,
+                        alternativeQueries: [],
+                        preferredStoreKeys: effectivePreferredStoreKeys,
+                        brandOfficialQuery: null
+                    });
+                }
             }
 
             const maxRescueQueries = deepSearchEnabled
