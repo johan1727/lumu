@@ -2299,7 +2299,8 @@ exports.searchProduct = async (req, res) => {
             top_5_baratos: balancedProducts,
             top_resultados: [],
             vip_auto_alert: vipAutoAlert,
-            advertencia_uso: usageWarning
+            advertencia_uso: usageWarning,
+            lumu_coins_awarded: userId ? 1 : 0
         });
     } catch (error) {
         // Clear timeout on error

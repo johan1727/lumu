@@ -4220,9 +4220,16 @@ async function initApp() {
                 }
 
                 // Fase 6: Lumu Coins
-                fetch('/api/me/coins', {
-                    headers: { 'Authorization': `Bearer ${user.access_token || ''}` }
-                }).then(res => res.json()).then(data => {
+                (async () => {
+                    let coinsToken = '';
+                    try {
+                        const { data: sessionData } = await supabaseClient.auth.getSession();
+                        coinsToken = sessionData?.session?.access_token || '';
+                    } catch (_) {}
+                    return fetch('/api/me/coins', {
+                        headers: { 'Authorization': `Bearer ${coinsToken}` }
+                    });
+                })().then(res => res.json()).then(data => {
                     if (data && data.coins !== undefined) {
                         let coinsBadge = document.getElementById('lumu-coins-nav');
                         if (!coinsBadge) {
@@ -5164,7 +5171,10 @@ async function initApp() {
                             const valSpan = spans[spans.length - 1]; // Select the last span containing the number
                             if (valSpan) {
                                 const currentCoins = parseInt(valSpan.innerText, 10) || 0;
-                                valSpan.innerText = currentCoins + 1;
+                                const newCoins = currentCoins + 1;
+                                valSpan.innerText = newCoins;
+                                // Update progress bar in results area
+                                updateCoinsProgress(newCoins);
                                 // Animation
                                 coinsBadge.classList.add('scale-110', 'bg-amber-200');
                                 setTimeout(() => {
