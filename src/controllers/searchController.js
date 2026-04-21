@@ -2044,6 +2044,7 @@ exports.searchProduct = async (req, res) => {
             const qualityFlags = [];
             if (clonePenalty >= 0.34) qualityFlags.push('likely_clone');
             if (modelMatchScore <= 0.35) qualityFlags.push('model_mismatch');
+            const normalizedPrice = Number(product.precio != null ? product.precio : product.price) || 0;
             return {
                 ...product,
                 titulo: resolvedTitle,
@@ -2304,20 +2305,29 @@ exports.searchProduct = async (req, res) => {
         // Clear timeout on error
         if (typeof timeoutId !== 'undefined') clearTimeout(timeoutId);
         
-        console.error('ðŸ”¥ðŸ”¥ðŸ”¥ ERROR FATAL en /buscar:', error.stack || error);
+        // Classify error source for better diagnostics
+        const errMsg = error.message || String(error);
+        const errSource = /gemini|generativelanguage/i.test(errMsg) ? 'gemini_api'
+            : /serper|google\.serper/i.test(errMsg) ? 'serper_api'
+            : /supabase|postgres/i.test(errMsg) ? 'supabase'
+            : /timeout|ETIMEDOUT|AbortError/i.test(errMsg) ? 'timeout'
+            : /rate.?limit|429/i.test(errMsg) ? 'rate_limit'
+            : 'unknown';
+        console.error(`[ERROR FATAL /buscar] source=${errSource} query="${query}" msg=${errMsg}`, error.stack ? `\n${error.stack}` : '');
         try {
             logSearchCostMetrics('search.error', costMetrics, {
                 query,
                 userId: Boolean(userId),
-                error: error.message
+                error: errMsg,
+                error_source: errSource
             });
         } catch { }
         
-        // No exponer stack trace en producción
+        // No exponer stack trace en produccion
         const isDev = process.env.NODE_ENV !== 'production';
         res.status(500).json({ 
             error: 'Ocurrió un error al buscar las mejores ofertas. Si estás probando en local, asegúrate de configurar las variables de entorno.',
-            ...(isDev && { details: error.message, stack: error.stack })
+            ...(isDev && { details: errMsg, error_source: errSource, stack: error.stack })
         });
     }
 };

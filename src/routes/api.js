@@ -274,4 +274,99 @@ router.post('/admin/supplier-check/:id', requireAdmin, async (req, res) => {
     }
 });
 
+// GET /api/health — Diagnostico de servicios en tiempo real (requiere ADMIN_API_KEY en produccion)
+router.get('/health', async (req, res) => {
+    if (process.env.NODE_ENV === 'production') {
+        const crypto = require('crypto');
+        const authKey = req.headers['x-admin-key'] || req.query.key;
+        const adminKey = process.env.ADMIN_API_KEY;
+        if (!adminKey || !authKey) {
+            return res.status(403).json({ error: 'Se requiere x-admin-key para health check en produccion.' });
+        }
+        const authHash = crypto.createHmac('sha256', 'lumu-admin').update(String(authKey)).digest();
+        const adminHash = crypto.createHmac('sha256', 'lumu-admin').update(String(adminKey)).digest();
+        if (!crypto.timingSafeEqual(authHash, adminHash)) {
+            return res.status(403).json({ error: 'Acceso denegado.' });
+        }
+    }
+
+    const fetchWithTimeout = require('../utils/fetchWithTimeout');
+    const checks = {};
+
+    // 1. Gemini API
+    try {
+        const geminiKey = process.env.GEMINI_API_KEY;
+        const geminiModel = process.env.GEMINI_MODEL || 'gemini-2.5-flash';
+        if (!geminiKey) {
+            checks.gemini = { ok: false, error: 'GEMINI_API_KEY no configurada' };
+        } else {
+            const r = await fetchWithTimeout(
+                `https://generativelanguage.googleapis.com/v1beta/models/${geminiModel}:generateContent`,
+                { method: 'POST', headers: { 'Content-Type': 'application/json', 'x-goog-api-key': geminiKey }, body: JSON.stringify({ contents: [{ parts: [{ text: 'ping' }] }], generationConfig: { maxOutputTokens: 5 } }) },
+                8000
+            );
+            checks.gemini = { ok: r.ok, status: r.status, model: geminiModel };
+            if (!r.ok) {
+                const err = await r.json().catch(() => ({}));
+                checks.gemini.error = err?.error?.message || `HTTP ${r.status}`;
+            }
+        }
+    } catch (e) {
+        checks.gemini = { ok: false, error: e.message };
+    }
+
+    // 2. Serper API
+    try {
+        const serperKey = process.env.SERPER_API_KEY;
+        if (!serperKey) {
+            checks.serper = { ok: false, error: 'SERPER_API_KEY no configurada' };
+        } else {
+            const r = await fetchWithTimeout(
+                'https://google.serper.dev/shopping',
+                { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-API-KEY': serperKey }, body: JSON.stringify({ q: 'iphone', num: 1, gl: 'mx' }) },
+                8000
+            );
+            checks.serper = { ok: r.ok, status: r.status };
+            if (!r.ok) {
+                const err = await r.json().catch(() => ({}));
+                checks.serper.error = err?.message || `HTTP ${r.status}`;
+            }
+        }
+    } catch (e) {
+        checks.serper = { ok: false, error: e.message };
+    }
+
+    // 3. Supabase
+    try {
+        const supabase = require('../config/supabase');
+        if (!supabase) {
+            checks.supabase = { ok: false, error: 'SUPABASE_URL o SUPABASE keys no configuradas' };
+        } else {
+            const { error } = await supabase.from('profiles').select('id').limit(1);
+            checks.supabase = { ok: !error, error: error?.message || null };
+        }
+    } catch (e) {
+        checks.supabase = { ok: false, error: e.message };
+    }
+
+    // 4. Env vars presentes (solo indica si están seteadas, no los valores)
+    checks.env_vars = {
+        GEMINI_API_KEY: !!process.env.GEMINI_API_KEY,
+        GEMINI_MODEL: process.env.GEMINI_MODEL || '(default: gemini-2.5-flash)',
+        SERPER_API_KEY: !!process.env.SERPER_API_KEY,
+        SUPABASE_URL: !!process.env.SUPABASE_URL,
+        SUPABASE_ANON_KEY: !!process.env.SUPABASE_ANON_KEY,
+        SUPABASE_SERVICE_ROLE_KEY: !!process.env.SUPABASE_SERVICE_ROLE_KEY,
+        STRIPE_SECRET_KEY: !!process.env.STRIPE_SECRET_KEY,
+        ADMIN_API_KEY: !!process.env.ADMIN_API_KEY
+    };
+
+    const allOk = checks.gemini?.ok && checks.serper?.ok && checks.supabase?.ok;
+    res.status(allOk ? 200 : 503).json({
+        status: allOk ? 'ok' : 'degraded',
+        timestamp: new Date().toISOString(),
+        checks
+    });
+});
+
 module.exports = router;

@@ -983,7 +983,14 @@ ${extraContext}`;
         }
     };
 
-    const modelName = process.env.GEMINI_MODEL || 'gemini-2.5-flash';
+    // SECURITY FIX: Validate Gemini model name to prevent API errors
+    // Solo permitir gemini-2.5-flash (free tier de AI Studio)
+    const VALID_GEMINI_MODELS = ['gemini-2.5-flash'];
+    let modelName = process.env.GEMINI_MODEL || 'gemini-2.5-flash';
+    if (!VALID_GEMINI_MODELS.includes(modelName)) {
+        console.warn(`[LLM] Invalid GEMINI_MODEL "${modelName}", forcing gemini-2.5-flash (free tier)`);
+        modelName = 'gemini-2.5-flash';
+    }
     const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent`;
     let retries = 0;
     const maxRetries = 2;
