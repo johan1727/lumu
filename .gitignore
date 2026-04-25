@@ -34,3 +34,13 @@ syntax_error.txt
 # Local scratch and test scripts
 scratch/
 scripts/test-*.js
+
+# Playwright test artifacts
+test-results/
+playwright-report/
+playwright/.cache/
+e2e/*.png
+e2e/*.mp4
+
+# Husky internal files
+.husky/_

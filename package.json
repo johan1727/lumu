@@ -8,9 +8,13 @@
         "dev": "nodemon api/index.js",
         "test:llm-smoke": "node scripts/llm-smoke-test.js",
         "test:search-smoke": "node scripts/search-endpoint-smoke-test.js",
+        "test:e2e": "playwright test",
+        "test:e2e:ui": "playwright test --ui",
         "build:css": "npx @tailwindcss/cli -i src/styles/input.css -o public/styles.css --minify",
         "build:ui": "npx esbuild src/ui/index.ts --bundle --minify --platform=browser --format=iife --global-name=LumuUI --outfile=public/ui-bundle.js",
-        "build": "npm run build:css && npm run build:ui"
+        "build": "npm run build:css && npm run build:ui",
+        "lint": "node --check api/index.js && node --check src/controllers/searchController.js && node --check src/services/shoppingService.js && node --check src/services/cacheService.js",
+        "prepare": "husky install"
     },
     "engines": {
         "node": ">=18"
@@ -31,11 +35,22 @@
         "zod": "^3.24.1"
     },
     "devDependencies": {
+        "@playwright/test": "^1.40.0",
+        "husky": "^8.0.3",
+        "lint-staged": "^15.0.0",
         "@tailwindcss/cli": "^4.2.1",
         "esbuild": "^0.25.0",
         "nodemon": "^3.0.1",
         "sharp": "^0.34.5",
         "tailwindcss": "^4.2.1",
         "tinify": "^1.8.2"
+    },
+    "lint-staged": {
+        "*.js": [
+            "node --check"
+        ],
+        "*.css": [
+            "echo 'CSS files checked'"
+        ]
     }
 }

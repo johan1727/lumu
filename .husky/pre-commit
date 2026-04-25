@@ -1,0 +1,16 @@
+#!/usr/bin/env sh
+. "$(dirname -- "$0")/_/husky.sh"
+
+echo "Running pre-commit checks..."
+
+# Run lint-staged (syntax check on JS files)
+npx lint-staged
+
+# Quick syntax check on critical files
+echo "Checking critical files..."
+node --check api/index.js
+node --check src/controllers/searchController.js
+node --check src/services/shoppingService.js
+node --check src/services/cacheService.js
+
+echo "Pre-commit checks passed!"
