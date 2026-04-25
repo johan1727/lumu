@@ -287,7 +287,13 @@ function buildStoreFocusedShoppingQuery(query = '', countryCode = 'MX', searchPo
 
 function filterResultsBySearchPolicy(results = [], searchPolicy = {}) {
     const policy = normalizeSearchPolicy(searchPolicy);
-    return (results || []).filter(result => {
+    const debugMode = policy.preferredStoreKeys.length > 0 && policy.preferredStoreMode === 'exclusive';
+    
+    if (debugMode) {
+        console.log(`[filterResultsBySearchPolicy] EXCLUSIVE MODE - preferredKeys: ${JSON.stringify(policy.preferredStoreKeys)}, totalResults: ${results.length}`);
+    }
+    
+    const filtered = (results || []).filter(result => {
         const storeTrust = result.storeTrust || storeTrustService.classifyStore({
             title: result.title || '',
             snippet: result.snippet || '',
@@ -296,6 +302,10 @@ function filterResultsBySearchPolicy(results = [], searchPolicy = {}) {
         });
         const canonicalStore = result.canonicalStore || storeTrust.canonicalStore;
         const isPreferredStore = policy.preferredStoreKeys.length > 0 && policy.preferredStoreKeys.includes(canonicalStore);
+
+        if (debugMode && Math.random() < 0.1) { // Log 10% of results to avoid spam
+            console.log(`[filterResultsBySearchPolicy] result.source="${result.source}", canonicalStore="${canonicalStore}", isPreferred=${isPreferredStore}, url=${(result.url || '').substring(0, 60)}...`);
+        }
 
         if (policy.preferredStoreKeys.length > 0 && policy.preferredStoreMode === 'exclusive' && !isPreferredStore) {
             return false;
@@ -314,6 +324,12 @@ function filterResultsBySearchPolicy(results = [], searchPolicy = {}) {
         }
         return true;
     });
+    
+    if (debugMode) {
+        console.log(`[filterResultsBySearchPolicy] EXCLUSIVE MODE - filtered: ${filtered.length}/${results.length} results`);
+    }
+    
+    return filtered;
 }
 
 function getPreferredStoreAliases(preferredStoreKey = '') {
