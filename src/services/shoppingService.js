@@ -1640,8 +1640,20 @@ exports.searchGoogleShopping = async (query, radius, lat, lng, intentType, abort
     console.log(`[ShoppingService][Counts] query="${String(query || '').slice(0, 80)}" serper=${serperResults.length} direct=${directResults.length} dedup=${dedupedByUrl.length} merged=${mergedResults.length} sellable=${sellableResults.length} nonRejected=${nonRejectedResults.length} valid=${validResultShape.length} policy=${policyFilteredResults.length}`);
     const sortedResults = policyFilteredResults
         .sort((a, b) => {
+            // FIX: Priorizar tiendas preferidas primero
             const preferredStoreDelta = getStoreFocusSignal(b, searchPolicy) - getStoreFocusSignal(a, searchPolicy);
             if (preferredStoreDelta !== 0) return preferredStoreDelta;
+
+            // FIX: Priorizar fuentes verificadas (MELI API, Amazon API, Shopping API)
+            const sourcePriority = {
+                'meli_api': 0,
+                'amazon_serpapi': 1,
+                'shopping_api': 2,
+                'direct_scraper': 3
+            };
+            const aSourcePrio = sourcePriority[a.resultSource] ?? 99;
+            const bSourcePrio = sourcePriority[b.resultSource] ?? 99;
+            if (aSourcePrio !== bSourcePrio) return aSourcePrio - bSourcePrio;
 
             const aHasPrice = Number.isFinite(Number(a.price)) && Number(a.price) > 0;
             const bHasPrice = Number.isFinite(Number(b.price)) && Number(b.price) > 0;
@@ -1649,6 +1661,21 @@ exports.searchGoogleShopping = async (query, radius, lat, lng, intentType, abort
 
             // Deep mode: price is criterion #2 — find the cheapest option first
             if (deepSearchEnabled && aHasPrice && bHasPrice) {
+                const aPrice = Number(a.price);
+                const bPrice = Number(b.price);
+                if (aPrice !== bPrice) return aPrice - bPrice;
+            }
+
+            // FIX: Priorizar confianza de precio antes que directness
+            const aConfidence = Number(a.priceConfidence || 0);
+            const bConfidence = Number(b.priceConfidence || 0);
+            if (Math.abs(aConfidence - bConfidence) >= 0.1) return bConfidence - aConfidence;
+
+            // FIX: Si confianza es similar (ambas >= 0.7) y match es similar, priorizar precio
+            const aMatch = Number(a.matchScore || a._modelMatchScore || 0);
+            const bMatch = Number(b.matchScore || b._modelMatchScore || 0);
+            const matchDiff = Math.abs(aMatch - bMatch);
+            if (aConfidence >= 0.7 && bConfidence >= 0.7 && matchDiff < 0.25 && aHasPrice && bHasPrice) {
                 const aPrice = Number(a.price);
                 const bPrice = Number(b.price);
                 if (aPrice !== bPrice) return aPrice - bPrice;
@@ -1662,10 +1689,7 @@ exports.searchGoogleShopping = async (query, radius, lat, lng, intentType, abort
             const bRedirectPenalty = Number(Boolean(b.hasEphemeralRedirect && !b.isDirectProductPage));
             if (aRedirectPenalty !== bRedirectPenalty) return aRedirectPenalty - bRedirectPenalty;
 
-            const aConfidence = Number(a.priceConfidence || 0);
-            const bConfidence = Number(b.priceConfidence || 0);
-            if (Math.abs(aConfidence - bConfidence) >= 0.05) return bConfidence - aConfidence;
-
+            // Precio final
             const aPrice = Number(a.price || Number.MAX_SAFE_INTEGER);
             const bPrice = Number(b.price || Number.MAX_SAFE_INTEGER);
             if (aPrice !== bPrice) return aPrice - bPrice;

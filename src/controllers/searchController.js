@@ -322,6 +322,77 @@ function buildBestBuyLabel(score = 0) {
     return 'Opción aceptable';
 }
 
+// NUEVO: Comparador central barato + relevante + confiable + tienda preferida
+function compareCheapestRelevant(a, b, options = {}) {
+    const {
+        preferredStoreKeys = [],
+        countryCode = 'MX',
+        prioritizePrice = false
+    } = options;
+
+    const aPrice = Number(a.precio || a.price || 0);
+    const bPrice = Number(b.precio || b.price || 0);
+    const aHasPrice = aPrice > 0;
+    const bHasPrice = bPrice > 0;
+
+    // 1. Prioridad: Tienda preferida con buen match
+    const aIsPreferred = preferredStoreKeys.includes(a.canonicalStore);
+    const bIsPreferred = preferredStoreKeys.includes(b.canonicalStore);
+    const aGoodMatch = (a._modelMatchScore || 0) >= 0.35;
+    const bGoodMatch = (b._modelMatchScore || 0) >= 0.35;
+    const aConfident = (a.priceConfidence || 0) >= 0.5;
+    const bConfident = (b.priceConfidence || 0) >= 0.5;
+
+    const aPreferredValid = aIsPreferred && aGoodMatch && aConfident && !a.isPotentiallyUnavailable;
+    const bPreferredValid = bIsPreferred && bGoodMatch && bConfident && !b.isPotentiallyUnavailable;
+
+    if (aPreferredValid !== bPreferredValid) return bPreferredValid - aPreferredValid;
+
+    // 2. Prioridad: Fuentes verificadas (API)
+    const sourceRank = {
+        'meli_api': 0,
+        'amazon_serpapi': 1,
+        'shopping_api': 2,
+        'direct_scraper': 3,
+        'official_web': 4,
+        'web_search': 5
+    };
+    const aSourceRank = sourceRank[a.resultSource] ?? 99;
+    const bSourceRank = sourceRank[b.resultSource] ?? 99;
+    if (aSourceRank !== bSourceRank) return aSourceRank - bSourceRank;
+
+    // 3. Prioridad: Precio (si ambos tienen precio válido)
+    if (aHasPrice && bHasPrice) {
+        // Solo comparar precio si la diferencia de relevancia no es muy grande
+        const matchDiff = Math.abs((a._modelMatchScore || 0) - (b._modelMatchScore || 0));
+        if (matchDiff < 0.25 || prioritizePrice) {
+            if (aPrice !== bPrice) return aPrice - bPrice;
+        }
+    } else if (aHasPrice !== bHasPrice) {
+        return aHasPrice ? -1 : 1;
+    }
+
+    // 4. Prioridad: Confianza de precio
+    const aConf = Number(a.priceConfidence || 0);
+    const bConf = Number(b.priceConfidence || 0);
+    if (Math.abs(aConf - bConf) >= 0.1) return bConf - aConf;
+
+    // 5. Prioridad: Match del modelo
+    const aMatch = Number(a._modelMatchScore || 0);
+    const bMatch = Number(b._modelMatchScore || 0);
+    if (Math.abs(aMatch - bMatch) >= 0.15) return bMatch - aMatch;
+
+    // 6. Prioridad: Score general
+    const aScore = Number(a.bestBuyScore || 0);
+    const bScore = Number(b.bestBuyScore || 0);
+    if (Math.abs(aScore - bScore) >= 0.05) return bScore - aScore;
+
+    // 7. Desempate final: más barato
+    if (aHasPrice && bHasPrice && aPrice !== bPrice) return aPrice - bPrice;
+
+    return 0;
+}
+
 function buildIntentMemoryBoost(row = {}, maxClicks = 1, maxSuccessScore = 1) {
     const clicks = Math.max(0, Number(row.clicked_count || 0));
     const successScore = Math.max(0, Number(row.success_score || 0));
@@ -339,7 +410,7 @@ function buildIntentMemoryMeta(storeKey = '', intentBoostMap = {}, intentSignalM
     };
 }
 
-// NUEVO: Encuentra el mejor resultado de tienda preferida
+// NUEVO: Encuentra el mejor resultado de tienda preferida (más barato relevante)
 function findBestPreferredResult(results = [], preferredStoreKeys = [], minConfidence = 0.5) {
     if (!preferredStoreKeys || preferredStoreKeys.length === 0) return null;
     const preferredResults = results.filter(r => {
@@ -350,13 +421,31 @@ function findBestPreferredResult(results = [], preferredStoreKeys = [], minConfi
         return isPreferred && hasGoodMatch && hasConfidentPrice && isAvailable;
     });
     if (preferredResults.length === 0) return null;
-    // Ordenar por: score de match del modelo, luego confianza de precio, luego precio
+    // FIX: Ordenar por precio primero entre resultados comparables (match similar)
+    // Luego por confianza de precio, luego por match
     preferredResults.sort((a, b) => {
-        const matchDelta = (b._modelMatchScore || 0) - (a._modelMatchScore || 0);
-        if (Math.abs(matchDelta) > 0.15) return matchDelta;
-        const confidenceDelta = (b.priceConfidence || 0) - (a.priceConfidence || 0);
-        if (Math.abs(confidenceDelta) > 0.2) return confidenceDelta;
-        return (a._priceValue || Number.MAX_SAFE_INTEGER) - (b._priceValue || Number.MAX_SAFE_INTEGER);
+        const aPrice = Number(a.precio || a.price || Number.MAX_SAFE_INTEGER);
+        const bPrice = Number(b.precio || b.price || Number.MAX_SAFE_INTEGER);
+        const aMatch = a._modelMatchScore || 0;
+        const bMatch = b._modelMatchScore || 0;
+        const matchDiff = Math.abs(aMatch - bMatch);
+        
+        // Si el match es similar (diferencia < 0.2), priorizar el más barato
+        if (matchDiff < 0.2 && aPrice !== bPrice) {
+            return aPrice - bPrice;
+        }
+        
+        // Si hay gran diferencia de match, priorizar mejor match
+        if (matchDiff >= 0.2) {
+            return bMatch - aMatch;
+        }
+        
+        // Si match es igual, priorizar confianza de precio
+        const confDiff = (b.priceConfidence || 0) - (a.priceConfidence || 0);
+        if (Math.abs(confDiff) > 0.15) return confDiff;
+        
+        // Finalmente precio
+        return aPrice - bPrice;
     });
     return preferredResults[0];
 }
@@ -996,35 +1085,37 @@ function getAffiliatePriorityMeta(item = {}, countryCode = 'MX') {
 }
 
 function selectBalancedResults(sortedResults = [], broadProfile = {}, maxResults = 36, maxPerStore = 6, options = {}) {
+    // FIX: Usar comparador central barato + relevante + confiable
+    const preferredStoreKeys = [
+        ...(options?.preferredStoreKeys || []),
+        options?.preferredStoreKey || ''
+    ].filter(Boolean).map(k => k.toLowerCase());
+    
+    const countryCode = options?.countryCode || 'MX';
+    
     const rankedResults = [...sortedResults].sort((a, b) => {
-        const preferredStoreKey = String(options?.preferredStoreKey || '').trim().toLowerCase();
-        const aPreferred = preferredStoreKey && String(a.canonicalStore || '').toLowerCase() === preferredStoreKey ? 1 : 0;
-        const bPreferred = preferredStoreKey && String(b.canonicalStore || '').toLowerCase() === preferredStoreKey ? 1 : 0;
-        if (aPreferred !== bPreferred) return bPreferred - aPreferred;
-
+        // 1. Usar comparador central para orden principal
+        const centralCompare = compareCheapestRelevant(a, b, {
+            preferredStoreKeys,
+            countryCode,
+            prioritizePrice: false
+        });
+        if (centralCompare !== 0) return centralCompare;
+        
+        // 2. Delta de score refinado
         const scoreDelta = Number(b.bestBuyScore || 0) - Number(a.bestBuyScore || 0);
-        if (Math.abs(scoreDelta) >= 0.04) return scoreDelta;
-
+        if (Math.abs(scoreDelta) >= 0.02) return scoreDelta;
+        
+        // 3. Affiliate priority
         const affiliateRankDelta = Number(a.affiliatePriorityRank || 9) - Number(b.affiliatePriorityRank || 9);
         if (affiliateRankDelta !== 0) return affiliateRankDelta;
-
+        
+        // 4. Imagen útil
         const aHasImage = Boolean(a.hasUsefulImage || a.image);
         const bHasImage = Boolean(b.hasUsefulImage || b.image);
         if (aHasImage !== bHasImage) return aHasImage ? -1 : 1;
-
-        const specificityDelta = Number(b.productSpecificity || 0) - Number(a.productSpecificity || 0);
-        if (Math.abs(specificityDelta) >= 0.18) return specificityDelta > 0 ? 1 : -1;
-
-        const comparabilityDelta = Number(b.structuredTokenOverlap || 0) - Number(a.structuredTokenOverlap || 0);
-        if (Math.abs(comparabilityDelta) >= 0.2) return comparabilityDelta > 0 ? 1 : -1;
-
-        const aSourceRank = a.resultSource === 'shopping_api' ? 0 : a.resultSource === 'direct_scraper' ? 1 : a.resultSource === 'official_web' ? 2 : a.resultSource === 'web_search' ? 3 : 4;
-        const bSourceRank = b.resultSource === 'shopping_api' ? 0 : b.resultSource === 'direct_scraper' ? 1 : b.resultSource === 'official_web' ? 2 : b.resultSource === 'web_search' ? 3 : 4;
-        if (aSourceRank !== bSourceRank) return aSourceRank - bSourceRank;
-
-        const aConfidence = Number(a.priceConfidence || 0);
-        const bConfidence = Number(b.priceConfidence || 0);
-        return bConfidence - aConfidence;
+        
+        return 0;
     });
 
     const storeCount = {};
@@ -2094,6 +2185,17 @@ exports.searchProduct = async (req, res) => {
                 });
             }
 
+            // FIX: Detectar tiendas clave faltantes y forzar rescue específico
+            const hasMeliResults = shoppingResults.some(r => /mercadolibre/i.test(r.urlOriginal || r.url || ''));
+            const hasAmazonResults = shoppingResults.some(r => /amazon\.com(\.mx)?/i.test(r.urlOriginal || r.url || ''));
+            const hasPreferredResults = searchPolicy.preferredStoreKeys.length > 0 && 
+                shoppingResults.some(r => searchPolicy.preferredStoreKeys.includes(r.canonicalStore));
+            
+            // Siempre agregar rescue para tiendas clave si faltan y es MX
+            const needsMeliRescue = countryCode === 'MX' && !hasMeliResults;
+            const needsAmazonRescue = countryCode === 'MX' && !hasAmazonResults;
+            const needsPreferredRescue = searchPolicy.preferredStoreKeys.length > 0 && !hasPreferredResults;
+
             if (deepSearchEnabled && shoppingResults.length <= 4) {
                 // Smart site: operator queries for deep mode — solo si no hay exclusividad a otras tiendas
                 const userExplicitStores = searchPolicy.preferredStoreKeys || [];
@@ -2131,6 +2233,63 @@ exports.searchProduct = async (req, res) => {
                         preferredStoreKeys: effectivePreferredStoreKeys,
                         brandOfficialQuery: null
                     });
+                }
+            }
+
+            // FIX: Agregar rescue específico para tiendas clave faltantes (no deep mode)
+            if (!deepSearchEnabled && (needsMeliRescue || needsAmazonRescue || needsPreferredRescue)) {
+                console.log(`[Search Pipeline] Tiendas clave faltantes - ML:${needsMeliRescue} Amazon:${needsAmazonRescue} Preferred:${needsPreferredRescue}. Forzando rescue...`);
+                
+                if (needsMeliRescue) {
+                    const meliDomain = countryCode === 'MX' ? 'mercadolibre.com.mx' : 'mercadolibre.com';
+                    rescuedQueries.unshift({
+                        label: 'rescue_meli_missing',
+                        query: `site:${meliDomain} "${searchQuery}"`,
+                        alternativeQueries: [],
+                        preferredStoreKeys: effectivePreferredStoreKeys,
+                        brandOfficialQuery: null,
+                        priority: 1 // Alta prioridad
+                    });
+                }
+                
+                if (needsAmazonRescue) {
+                    const amazonDomain = countryCode === 'MX' ? 'amazon.com.mx' : 'amazon.com';
+                    rescuedQueries.unshift({
+                        label: 'rescue_amazon_missing',
+                        query: `site:${amazonDomain} "${searchQuery}"`,
+                        alternativeQueries: [],
+                        preferredStoreKeys: effectivePreferredStoreKeys,
+                        brandOfficialQuery: null,
+                        priority: 1
+                    });
+                }
+                
+                if (needsPreferredRescue) {
+                    // Buscar dominios de tiendas preferidas
+                    const preferredDomains = searchPolicy.preferredStoreKeys.map(store => {
+                        const domainMap = {
+                            'mercado libre': 'mercadolibre.com.mx',
+                            'amazon': 'amazon.com.mx',
+                            'walmart': 'walmart.com.mx',
+                            'liverpool': 'liverpool.com.mx',
+                            'coppel': 'coppel.com',
+                            'costco': 'costco.com.mx',
+                            'best buy': 'bestbuy.com.mx',
+                            'elektra': 'elektra.com.mx'
+                        };
+                        return domainMap[store] || `${store.replace(/\s+/g, '')}.com.mx`;
+                    }).filter(Boolean);
+                    
+                    if (preferredDomains.length > 0) {
+                        rescuedQueries.unshift({
+                            label: 'rescue_preferred_missing',
+                            query: `(${preferredDomains.map(d => `site:${d}`).join(' OR ')}) "${searchQuery}"`,
+                            alternativeQueries: [],
+                            preferredStoreKeys: effectivePreferredStoreKeys,
+                            brandOfficialQuery: null,
+                            priority: 1
+                        });
+                    }
                 }
             }
 
@@ -2342,7 +2501,11 @@ exports.searchProduct = async (req, res) => {
             buildBroadSearchProfile(searchQuery),
             36,
             isVipSearch ? 8 : 5,
-            { preferredStoreKey: searchPolicy.preferredStoreKey, preferredStoreKeys: searchPolicy.preferredStoreKeys || [] }
+            { 
+                preferredStoreKey: searchPolicy.preferredStoreKey, 
+                preferredStoreKeys: searchPolicy.preferredStoreKeys || [],
+                countryCode: countryCode
+            }
         );
         
         // NUEVO: Encontrar mejor resultado de tienda preferida y mejor alternativa para metadata de respuesta
