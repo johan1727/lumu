@@ -2006,70 +2006,87 @@ exports.searchProduct = async (req, res) => {
         let intentBoostMap = resolvedIntentSignals?.boostMap || {};
         let intentSignalMetaMap = resolvedIntentSignals?.signalMetaMap || {};
 
-        if (cachedResults) {
-            const filteredCachedResults = applySearchPolicyFilters(cachedResults.filter(item => {
+        // FIX: Cache hit solo si hay resultados útiles
+        const hasValidCache = Array.isArray(cachedResults) && cachedResults.length > 0;
+        let filteredCachedResults = [];
+        let cacheStatus = 'miss';
+
+        if (hasValidCache) {
+            filteredCachedResults = applySearchPolicyFilters(cachedResults.filter(item => {
                 const sourceText = `${item?.tienda || item?.source || ''} ${item?.urlOriginal || item?.url || ''}`.toLowerCase();
                 if (countryCode === 'MX' && /apple\.com\/(us-edu|ca|us-es)\//i.test(sourceText)) return false;
                 if (countryCode === 'MX' && (/apple\.com\/.+\/newsroom\//i.test(sourceText) || /apple\.com\/newsroom\//i.test(sourceText))) return false;
                 return true;
             }), searchPolicy);
-            await logSuccessfulSearchUsage({
-                userId,
-                query: searchQuery,
-                deepSearchEnabled,
-                countryCode
-            });
-            costMetrics.cacheHit = true;
-            const cacheEstimatedCostUsd = estimateSearchCostUsd(costMetrics);
-            logSearchCostMetrics('search.cache_hit', costMetrics, {
-                query: searchQuery,
-                userId: Boolean(userId),
-                resultCount: filteredCachedResults.length
-            });
-            return res.json({
-                tipo_respuesta: 'resultados',
-                intencion_detectada: {
-                    busqueda: searchQuery,
-                    condicion: llmAnalysis.condition,
-                    modo_condicion: conditionMode,
-                    tienda_preferida: searchPolicy.preferredStoreKey || null,
-                    tiendas_preferidas: searchPolicy.preferredStoreKeys || [],
-                    modo_tienda_preferida: (searchPolicy.preferredStoreKeys || []).length > 0 ? searchPolicy.preferredStoreMode : null,
-                    desde_cache: true
-                },
-                search_metadata: {
-                    canonical_key: llmAnalysis.canonicalKey,
-                    product_category: llmAnalysis.productCategory || '',
-                    max_budget: llmAnalysis.maxBudget || null,
-                    ai_summary: llmAnalysis.aiSummary,
-                    is_comparison: llmAnalysis.isComparison,
-                    comparison_products: llmAnalysis.comparisonProducts,
-                    query_type: llmAnalysis.queryType,
-                    is_speculative: llmAnalysis.isSpeculative,
-                    needs_disambiguation: llmAnalysis.needsDisambiguation,
-                    disambiguation_options: llmAnalysis.disambiguationOptions,
-                    commercial_readiness: llmAnalysis.commercialReadiness,
-                    reasoning: llmAnalysis.reasoning || null,
-                    estimatedCostUsd: cacheEstimatedCostUsd,
-                    search_tier: effectiveSearchTier,
-                    deep_search_enabled: deepSearchEnabled,
-                    preferred_store_key: searchPolicy.preferredStoreKey || null,
-                    preferred_store_keys: searchPolicy.preferredStoreKeys || [],
-                    preferred_store_mode: (searchPolicy.preferredStoreKeys || []).length > 0 ? searchPolicy.preferredStoreMode : null,
-                    safe_stores_only: searchPolicy.safeStoresOnly,
-                    include_known_marketplaces: searchPolicy.includeKnownMarketplaces,
-                    include_high_risk_marketplaces: searchPolicy.includeHighRiskMarketplaces
-                },
-                region: {
-                    country: countryCode,
-                    currency: regionCfg.currency,
-                    locale: regionCfg.locale,
-                    label: regionCfg.regionLabel
-                },
-                top_5_baratos: filteredCachedResults,
-                advertencia_uso: usageWarning,
-                vip_auto_alert: null
-            });
+
+            // FIX: Solo usar cache si quedan resultados después de filtros
+            if (filteredCachedResults.length > 0) {
+                cacheStatus = 'hit';
+                await logSuccessfulSearchUsage({
+                    userId,
+                    query: searchQuery,
+                    deepSearchEnabled,
+                    countryCode
+                });
+                costMetrics.cacheHit = true;
+                const cacheEstimatedCostUsd = estimateSearchCostUsd(costMetrics);
+                logSearchCostMetrics('search.cache_hit', costMetrics, {
+                    query: searchQuery,
+                    userId: Boolean(userId),
+                    resultCount: filteredCachedResults.length
+                });
+                return res.json({
+                    tipo_respuesta: 'resultados',
+                    intencion_detectada: {
+                        busqueda: searchQuery,
+                        condicion: llmAnalysis.condition,
+                        modo_condicion: conditionMode,
+                        tienda_preferida: searchPolicy.preferredStoreKey || null,
+                        tiendas_preferidas: searchPolicy.preferredStoreKeys || [],
+                        modo_tienda_preferida: (searchPolicy.preferredStoreKeys || []).length > 0 ? searchPolicy.preferredStoreMode : null,
+                        desde_cache: true
+                    },
+                    search_metadata: {
+                        canonical_key: llmAnalysis.canonicalKey,
+                        product_category: llmAnalysis.productCategory || '',
+                        max_budget: llmAnalysis.maxBudget || null,
+                        ai_summary: llmAnalysis.aiSummary,
+                        is_comparison: llmAnalysis.isComparison,
+                        comparison_products: llmAnalysis.comparisonProducts,
+                        query_type: llmAnalysis.queryType,
+                        is_speculative: llmAnalysis.isSpeculative,
+                        needs_disambiguation: llmAnalysis.needsDisambiguation,
+                        disambiguation_options: llmAnalysis.disambiguationOptions,
+                        commercial_readiness: llmAnalysis.commercialReadiness,
+                        reasoning: llmAnalysis.reasoning || null,
+                        estimatedCostUsd: cacheEstimatedCostUsd,
+                        search_tier: effectiveSearchTier,
+                        deep_search_enabled: deepSearchEnabled,
+                        preferred_store_key: searchPolicy.preferredStoreKey || null,
+                        preferred_store_keys: searchPolicy.preferredStoreKeys || [],
+                        preferred_store_mode: (searchPolicy.preferredStoreKeys || []).length > 0 ? searchPolicy.preferredStoreMode : null,
+                        safe_stores_only: searchPolicy.safeStoresOnly,
+                        include_known_marketplaces: searchPolicy.includeKnownMarketplaces,
+                        include_high_risk_marketplaces: searchPolicy.includeHighRiskMarketplaces,
+                        cache_status: cacheStatus,
+                        cache_results_before_filter: cachedResults.length,
+                        cache_results_after_filter: filteredCachedResults.length
+                    },
+                    region: {
+                        country: countryCode,
+                        currency: regionCfg.currency,
+                        locale: regionCfg.locale,
+                        label: regionCfg.regionLabel
+                    },
+                    top_5_baratos: filteredCachedResults,
+                    advertencia_uso: usageWarning,
+                    vip_auto_alert: null
+                });
+            } else {
+                // Cache filtrado quedó vacío - continuar a búsqueda live
+                cacheStatus = 'empty_after_filter';
+                console.warn(`[Cache] Cache filtrado quedó vacío para "${searchQuery}". Continuando a búsqueda live...`);
+            }
         }
 
         // Check if aborted
@@ -2603,7 +2620,8 @@ exports.searchProduct = async (req, res) => {
                 preferred_store_mode: (searchPolicy.preferredStoreKeys || []).length > 0 ? searchPolicy.preferredStoreMode : null,
                 safe_stores_only: searchPolicy.safeStoresOnly,
                 include_known_marketplaces: searchPolicy.includeKnownMarketplaces,
-                include_high_risk_marketplaces: searchPolicy.includeHighRiskMarketplaces
+                include_high_risk_marketplaces: searchPolicy.includeHighRiskMarketplaces,
+                cache_status: cacheStatus
             },
             deep_research_analysis: deepResearchEnhancements?.comparativeAnalysis || null,
             ai_pick: deepResearchEnhancements?.comparativeAnalysis

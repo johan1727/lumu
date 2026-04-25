@@ -299,6 +299,24 @@ async function persistCacheKey(queryKey, results, priceVolatility = 'medium') {
 exports.saveToCache = async (query, radius, lat, lng, results, countryCode = 'MX', canonicalKey = '', priceVolatility = 'medium', searchPolicy = {}) => {
     if (!supabase) return;
 
+    // FIX: No guardar cache vacío o sin resultados útiles
+    if (!Array.isArray(results) || results.length === 0) {
+        console.log(`[Cache Skip] No se guarda cache vacío para: ${query}`);
+        return;
+    }
+
+    // FIX: Validar que al menos un resultado tenga datos mínimos útiles
+    const hasValidResult = results.some(r => 
+        (r.urlOriginal || r.url) && 
+        (r.titulo || r.title) && 
+        (r.precio || r.price || r.price === 0)
+    );
+    
+    if (!hasValidResult) {
+        console.log(`[Cache Skip] No se guarda cache sin resultados válidos para: ${query}`);
+        return;
+    }
+
     const queryKey = generateCacheKey(query, radius, lat, lng, countryCode, searchPolicy);
     await persistCacheKey(queryKey, results, priceVolatility);
 
@@ -306,7 +324,7 @@ exports.saveToCache = async (query, radius, lat, lng, results, countryCode = 'MX
     if (canonicalCacheKey) {
         await persistCacheKey(canonicalCacheKey, results, priceVolatility);
     }
-    console.log(`[Cache Saved] Resultados guardados para: ${queryKey}${canonicalCacheKey ? ` y ${canonicalCacheKey}` : ''}`);
+    console.log(`[Cache Saved] ${results.length} resultados guardados para: ${queryKey}${canonicalCacheKey ? ` y ${canonicalCacheKey}` : ''}`);
 };
 
 /**
