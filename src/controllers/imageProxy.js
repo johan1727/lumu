@@ -1,4 +1,5 @@
 const axios = require('axios');
+const dns = require('dns').promises;
 
 function isBlockedHostname(hostname = '') {
     const normalized = String(hostname || '').trim().toLowerCase();
@@ -11,6 +12,19 @@ function isBlockedHostname(hostname = '') {
     if (/^169\.254\./.test(normalized)) return true;
     if (/^172\.(1[6-9]|2\d|3[0-1])\./.test(normalized)) return true;
     return false;
+}
+
+// FIX #6: Resolve DNS and verify the resolved IP is not private (blocks DNS rebinding)
+async function isBlockedAfterDnsResolve(hostname) {
+    try {
+        const result = await dns.lookup(hostname, { all: true });
+        for (const entry of result) {
+            if (isBlockedHostname(entry.address)) return true;
+        }
+        return false;
+    } catch {
+        return true;
+    }
 }
 
 exports.proxyImage = async (req, res) => {
@@ -26,6 +40,12 @@ exports.proxyImage = async (req, res) => {
             return res.status(400).send('URL inválida');
         }
         if (parsedUrl.username || parsedUrl.password || isBlockedHostname(parsedUrl.hostname)) {
+            return res.status(400).send('URL inválida');
+        }
+
+        // FIX #6: DNS resolution check to prevent SSRF via DNS rebinding
+        const dnsBlocked = await isBlockedAfterDnsResolve(parsedUrl.hostname);
+        if (dnsBlocked) {
             return res.status(400).send('URL inválida');
         }
 

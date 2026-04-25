@@ -4209,7 +4209,7 @@ async function initApp() {
                 // Show PRO Badge if premium
                 const proBadge = document.getElementById('pro-badge-nav');
                 if (proBadge) {
-                    const isPremium = user.is_premium || user.plan === 'personal_vip' || user.plan === 'b2b';
+                    const isPremium = user.is_premium || user.plan === 'personal_vip' || user.plan === 'b2b' || user.plan === 'personal_vip_annual' || user.plan === 'b2b_annual';
                     if (isPremium) {
                         proBadge.classList.remove('hidden');
                         proBadge.classList.add('flex');

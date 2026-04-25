@@ -221,8 +221,9 @@ async function createVipAutoAlert({ userId = null, product = null }) {
     }
 }
 
-function buildBestBuyScore(product = {}, deepMode = false) {
+function buildBestBuyScore(product = {}, deepMode = false, countryCode = 'MX') {
     const isVerifiedMeliApi = product.resultSource === 'meli_api';
+    const isVerifiedAmazonApi = product.resultSource === 'amazon_serpapi';
     const meliPriorityBoost = Math.max(0, Number(product._meliPriorityBoost || 0));
     const meliHardPenalty = Math.max(0, Number(product._meliAccessoryPenalty || 0)) + Math.max(0, Number(product._meliGameContentPenalty || 0)) + Math.max(0, Number(product._meliGenericTitlePenalty || 0)) + Math.max(0, Number(product._meliCategoryPenalty || 0));
     const priceConfidence = Math.min(1, Math.max(0, Number(product.priceConfidence || 0)));
@@ -236,7 +237,21 @@ function buildBestBuyScore(product = {}, deepMode = false) {
         snippet: product.shippingText || product.snippet,
         url: product.urlOriginal || product.urlMonetizada || product.url
     });
-    const trustScore = product.storeTier === 1 ? 1 : product.storeTier === 2 ? 0.72 : 0.38;
+    // NUEVO: Trust score mejorado para México - elevar ML y Amazon MX, penalizar importación
+    const isMexicanStore = product.canonicalStore === 'mercado libre' || 
+                           product.canonicalStore === 'amazon' && /amazon\.com\.mx/i.test(product.urlOriginal || product.url || '') ||
+                           ['walmart', 'liverpool', 'coppel', 'costco', "sam's club", 'elektra', 'best buy'].includes(product.canonicalStore);
+    const isImportStore = ['aliexpress', 'temu', 'shein', 'wish', 'shopee'].includes(product.canonicalStore);
+    const hasMexicanShipping = countryCode === 'MX' ? hasMexicanShippingSignal(product, countryCode) : true;
+    let trustScore = product.storeTier === 1 ? 1 : product.storeTier === 2 ? 0.72 : 0.38;
+    // Boost para tiendas mexicanas verificadas
+    if (isVerifiedMeliApi || isVerifiedAmazonApi) trustScore = Math.min(1, trustScore + 0.08);
+    if (isMexicanStore && hasMexicanShipping === true) trustScore = Math.min(1, trustScore + 0.04);
+    // Penalización para importaciones sin envío claro a México
+    if (countryCode === 'MX' && isImportStore) {
+        if (hasMexicanShipping === false) trustScore = Math.max(0.15, trustScore - 0.25);
+        else if (hasMexicanShipping === null) trustScore = Math.max(0.25, trustScore - 0.15);
+    }
     const availabilityScore = product.isPotentiallyUnavailable ? 0.2 : (product.hasStockSignal ? 1 : 0.62);
     const ephemeralPenalty = product.hasEphemeralRedirect && !product.hasStockSignal && product.priceConfidence < 0.5 ? 0.22 : (product.hasEphemeralRedirect ? 0.08 : 0);
     const titleText = String(product.titulo || product.title || '').toLowerCase();
@@ -244,9 +259,13 @@ function buildBestBuyScore(product = {}, deepMode = false) {
     const productCategory = String(product.productCategory || '').toLowerCase();
     const queryLooksLikeConsoleSearch = productCategory === 'gaming' && /\b(xbox|series\s*[xs]|playstation|ps5|ps4|nintendo\s+switch|switch|steam\s*deck|consola)\b/i.test(queryText) && !/\b(juego|videojuego|game|bundle|pack|dlc|season\s+pass|codigo|c[oó]digo|key|gift\s*card|tarjeta\s+de\s+regalo)\b/i.test(queryText);
     const gameContentPenalty = !isVerifiedMeliApi && queryLooksLikeConsoleSearch && /\b(juego|videojuego|game\s+pass|game\s+key|gift\s*card|tarjeta\s+de\s+regalo|season\s+pass|dlc|expansi[oó]n|expansion|moneda\s+virtual|skin|c[oó]digo\s+digital|digital\s+key|c[oó]digo\s+de\s+activaci[oó]n|codigo\s+de\s+activacion)\b/i.test(titleText) ? 0.3 : 0;
-    const shippingScore = product.shippingText
+    // NUEVO: Shipping score mejorado para México
+    let shippingScore = product.shippingText
         ? (/env[ií]o gratis|llega hoy|llega ma[ñn]ana|same day|free shipping|arrives? tomorrow/i.test(String(product.shippingText)) ? 1 : 0.72)
         : 0.55;
+    // Penalizar si no hay señal de envío a México
+    if (countryCode === 'MX' && hasMexicanShipping === false) shippingScore = Math.max(0.25, shippingScore - 0.3);
+    else if (countryCode === 'MX' && hasMexicanShipping === null) shippingScore = Math.max(0.4, shippingScore - 0.15);
     const dealScore = product.dealVerdict?.status === 'real_deal'
         ? 1
         : product.dealVerdict?.status === 'normal_price'
@@ -318,6 +337,147 @@ function buildIntentMemoryMeta(storeKey = '', intentBoostMap = {}, intentSignalM
         successScore: Number(intentSignalMetaMap[storeKey]?.successScore || 0),
         clickedCount: Number(intentSignalMetaMap[storeKey]?.clickedCount || 0)
     };
+}
+
+// NUEVO: Encuentra el mejor resultado de tienda preferida
+function findBestPreferredResult(results = [], preferredStoreKeys = [], minConfidence = 0.5) {
+    if (!preferredStoreKeys || preferredStoreKeys.length === 0) return null;
+    const preferredResults = results.filter(r => {
+        const isPreferred = preferredStoreKeys.includes(r.canonicalStore);
+        const hasGoodMatch = (r._modelMatchScore || 0) >= 0.35;
+        const hasConfidentPrice = (r.priceConfidence || 0) >= minConfidence;
+        const isAvailable = !r.isPotentiallyUnavailable && r.hasStockSignal !== false;
+        return isPreferred && hasGoodMatch && hasConfidentPrice && isAvailable;
+    });
+    if (preferredResults.length === 0) return null;
+    // Ordenar por: score de match del modelo, luego confianza de precio, luego precio
+    preferredResults.sort((a, b) => {
+        const matchDelta = (b._modelMatchScore || 0) - (a._modelMatchScore || 0);
+        if (Math.abs(matchDelta) > 0.15) return matchDelta;
+        const confidenceDelta = (b.priceConfidence || 0) - (a.priceConfidence || 0);
+        if (Math.abs(confidenceDelta) > 0.2) return confidenceDelta;
+        return (a._priceValue || Number.MAX_SAFE_INTEGER) - (b._priceValue || Number.MAX_SAFE_INTEGER);
+    });
+    return preferredResults[0];
+}
+
+// NUEVO: Encuentra la mejor alternativa más barata relevante (ahorro significativo)
+function findBestCheaperAlternative(results = [], preferredResult = null, minSavingsPct = 8, minSavingsAmount = 150) {
+    if (!preferredResult) return null;
+    const preferredPrice = Number(preferredResult.precio || preferredResult.price || 0);
+    if (preferredPrice <= 0) return null;
+    const cheaperAlternatives = results.filter(r => {
+        if (r.urlOriginal === preferredResult.urlOriginal) return false;
+        const price = Number(r.precio || r.price || 0);
+        if (price <= 0) return false;
+        const savings = preferredPrice - price;
+        const savingsPct = (savings / preferredPrice) * 100;
+        const hasGoodMatch = (r._modelMatchScore || 0) >= 0.35;
+        const isConfidentPrice = (r.priceConfidence || 0) >= 0.4;
+        const isSameVariant = !r._variantMismatch;
+        const isTrustedStore = (r.storeTier || 2) <= 2;
+        return savings > 0 &&
+               (savingsPct >= minSavingsPct || savings >= minSavingsAmount) &&
+               hasGoodMatch && isConfidentPrice && isSameVariant && isTrustedStore;
+    });
+    if (cheaperAlternatives.length === 0) return null;
+    // Ordenar por ahorro absoluto, luego por confianza
+    cheaperAlternatives.sort((a, b) => {
+        const aPrice = Number(a.precio || a.price || 0);
+        const bPrice = Number(b.precio || b.price || 0);
+        const aSavings = preferredPrice - aPrice;
+        const bSavings = preferredPrice - bPrice;
+        if (Math.abs(bSavings - aSavings) > 50) return bSavings - aSavings;
+        return (b.priceConfidence || 0) - (a.priceConfidence || 0);
+    });
+    return cheaperAlternatives[0];
+}
+
+// NUEVO: Calcula metadata de ahorros y explicación para cada resultado
+function calculateSavingsMetadata(results = [], preferredStoreKeys = [], countryCode = 'MX') {
+    const bestPreferred = findBestPreferredResult(results, preferredStoreKeys);
+    const bestCheaper = findBestCheaperAlternative(results, bestPreferred);
+    const preferredPrice = bestPreferred ? Number(bestPreferred.precio || bestPreferred.price || 0) : 0;
+    const cheaperPrice = bestCheaper ? Number(bestCheaper.precio || bestCheaper.price || 0) : 0;
+    const hasPreferredStore = preferredStoreKeys && preferredStoreKeys.length > 0;
+    return results.map(product => {
+        const price = Number(product.precio || product.price || 0);
+        const isPreferredResult = hasPreferredStore && preferredStoreKeys.includes(product.canonicalStore);
+        const isCheaperAlternative = bestCheaper && product.urlOriginal === bestCheaper.urlOriginal;
+        let winnerReason = null;
+        let savingsVsPreferred = null;
+        // Determinar razón de ganar posición
+        if (isPreferredResult && bestPreferred && product.urlOriginal === bestPreferred.urlOriginal) {
+            winnerReason = 'tienda_preferida';
+        } else if (isCheaperAlternative) {
+            winnerReason = 'mejor_ahorro';
+            savingsVsPreferred = {
+                amount: preferredPrice - cheaperPrice,
+                pct: Math.round(((preferredPrice - cheaperPrice) / preferredPrice) * 100),
+                preferredStore: bestPreferred.canonicalStore,
+                preferredPrice: preferredPrice
+            };
+        } else if ((product.priceConfidence || 0) >= 0.85) {
+            winnerReason = 'precio_verificado';
+        } else if (product.storeTier === 1) {
+            winnerReason = 'tienda_confiable';
+        } else if (product.shippingText && /env[ií]o gratis|llega hoy|free shipping/i.test(product.shippingText)) {
+            winnerReason = 'envio_bueno';
+        } else {
+            winnerReason = 'match_producto';
+        }
+        // Calcular ahorro vs tienda preferida para todos los resultados
+        if (hasPreferredStore && bestPreferred && price > 0 && preferredPrice > 0 && !isPreferredResult) {
+            const savings = preferredPrice - price;
+            const savingsPct = (savings / preferredPrice) * 100;
+            if (savings > 0 && (savingsPct >= 5 || savings >= 100)) {
+                savingsVsPreferred = {
+                    amount: Math.round(savings),
+                    pct: Math.round(savingsPct),
+                    preferredStore: bestPreferred.canonicalStore,
+                    preferredPrice: Math.round(preferredPrice)
+                };
+            }
+        }
+        return {
+            ...product,
+            winnerReason,
+            isPreferredStoreResult: isPreferredResult,
+            isBestCheaperAlternative: isCheaperAlternative,
+            savingsVsPreferred,
+            priceConfidenceLabel: getPriceConfidenceLabel(product.priceConfidence, product.priceSource, countryCode),
+            hasMexicanShipping: hasMexicanShippingSignal(product, countryCode)
+        };
+    });
+}
+
+// NUEVO: Etiqueta legible para confianza de precio
+function getPriceConfidenceLabel(confidence = 0, source = '', countryCode = 'MX') {
+    if (source === 'meli_api') return 'Precio Mercado Libre (API)';
+    if (source === 'amazon_serpapi') return 'Precio Amazon (API)';
+    if (source === 'direct_scraper') return 'Precio verificado tienda';
+    if (source === 'shopping_api') return 'Precio Google Shopping';
+    if (confidence >= 0.85) return 'Precio verificado';
+    if (confidence >= 0.6) return 'Precio probable';
+    if (confidence >= 0.4) return 'Precio estimado';
+    return 'Verificar precio';
+}
+
+// NUEVO: Detecta señales de envío a México
+function hasMexicanShippingSignal(product = {}, countryCode = 'MX') {
+    if (countryCode !== 'MX') return true;
+    const shipping = String(product.shippingText || '').toLowerCase();
+    const source = String(product.source || product.tienda || '').toLowerCase();
+    const url = String(product.urlOriginal || product.url || '').toLowerCase();
+    // Señales positivas de envío a México
+    if (/env[ií]o gratis|llega hoy|llega mañana|mercado env[ií]os|full/i.test(shipping)) return true;
+    if (/mercadolibre\.com\.mx|amazon\.com\.mx|walmart\.com\.mx|liverpool\.com\.mx/i.test(url)) return true;
+    if (source.includes('mercado libre') || source.includes('amazon mx') || source.includes('walmart')) return true;
+    // Señales negativas (posible importación)
+    if (/aliexpress|temu|shein|importaci/i.test(url) || /aliexpress|temu|shein/i.test(source)) {
+        if (!shipping.includes('mx') && !shipping.includes('méxico')) return false;
+    }
+    return null; // Desconocido
 }
 
 function normalizeExplicitStoreKey(value = '') {
@@ -2116,7 +2276,7 @@ exports.searchProduct = async (req, res) => {
                 product.couponDisclaimer = couponDisclaimer;
                 product.couponSourceUrl = couponSourceUrl;
             }
-            product.bestBuyScore = buildBestBuyScore(product);
+            product.bestBuyScore = buildBestBuyScore(product, false, countryCode);
             product._searchPolicyBoost = getSearchPolicyBoost(product, searchPolicy);
             product.bestBuyScore = Number(Math.min(1, product.bestBuyScore + product._searchPolicyBoost).toFixed(3));
             product.bestBuyLabel = buildBestBuyLabel(product.bestBuyScore);
@@ -2140,7 +2300,7 @@ exports.searchProduct = async (req, res) => {
                     p._deepPriceRank = 0.35;
                 }
                 // Re-score with deep mode weights
-                p.bestBuyScore = buildBestBuyScore(p, true);
+                p.bestBuyScore = buildBestBuyScore(p, true, countryCode);
                 p.bestBuyLabel = buildBestBuyLabel(p.bestBuyScore);
             });
         }
@@ -2169,13 +2329,25 @@ exports.searchProduct = async (req, res) => {
         });
 
         finalProductsConCupones.sort((a, b) => Number(b.bestBuyScore || 0) - Number(a.bestBuyScore || 0));
-        const balancedProducts = selectBalancedResults(
+        
+        // NUEVO: Calcular metadata de ahorros y explicación de resultados
+        const productsWithSavingsMetadata = calculateSavingsMetadata(
             finalProductsConCupones,
+            searchPolicy.preferredStoreKeys || [],
+            countryCode
+        );
+        
+        const balancedProducts = selectBalancedResults(
+            productsWithSavingsMetadata,
             buildBroadSearchProfile(searchQuery),
             36,
             isVipSearch ? 8 : 5,
             { preferredStoreKey: searchPolicy.preferredStoreKey, preferredStoreKeys: searchPolicy.preferredStoreKeys || [] }
         );
+        
+        // NUEVO: Encontrar mejor resultado de tienda preferida y mejor alternativa para metadata de respuesta
+        const bestPreferredResult = findBestPreferredResult(balancedProducts, searchPolicy.preferredStoreKeys || []);
+        const bestCheaperAlternative = findBestCheaperAlternative(balancedProducts, bestPreferredResult);
 
         // Deep Research: AI-powered comparative analysis and variant suggestions
         let deepResearchEnhancements = null;
@@ -2287,9 +2459,49 @@ exports.searchProduct = async (req, res) => {
                     price: balancedProducts[0].precio,
                     score: balancedProducts[0].bestBuyScore,
                     label: balancedProducts[0].bestBuyLabel,
-                    url: balancedProducts[0].urlMonetizada || balancedProducts[0].urlOriginal
+                    url: balancedProducts[0].urlMonetizada || balancedProducts[0].urlOriginal,
+                    winner_reason: balancedProducts[0].winnerReason,
+                    is_preferred_store: balancedProducts[0].isPreferredStoreResult,
+                    savings_vs_preferred: balancedProducts[0].savingsVsPreferred,
+                    price_confidence_label: balancedProducts[0].priceConfidenceLabel
                 }
                 : null,
+            // NUEVO: Metadata de tienda preferida y alternativa más barata
+            preferred_store_summary: bestPreferredResult
+                ? {
+                    has_preferred_result: true,
+                    best_preferred: {
+                        title: bestPreferredResult.titulo,
+                        store: bestPreferredResult.canonicalStore,
+                        price: bestPreferredResult.precio,
+                        url: bestPreferredResult.urlMonetizada || bestPreferredResult.urlOriginal,
+                        match_score: bestPreferredResult._modelMatchScore,
+                        price_confidence: bestPreferredResult.priceConfidence,
+                        winner_reason: bestPreferredResult.winnerReason
+                    },
+                    cheaper_alternative: bestCheaperAlternative
+                        ? {
+                            title: bestCheaperAlternative.titulo,
+                            store: bestCheaperAlternative.canonicalStore,
+                            price: bestCheaperAlternative.precio,
+                            url: bestCheaperAlternative.urlMonetizada || bestCheaperAlternative.urlOriginal,
+                            savings_amount: Math.round((bestPreferredResult.precio || bestPreferredResult.price || 0) - (bestCheaperAlternative.precio || bestCheaperAlternative.price || 0)),
+                            savings_pct: Math.round((((bestPreferredResult.precio || bestPreferredResult.price || 0) - (bestCheaperAlternative.precio || bestCheaperAlternative.price || 0)) / (bestPreferredResult.precio || bestPreferredResult.price || 1)) * 100),
+                            match_score: bestCheaperAlternative._modelMatchScore,
+                            price_confidence: bestCheaperAlternative.priceConfidence,
+                            price_confidence_label: bestCheaperAlternative.priceConfidenceLabel
+                        }
+                        : null,
+                    message: bestCheaperAlternative
+                        ? `Encontré ${bestPreferredResult.canonicalStore} a $${Math.round(bestPreferredResult.precio || bestPreferredResult.price || 0)}, pero hay una alternativa ${bestCheaperAlternative.savingsVsPreferred?.pct || 0}% más barata en ${bestCheaperAlternative.canonicalStore}.`
+                        : `El mejor resultado en tu tienda preferida ${bestPreferredResult.canonicalStore} es este:`
+                }
+                : {
+                    has_preferred_result: false,
+                    message: searchPolicy.preferredStoreKeys?.length > 0
+                        ? `No encontré buenos resultados en ${searchPolicy.preferredStoreKeys.join(', ')}. Te muestro las mejores alternativas disponibles.`
+                        : null
+                },
             region: {
                 country: countryCode,
                 currency: regionCfg.currency,

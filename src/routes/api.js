@@ -211,7 +211,7 @@ router.get('/scraper-health', (req, res) => {
 });
 
 // NUEVO: Fase 6 - Lumu Coins endpoint
-router.get('/me/coins', authMiddleware, searchController.getCoins);
+router.get('/me/coins', authMiddleware, authMiddleware.requireAuth, searchController.getCoins);
 
 // ============================================================
 // Admin Routes (private — requires ADMIN_API_KEY + allowed email)

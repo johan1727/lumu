@@ -30,3 +30,7 @@ dist/
 p_output.*
 diff.*
 syntax_error.txt
+
+# Local scratch and test scripts
+scratch/
+scripts/test-*.js
