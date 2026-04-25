@@ -612,11 +612,22 @@ function classifySearchPolicyStore(product = {}) {
 }
 
 function applySearchPolicyFilters(products = [], searchPolicy = {}) {
-    return (products || []).filter(product => {
+    const preferredStoreKeys = Array.isArray(searchPolicy.preferredStoreKeys) ? searchPolicy.preferredStoreKeys : [];
+    const debugMode = preferredStoreKeys.length > 0 && searchPolicy.preferredStoreMode === 'exclusive';
+    
+    if (debugMode) {
+        console.log(`[applySearchPolicyFilters] EXCLUSIVE MODE - preferredKeys: ${JSON.stringify(preferredStoreKeys)}, totalProducts: ${products.length}`);
+    }
+    
+    const filtered = (products || []).filter(product => {
         const storeTrust = classifySearchPolicyStore(product);
         const canonicalStore = product.canonicalStore || storeTrust.canonicalStore;
-        const preferredStoreKeys = Array.isArray(searchPolicy.preferredStoreKeys) ? searchPolicy.preferredStoreKeys : [];
         const isPreferredStore = preferredStoreKeys.length > 0 && preferredStoreKeys.includes(canonicalStore);
+
+        if (debugMode && Math.random() < 0.05) { // Log 5% of products
+            const source = product.tienda || product.fuente || product.source || '';
+            console.log(`[applySearchPolicyFilters] product.source="${source}", canonicalStore="${canonicalStore}", isPreferred=${isPreferredStore}`);
+        }
 
         if (preferredStoreKeys.length > 0 && searchPolicy.preferredStoreMode === 'exclusive' && !isPreferredStore) {
             return false;
@@ -640,6 +651,12 @@ function applySearchPolicyFilters(products = [], searchPolicy = {}) {
 
         return true;
     });
+    
+    if (debugMode) {
+        console.log(`[applySearchPolicyFilters] EXCLUSIVE MODE - filtered: ${filtered.length}/${products.length} products`);
+    }
+    
+    return filtered;
 }
 
 function getSearchPolicyBoost(product = {}, searchPolicy = {}) {
