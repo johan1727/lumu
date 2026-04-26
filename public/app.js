@@ -5095,29 +5095,52 @@ async function initApp() {
                         const vipUrl = vipLink !== '#' && currentUser ? `${vipLink}?client_reference_id=${encodeURIComponent(currentUser.id)}` : vipLink;
                         if (isPaywall) {
                             const rewardAvailable = typeof hasRealRewardedAdConfigured === 'function' && hasRealRewardedAdConfigured();
-                            const paywallMsg = rewardAvailable
-                                ? `🔒 **${getLocalizedText('Límite gratis alcanzado.', 'Free limit reached.')}** ${getLocalizedText('Tu plan gratis incluye 2 búsquedas por día y 10 por mes. Hazte VIP o mira un anuncio para 3 búsquedas extra.', 'Your free plan includes 2 searches per day and 10 per month. Go VIP or watch an ad for 3 extra searches.')}`
-                                : `🔒 **${getLocalizedText('Límite gratis alcanzado.', 'Free limit reached.')}** ${getLocalizedText('Tu plan gratis incluye 2 búsquedas por día y 10 por mes. Hazte VIP para seguir buscando.', 'Your free plan includes 2 searches per day and 10 per month. Upgrade to VIP to keep searching.')}`;
-                            addChatBubble('ai', paywallMsg, [], false);
+                            const isES = currentRegion !== 'US';
+                            addChatBubble('ai', `🔒 **${getLocalizedText('Agotaste tus búsquedas gratuitas de hoy.', 'You used up your free searches for today.')}** ${getLocalizedText('Con VIP buscas sin límite, más profundo y con alertas automáticas de precio.', 'With VIP you search without limits, deeper and with automatic price alerts.')}`, [], false);
                             const signupButton = !currentUser ? `
-                                        <button onclick="window.openSignupPrompt();" class="w-full bg-slate-900 hover:bg-slate-800 text-white px-8 py-3.5 rounded-2xl font-bold transition-all">
-                                            ${getLocalizedText('Crear cuenta gratis con búsquedas bonus', 'Create free account with bonus searches')}
+                                        <button id="paywall-signup-btn" class="w-full bg-slate-900 hover:bg-slate-800 text-white px-8 py-3.5 rounded-2xl font-bold transition-all">
+                                            ${getLocalizedText('Crear cuenta gratis (2 búsquedas/día)', 'Create free account (2 searches/day)')}
                                         </button>` : '';
                             resultsContainer.innerHTML = `
-                                <div class="col-span-full flex flex-col items-center text-center py-12 px-6 bg-gradient-to-br from-amber-50 to-orange-50 rounded-3xl border border-amber-200">
-                                    <div class="text-5xl mb-4">⚡</div>
-                                    <h3 class="text-xl font-black text-slate-800 mb-2">${getLocalizedText('Límite Alcanzado', 'Limit Reached')}</h3>
-                                    <p class="text-slate-600 font-medium mb-6 max-w-sm">${rewardAvailable ? getLocalizedText('Tu cuenta gratis incluye 2 búsquedas al día y 10 al mes. Desbloquea búsquedas ilimitadas con VIP o gana 3 búsquedas extra viendo un anuncio.', 'Your free account includes 2 searches per day and 10 per month. Unlock unlimited searches with VIP or earn 3 extra searches by watching an ad.') : getLocalizedText('Tu cuenta gratis incluye 2 búsquedas al día y 10 al mes. Desbloquea búsquedas ilimitadas con VIP para seguir encontrando mejores ofertas.', 'Your free account includes 2 searches per day and 10 per month. Unlock unlimited searches with VIP to keep finding better deals.')}</p>
+                                <div class="col-span-full flex flex-col items-center text-center py-10 px-6 bg-gradient-to-br from-amber-50 to-orange-50 rounded-3xl border border-amber-200">
+                                    <div class="text-5xl mb-3">⚡</div>
+                                    <h3 class="text-xl font-black text-slate-800 mb-1">${getLocalizedText('Límite diario alcanzado', 'Daily limit reached')}</h3>
+                                    <p class="text-slate-500 text-sm mb-5 max-w-xs">${getLocalizedText('Tu plan gratis: 2 búsquedas/día · 10/mes', 'Free plan: 2 searches/day · 10/month')}</p>
+                                    <div class="grid grid-cols-2 gap-2 w-full max-w-xs mb-5 text-left">
+                                        <div class="bg-white rounded-xl border border-amber-100 p-3 flex items-start gap-2">
+                                            <span class="text-lg">🔍</span>
+                                            <div><p class="text-xs font-black text-slate-800">${getLocalizedText('Búsquedas ilimitadas', 'Unlimited searches')}</p><p class="text-[11px] text-slate-500">${getLocalizedText('Sin cortes por día', 'No daily cuts')}</p></div>
+                                        </div>
+                                        <div class="bg-white rounded-xl border border-amber-100 p-3 flex items-start gap-2">
+                                            <span class="text-lg">🔬</span>
+                                            <div><p class="text-xs font-black text-slate-800">${getLocalizedText('Búsqueda profunda', 'Deep research')}</p><p class="text-[11px] text-slate-500">${getLocalizedText('Más tiendas y variantes', 'More stores & variants')}</p></div>
+                                        </div>
+                                        <div class="bg-white rounded-xl border border-amber-100 p-3 flex items-start gap-2">
+                                            <span class="text-lg">🔔</span>
+                                            <div><p class="text-xs font-black text-slate-800">${getLocalizedText('Alertas de precio', 'Price alerts')}</p><p class="text-[11px] text-slate-500">${getLocalizedText('Te avisamos si baja', 'We notify you on drops')}</p></div>
+                                        </div>
+                                        <div class="bg-white rounded-xl border border-amber-100 p-3 flex items-start gap-2">
+                                            <span class="text-lg">🏪</span>
+                                            <div><p class="text-xs font-black text-slate-800">${getLocalizedText('Filtros por tienda', 'Store filters')}</p><p class="text-[11px] text-slate-500">${getLocalizedText('Amazon, ML y más', 'Amazon, ML & more')}</p></div>
+                                        </div>
+                                    </div>
                                     <div class="flex flex-col gap-3 w-full max-w-xs">
                                         ${signupButton}
-                                        <a href="${sanitize(vipUrl)}" target="_blank" class="w-full bg-amber-500 hover:bg-amber-600 text-white px-8 py-3.5 rounded-2xl font-bold transition-all shadow-lg shadow-amber-500/20">${getLocalizedText('Obtener VIP - $39 MXN/mes', 'Get VIP - $39 MXN/mo')}</a>
+                                        <a href="${sanitize(vipUrl)}" target="_blank" class="w-full bg-amber-500 hover:bg-amber-600 text-white px-8 py-3.5 rounded-2xl font-bold transition-all shadow-lg shadow-amber-500/20 flex items-center justify-center gap-2">
+                                            <span>⚡</span>
+                                            <span>${getLocalizedText('Hacerme VIP — $39 MXN/mes', 'Go VIP — $39 MXN/mo')}</span>
+                                        </a>
                                         ${rewardAvailable ? `
                                         <button onclick="window.watchRewardedAdForSearches();" class="w-full bg-white hover:bg-slate-50 text-slate-700 border border-slate-200 px-8 py-3.5 rounded-2xl font-bold transition-all flex justify-center items-center gap-2">
                                             <svg class="w-5 h-5 text-emerald-500" fill="currentColor" viewBox="0 0 24 24"><path d="M10 8v8l6-4-6-4zm9-5H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm0 16H5V5h14v14z"/></svg>
-                                            ${getLocalizedText('Ver anuncio (3 Gratis)', 'Watch Ad (3 Free)')}
+                                            ${getLocalizedText('Ver anuncio (+3 búsquedas gratis)', 'Watch ad (+3 free searches)')}
                                         </button>` : ''}
                                     </div>
                                 </div>`;
+                            if (!currentUser) {
+                                const paywallSignupBtn = resultsContainer.querySelector('#paywall-signup-btn');
+                                if (paywallSignupBtn) paywallSignupBtn.addEventListener('click', () => openModal());
+                            }
                             resultsWrapper.classList.remove('hidden');
                         } else {
                             addChatBubble('ai', `⚠️ ${data.error}`, [], false);
@@ -5182,6 +5205,30 @@ async function initApp() {
                                 }, 600);
                             }
                         }
+                    }
+
+                    // Upsell contextual VIP para usuarios free logueados que usaron filtros avanzados
+                    const hasStoreFilterActive = (selectedStoreFocus.preferredStoreKeys || []).length > 0;
+                    const _currentSearchTier = data.search_metadata?.search_tier || 'free';
+                    if (currentUser && _currentSearchTier !== 'vip' && hasStoreFilterActive && !sessionStorage.getItem('lumu_vip_store_nudge_shown')) {
+                        setTimeout(() => {
+                            if (!resultsContainer) return;
+                            const vipLink = stripePaymentLink || '#';
+                            const vipUrl = vipLink !== '#' && currentUser ? `${vipLink}?client_reference_id=${encodeURIComponent(currentUser.id)}` : vipLink;
+                            const vipNudge = document.createElement('div');
+                            vipNudge.className = 'col-span-full mt-4 rounded-3xl border border-amber-200 bg-gradient-to-r from-amber-50 to-orange-50 px-5 py-4 flex flex-col md:flex-row items-center justify-between gap-4 shadow-sm';
+                            vipNudge.innerHTML = `
+                                <div class="text-center md:text-left min-w-0">
+                                    <p class="text-xs font-black text-amber-700 uppercase tracking-wide mb-1">⚡ ${getLocalizedText('Busca más profundo con VIP', 'Search deeper with VIP')}</p>
+                                    <p class="text-sm text-slate-700 font-medium">${getLocalizedText('Con VIP revisas más variantes, más tiendas y recibes alertas cuando baje el precio — por solo $39 MXN/mes.', 'With VIP you check more variants, more stores and get price drop alerts — for only $39 MXN/mo.')}</p>
+                                </div>
+                                <a href="${sanitize(vipUrl)}" target="_blank" class="flex-shrink-0 w-full md:w-auto bg-amber-500 hover:bg-amber-600 text-white px-5 py-2.5 rounded-2xl text-sm font-black transition-colors shadow-md shadow-amber-500/20 text-center">
+                                    ${getLocalizedText('Ver VIP', 'See VIP')}
+                                </a>
+                            `;
+                            resultsContainer.appendChild(vipNudge);
+                            sessionStorage.setItem('lumu_vip_store_nudge_shown', 'true');
+                        }, 4000);
                     }
 
                     if (!currentUser && !sessionStorage.getItem('lumu_signup_nudge_shown')) {
@@ -5406,6 +5453,9 @@ async function initApp() {
 
                         // --- No-results final: UI amigable con sugerencias ---
                         const searchTerm = data.intencion_detectada?.busqueda || finalQuery;
+                        const activeStoreKeys = _lastSearchPolicy.preferredStoreKeys || [];
+                        const hasStoreFilter = activeStoreKeys.length > 0 && _lastSearchPolicy.preferredStoreMode === 'exclusive';
+
                         const fallbackChips = currentRegion === 'US' ? [
                             `${searchTerm} new`,
                             `${searchTerm} deals`,
@@ -5425,6 +5475,36 @@ async function initApp() {
                             ? `<div class="mb-4 inline-flex items-center gap-2 rounded-full bg-violet-50 border border-violet-200 px-4 py-2 text-xs font-bold text-violet-700">✨ ${searchTier === 'vip' ? 'VIP' : 'Deep'} Search</div>`
                             : '';
 
+                        if (hasStoreFilter) {
+                            const storeNames = activeStoreKeys.map(k => sanitize(k.split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' '))).join(', ');
+                            resultsContainer.innerHTML = `
+                            <div class="col-span-full flex flex-col items-center text-center py-12 px-6 bg-white/60 backdrop-blur-sm rounded-3xl border border-dashed border-indigo-200">
+                                <div class="text-5xl mb-4">🏪</div>
+                                <h3 class="text-xl font-black text-slate-800 mb-2">${getLocalizedText(`Sin resultados en ${storeNames}`, `No results in ${storeNames}`)}</h3>
+                                <p class="text-slate-500 font-medium mb-6 max-w-sm">${getLocalizedText(`Busqué exclusivamente en ${storeNames} y no encontré resultados verificables para esta búsqueda. Puede ser un problema temporal de disponibilidad o que el producto se vende bajo otro nombre.`, `I searched exclusively in ${storeNames} and found no verifiable results. This may be a temporary availability issue or the product may be listed under a different name.`)}</p>
+                                <div class="flex flex-col gap-3 w-full max-w-xs">
+                                    <button id="zero-results-clear-store-btn" class="w-full bg-indigo-600 hover:bg-indigo-700 text-white px-6 py-3 rounded-2xl font-bold transition-colors">
+                                        ${getLocalizedText('Buscar en todas las tiendas', 'Search all stores')}
+                                    </button>
+                                    <div class="flex flex-wrap gap-2 justify-center sugg-container mt-2">
+                                        ${suggChips}
+                                    </div>
+                                </div>
+                            </div>`;
+                            resultsWrapper.classList.remove('hidden');
+                            errorMessage.classList.add('hidden');
+                            document.querySelectorAll('.sugg-chip').forEach(btn => {
+                                btn.addEventListener('click', () => window.quickSearch(btn.dataset.sugg));
+                            });
+                            const clearStoreBtn = document.getElementById('zero-results-clear-store-btn');
+                            if (clearStoreBtn) {
+                                clearStoreBtn.addEventListener('click', () => {
+                                    setSelectedStoreFocusKeys([]);
+                                    renderStoreFocusChips();
+                                    executeSearch(finalQuery, true);
+                                });
+                            }
+                        } else {
                         resultsContainer.innerHTML = `
                         <div class="col-span-full flex flex-col items-center text-center py-12 px-6 bg-white/60 backdrop-blur-sm rounded-3xl border border-dashed border-slate-200">
                             ${zeroMetaBadge}
@@ -5445,6 +5525,7 @@ async function initApp() {
                         document.querySelectorAll('.sugg-chip').forEach(btn => {
                             btn.addEventListener('click', () => window.quickSearch(btn.dataset.sugg));
                         });
+                        }
                     }
 
                     if (data.top_5_baratos && data.top_5_baratos.length === 0 && data.advertencia_uso) {

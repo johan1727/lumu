@@ -611,25 +611,50 @@ function classifySearchPolicyStore(product = {}) {
     });
 }
 
+function matchesPreferredStoreController(product = {}, storeKey = '') {
+    if (!storeKey) return false;
+    const key = String(storeKey).toLowerCase().trim();
+
+    // 1. canonicalStore directo
+    const canonical = String(product.canonicalStore || '').toLowerCase().trim();
+    if (canonical && canonical === key) return true;
+
+    // 2. Desde storeTrust
+    const storeTrustCanonical = String(product.storeTrust?.canonicalStore || '').toLowerCase().trim();
+    if (storeTrustCanonical && storeTrustCanonical === key) return true;
+
+    // 3. source / tienda / fuente
+    const source = String(product.tienda || product.fuente || product.source || '').toLowerCase();
+    if (source) {
+        if (key === 'amazon' && /\bamazon\b/.test(source)) return true;
+        if (key === 'mercado libre' && /mercado.?libre|\bmeli\b|mercadolibre/.test(source)) return true;
+        if (source.includes(key)) return true;
+    }
+
+    // 4. URL / dominio
+    const url = String(product.urlOriginal || product.urlMonetizada || product.url || '').toLowerCase();
+    if (url) {
+        if (key === 'amazon' && /amazon\.(com|com\.mx|com\.br|co\.uk|de|fr|es|ca|com\.au|co\.jp)/.test(url)) return true;
+        if (key === 'mercado libre' && /mercadolibre\.(com\.mx|com\.ar|com\.br|cl|com\.co|com\.pe|com\.uy|com\.ve|com)/.test(url)) return true;
+        if (key === 'walmart' && /walmart\.(com|com\.mx)/.test(url)) return true;
+        if (key === 'liverpool' && /liverpool\.(com\.mx)/.test(url)) return true;
+        if (key === 'costco' && /costco\.(com|com\.mx)/.test(url)) return true;
+        if (key === 'best buy' && /bestbuy\.com/.test(url)) return true;
+        if (key === 'falabella' && /falabella\.(com|cl|com\.co|com\.pe)/.test(url)) return true;
+    }
+
+    return false;
+}
+
 function applySearchPolicyFilters(products = [], searchPolicy = {}) {
     const preferredStoreKeys = Array.isArray(searchPolicy.preferredStoreKeys) ? searchPolicy.preferredStoreKeys : [];
-    const debugMode = preferredStoreKeys.length > 0 && searchPolicy.preferredStoreMode === 'exclusive';
-    
-    if (debugMode) {
-        console.log(`[applySearchPolicyFilters] EXCLUSIVE MODE - preferredKeys: ${JSON.stringify(preferredStoreKeys)}, totalProducts: ${products.length}`);
-    }
-    
-    const filtered = (products || []).filter(product => {
+    const isExclusive = preferredStoreKeys.length > 0 && searchPolicy.preferredStoreMode === 'exclusive';
+
+    return (products || []).filter(product => {
         const storeTrust = classifySearchPolicyStore(product);
-        const canonicalStore = product.canonicalStore || storeTrust.canonicalStore;
-        const isPreferredStore = preferredStoreKeys.length > 0 && preferredStoreKeys.includes(canonicalStore);
+        const isPreferredStore = preferredStoreKeys.length > 0 && preferredStoreKeys.some(key => matchesPreferredStoreController(product, key));
 
-        if (debugMode && Math.random() < 0.05) { // Log 5% of products
-            const source = product.tienda || product.fuente || product.source || '';
-            console.log(`[applySearchPolicyFilters] product.source="${source}", canonicalStore="${canonicalStore}", isPreferred=${isPreferredStore}`);
-        }
-
-        if (preferredStoreKeys.length > 0 && searchPolicy.preferredStoreMode === 'exclusive' && !isPreferredStore) {
+        if (isExclusive && !isPreferredStore) {
             return false;
         }
 
@@ -651,12 +676,6 @@ function applySearchPolicyFilters(products = [], searchPolicy = {}) {
 
         return true;
     });
-    
-    if (debugMode) {
-        console.log(`[applySearchPolicyFilters] EXCLUSIVE MODE - filtered: ${filtered.length}/${products.length} products`);
-    }
-    
-    return filtered;
 }
 
 function getSearchPolicyBoost(product = {}, searchPolicy = {}) {

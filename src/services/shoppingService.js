@@ -285,6 +285,45 @@ function buildStoreFocusedShoppingQuery(query = '', countryCode = 'MX', searchPo
     return normalizedQuery;
 }
 
+function matchesPreferredStore(result = {}, storeKey = '') {
+    if (!storeKey) return false;
+    const key = String(storeKey).toLowerCase().trim();
+
+    // 1. canonicalStore directo
+    const canonical = String(result.canonicalStore || '').toLowerCase().trim();
+    if (canonical && canonical === key) return true;
+
+    // 2. Desde storeTrust
+    const storeTrustCanonical = String(result.storeTrust?.canonicalStore || '').toLowerCase().trim();
+    if (storeTrustCanonical && storeTrustCanonical === key) return true;
+
+    // 3. source / tienda / fuente
+    const source = String(result.source || result.tienda || result.fuente || result.store || '').toLowerCase();
+    if (source) {
+        if (key === 'amazon' && /\bamazon\b/.test(source)) return true;
+        if (key === 'mercado libre' && /mercado.?libre|\bmeli\b|mercadolibre/.test(source)) return true;
+        if (source.includes(key)) return true;
+    }
+
+    // 4. URL / dominio
+    const url = String(result.url || result.urlOriginal || result.urlMonetizada || result.link || '').toLowerCase();
+    if (url) {
+        if (key === 'amazon' && /amazon\.(com|com\.mx|com\.br|co\.uk|de|fr|es|ca|com\.au|co\.jp)/.test(url)) return true;
+        if (key === 'mercado libre' && /mercadolibre\.(com\.mx|com\.ar|com\.br|cl|com\.co|com\.pe|com\.uy|com\.ve|com)/.test(url)) return true;
+        if (key === 'walmart' && /walmart\.(com|com\.mx)/.test(url)) return true;
+        if (key === 'liverpool' && /liverpool\.(com\.mx)/.test(url)) return true;
+        if (key === 'costco' && /costco\.(com|com\.mx)/.test(url)) return true;
+        if (key === 'best buy' && /bestbuy\.com/.test(url)) return true;
+        if (key === 'falabella' && /falabella\.(com|cl|com\.co|com\.pe)/.test(url)) return true;
+    }
+
+    return false;
+}
+
+function matchesAnyPreferredStore(result = {}, storeKeys = []) {
+    return storeKeys.length > 0 && storeKeys.some(key => matchesPreferredStore(result, key));
+}
+
 function filterResultsBySearchPolicy(results = [], searchPolicy = {}) {
     const policy = normalizeSearchPolicy(searchPolicy);
     const debugMode = policy.preferredStoreKeys.length > 0 && policy.preferredStoreMode === 'exclusive';
@@ -300,12 +339,7 @@ function filterResultsBySearchPolicy(results = [], searchPolicy = {}) {
             source: result.source || result.store || '',
             url: result.url || result.link || ''
         });
-        const canonicalStore = result.canonicalStore || storeTrust.canonicalStore;
-        const isPreferredStore = policy.preferredStoreKeys.length > 0 && policy.preferredStoreKeys.includes(canonicalStore);
-
-        if (debugMode && Math.random() < 0.1) { // Log 10% of results to avoid spam
-            console.log(`[filterResultsBySearchPolicy] result.source="${result.source}", canonicalStore="${canonicalStore}", isPreferred=${isPreferredStore}, url=${(result.url || '').substring(0, 60)}...`);
-        }
+        const isPreferredStore = policy.preferredStoreKeys.length > 0 && matchesAnyPreferredStore(result, policy.preferredStoreKeys);
 
         if (policy.preferredStoreKeys.length > 0 && policy.preferredStoreMode === 'exclusive' && !isPreferredStore) {
             return false;
@@ -865,6 +899,8 @@ exports.searchGoogleShopping = async (query, radius, lat, lng, intentType, abort
     const deepSearchEnabled = Boolean(searchOptions?.deepSearchEnabled);
     const isSpecificProduct = queryType === 'brand_model' || queryType === 'comparison';
     const restrictToPreferredStore = searchPolicy.preferredStoreKeys.length > 0 && searchPolicy.preferredStoreMode === 'exclusive';
+    const preferredIncludesMeli = restrictToPreferredStore && searchPolicy.preferredStoreKeys.some(k => /mercado.?libre|meli/i.test(k));
+    const preferredIncludesAmazon = restrictToPreferredStore && searchPolicy.preferredStoreKeys.some(k => /amazon/i.test(k));
     const shouldQueryBroadWeb = !restrictToPreferredStore && !isSpecificProduct && shouldRunBroadWebQuery(webQuery, {
         productCategory,
         preferredStoreKeys,
@@ -872,7 +908,7 @@ exports.searchGoogleShopping = async (query, radius, lat, lng, intentType, abort
         alternativeQueries
     });
     const shouldQueryOfficialWeb = !restrictToPreferredStore && !isSpecificProduct && (isVipSearch || shouldRunOfficialWebQuery(webQuery, brandOfficialQuery, countryCode));
-    const shouldQueryMlPriority = !restrictToPreferredStore && !isSpecificProduct && (isVipSearch || searchPolicy.preferredStoreKeys.length === 0);
+    const shouldQueryMlPriority = (!restrictToPreferredStore && !isSpecificProduct && (isVipSearch || searchPolicy.preferredStoreKeys.length === 0)) || preferredIncludesMeli;
     const shouldRunDirectScrapers = !isService
         && intentType !== 'mayoreo_perecedero'
         && (!isLocalFastMode || isBroadExploration || ['smartphone', 'laptop', 'audio', 'tv', 'fashion', 'home', 'appliance'].includes(String(productCategory || '').toLowerCase()));
@@ -956,9 +992,9 @@ exports.searchGoogleShopping = async (query, radius, lat, lng, intentType, abort
         const normalizedWebSearchQ = String(webSearchQ || '').toLowerCase();
         const mainWebAlreadyTargetsAmazon = /site:amazon\.(com|com\.mx)/i.test(normalizedWebSearchQ);
         const mainWebAlreadyTargetsMercadoLibre = /site:mercadolibre\./i.test(normalizedWebSearchQ);
-        const shouldQueryMlAmazon = !restrictToPreferredStore && !isSpecificProduct && !(mainWebAlreadyTargetsAmazon && mainWebAlreadyTargetsMercadoLibre);
+        const shouldQueryMlAmazon = (!restrictToPreferredStore && !isSpecificProduct && !(mainWebAlreadyTargetsAmazon && mainWebAlreadyTargetsMercadoLibre)) || (restrictToPreferredStore && (preferredIncludesMeli || preferredIncludesAmazon));
         const amazonSpecificDomain = countryCode === 'US' ? 'amazon.com' : 'amazon.com.mx';
-        const amazonSpecificShoppingPromise = !isSpecificProduct
+        const amazonSpecificShoppingPromise = (!isSpecificProduct && !preferredIncludesAmazon)
             ? Promise.resolve(null)
             : fetchWithRetry({
                 method: 'post',
@@ -1579,6 +1615,17 @@ exports.searchGoogleShopping = async (query, radius, lat, lng, intentType, abort
                 const source = String(fn).toLowerCase();
                 return preferredAliases.some(alias => source.includes(String(alias).toLowerCase()));
             });
+            // SIEMPRE incluir meliService cuando ML es tienda preferida — no depender de proxy
+            if (preferredIncludesMeli && !scraperFunctions.some(fn => String(fn).toLowerCase().includes('meli'))) {
+                scraperFunctions.push(
+                    () => monitor.wrap(() => meliService.searchMeli(cleanQuery, countryCode, {
+                        limit: meliResultLimit,
+                        sort: 'best_sellers',
+                        signal: abortSignal,
+                        conditionMode
+                    }), 'meli_api_exclusive')
+                );
+            }
         }
         
         const CONCURRENCY_LIMIT = isLocalFastMode ? (isBroadExploration ? 3 : 2) : 8;
