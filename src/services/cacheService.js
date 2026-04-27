@@ -73,6 +73,7 @@ function normalizeSearchPolicy(searchPolicy = {}) {
 function serializeSearchPolicy(searchPolicy = {}) {
     const normalized = normalizeSearchPolicy(searchPolicy);
     return [
+        'v6coherence',
         normalized.preferredStoreKeys.length > 0 ? normalized.preferredStoreKeys.join('+') : 'allstores',
         normalized.preferredStoreMode,
         normalized.safeStoresOnly ? 'safe' : 'mixed',

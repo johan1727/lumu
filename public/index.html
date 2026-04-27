@@ -36,7 +36,6 @@
     <link rel="alternate" hreflang="es" href="https://www.lumu.dev/">
     <link rel="alternate" hreflang="en-US" href="https://www.lumu.dev/en/">
     <link rel="alternate" hreflang="x-default" href="https://www.lumu.dev/">
-qu    
     <!-- Preload Critical Resources for LCP -->
     <link rel="preload" href="/styles.css?v=sw_auto_reload_v2" as="style">
     <link rel="preload" href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800;900&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" as="style">
@@ -1493,14 +1492,14 @@ qu
     </style>
 
     <body
-        class="page-home bg-slate-50 font-sans text-slate-800 antialiased min-h-screen flex flex-col relative selection:bg-emerald-200 selection:text-emerald-900 safe-bottom">
+        class="page-home lumu-stitch-redesign bg-slate-50 font-sans text-slate-800 antialiased min-h-screen flex flex-col relative selection:bg-indigo-500/40 selection:text-white safe-bottom">
 
         <div id="bg-dotted-surface" class="pointer-events-none fixed inset-0 -z-10"></div>
 
         <!-- Header Premium Full-Width -->
         <header
-            class="w-full bg-white/72 backdrop-blur-xl border-b border-emerald-100/80 sticky top-0 z-50 transition-all shadow-[0_10px_35px_rgba(16,185,129,0.06)]">
-            <div class="w-full px-4 sm:px-6 lg:px-8 h-14 md:h-[72px] flex items-center justify-between relative z-10">
+            class="lumu-topbar w-full bg-white/72 backdrop-blur-xl border-b border-emerald-100/80 sticky top-0 z-50 transition-all shadow-[0_10px_35px_rgba(16,185,129,0.06)]">
+            <div class="w-full max-w-[1440px] mx-auto px-4 sm:px-6 lg:px-10 h-16 md:h-20 flex items-center justify-between relative z-10">
                 <div class="flex items-center gap-2">
                     <a href="/" id="home-logo-link" class="flex items-center gap-3 group" aria-label="Lumu HOME">
                         <!-- Logo SVG inline: 100% transparente en cualquier fondo - Color Lumu Verde -->
@@ -1520,7 +1519,7 @@ qu
                             <path d="M36 10l.8 2L39 12.8l-2.2.8-.8 2.2-.8-2.2-2.2-.8 2.2-.8z" fill="#00E676" />
                         </svg>
                         <span
-                            class="font-display font-black text-xl tracking-tight text-black hidden sm:block">Lumu</span>
+                            class="font-display font-black text-xl tracking-[-0.04em] text-black hidden sm:block uppercase">Lumu</span>
                     </a>
                 </div>
 
@@ -1623,36 +1622,40 @@ qu
         </header>
 
         <!-- Área Principal -->
-        <main class="flex-grow w-full mx-auto px-4 sm:px-6 lg:px-8 py-7 md:py-12 flex flex-col items-center relative z-10">
+        <main class="flex-grow w-full mx-auto px-4 sm:px-6 lg:px-10 py-10 md:py-20 flex flex-col items-center relative z-10">
 
             <!-- Hero Titles -->
-            <div class="text-center max-w-4xl mx-auto mb-6 md:mb-8 relative z-20">
-                <h1 id="hero-title" class="font-display text-3xl md:text-5xl lg:text-6xl font-black text-slate-900 tracking-[-0.04em] leading-[1.08] mb-3">
-                    Compara precios con IA,
-                    <span class="text-transparent bg-clip-text bg-gradient-to-r from-emerald-500 to-teal-400">encuentra dónde conviene.</span>
+            <div class="lumu-stitch-hero text-center max-w-4xl mx-auto mb-7 md:mb-10 relative z-20">
+                <div class="lumu-ai-orb absolute inset-0 -z-10 pointer-events-none"></div>
+                <p class="mb-4 inline-flex items-center gap-2 rounded-full border border-indigo-400/20 bg-indigo-500/10 px-4 py-2 text-[11px] font-black uppercase tracking-[0.22em] text-indigo-200">
+                    ✦ AI Shopping Concierge
+                </p>
+                <h1 id="hero-title" class="font-display text-4xl md:text-5xl lg:text-7xl font-black text-slate-900 tracking-[-0.055em] leading-[0.98] mb-5">
+                    Compra con precisión.
+                    <span class="lumu-gradient-text block">Decide con inteligencia.</span>
                 </h1>
-                <p id="hero-subtitle" class="text-base md:text-lg text-slate-500 font-medium max-w-2xl mx-auto leading-relaxed">
-                    Busca cualquier producto y Lumu compara precios en Amazon, Mercado Libre y tiendas locales.
+                <p id="hero-subtitle" class="text-base md:text-xl text-slate-500 font-medium max-w-2xl mx-auto leading-relaxed">
+                    Describe lo que necesitas y Lumu sintetiza tiendas, precios, riesgos y ofertas para encontrar la mejor compra.
                 </p>
             </div>
 
             <!-- Search Form -->
-            <form id="search-form" class="relative fade-in mx-auto w-full max-w-[72rem] mb-6 md:mb-8 md:sticky md:top-auto z-40">
+            <form id="search-form" class="relative fade-in mx-auto w-full max-w-[66rem] mb-6 md:mb-8 md:sticky md:top-auto z-40">
                 <div id="search-shell"
-                    class="bg-white/95 border border-white filter drop-shadow-xl text-slate-800 rounded-[28px] md:rounded-[32px] focus-within:ring-[3px] focus-within:ring-emerald-400/20 focus-within:border-emerald-300 transition-all duration-300 p-3 md:p-4 flex flex-col relative z-20 backdrop-blur-xl shadow-[0_16px_40px_rgba(15,23,42,0.08)]">
+                    class="lumu-ai-search-card bg-white/95 border border-white filter drop-shadow-xl text-slate-800 rounded-[28px] md:rounded-[32px] focus-within:ring-[3px] focus-within:ring-emerald-400/20 focus-within:border-emerald-300 transition-all duration-300 p-3 md:p-4 flex flex-col relative z-20 backdrop-blur-xl shadow-[0_16px_40px_rgba(15,23,42,0.08)]">
                     <textarea id="search-input" rows="1"
                         class="block w-full min-h-[56px] md:min-h-[60px] max-h-36 py-3.5 md:py-4 px-4 md:px-5 text-base md:text-[17px] bg-transparent border-0 focus:ring-0 font-semibold resize-none custom-scrollbar relative z-10 leading-relaxed text-slate-800 placeholder:text-slate-400 caret-emerald-500"
-                        placeholder="Dime qué estás buscando... Ej: iPhone 15 Pro Max" required
+                        placeholder="Describe lo que buscas... ej. laptop para edición 4K por menos de $35,000" required
                         autocomplete="off"></textarea>
                     <div id="search-assistant-copy" class="hidden md:block px-4 pb-1 text-[13px] text-slate-500 font-medium">
-                        Escríbelo como si hablaras con un asistente: producto, presupuesto, uso o si quieres que compare por ti.
+                        Incluye producto, presupuesto, país, uso y si prefieres tiendas oficiales, locales o marketplaces.
                     </div>
 
                     <!-- Fase 6: Autocomplete Dropdown -->
                     <div id="autocomplete-dropdown" class="hidden absolute left-0 right-0 top-[calc(100%+0.6rem)] bg-white text-slate-900 rounded-2xl border border-slate-200 overflow-hidden z-[120] max-h-72 overflow-y-auto custom-scrollbar flex flex-col shadow-[0_24px_60px_rgba(15,23,42,0.16)]"></div>
 
                     <div class="px-4 md:px-5 pt-1 pb-2 flex flex-wrap items-center gap-2.5">
-                        <span id="deep-research-copy" class="text-[11px] text-slate-500 font-semibold">Busca más tiendas y variantes. Solo VIP. Click para activar.</span>
+                        <span id="deep-research-copy" class="text-[11px] text-slate-500 font-semibold">Quick Search para comparar rápido. Deep Research analiza más variantes y señales de confianza.</span>
                         <span id="deep-research-badge" class="hidden items-center gap-1 rounded-full border border-violet-200 bg-violet-100 px-3 py-1 text-[10px] font-black uppercase tracking-[0.14em] text-violet-800">🔬 Búsqueda Profunda activa</span>
                     </div>
 
@@ -1695,13 +1698,13 @@ qu
                                         class="inline-flex flex-1 items-center justify-center gap-1.5 rounded-full px-3 py-2 text-[11px] font-black uppercase tracking-[0.14em] text-slate-800 transition-all cursor-pointer bg-white shadow-sm ring-1 ring-slate-200 sm:flex-none"
                                         data-enabled="true">
                                         <span>⚡</span>
-                                        <span>Normal</span>
+                                        <span>Quick Search</span>
                                     </button>
                                     <button type="button" id="btn-deep-research"
                                         class="inline-flex flex-1 items-center justify-center gap-1.5 rounded-full px-3 py-2 text-[11px] font-black uppercase tracking-[0.14em] text-violet-600 transition-all cursor-pointer sm:flex-none"
                                         data-enabled="false">
                                         <span>✨</span>
-                                        <span id="deep-research-label">Búsqueda Profunda</span>
+                                        <span id="deep-research-label">Deep Research</span>
                                     </button>
                                 </div>
                             </div>
@@ -1722,7 +1725,7 @@ qu
                         </div>
                         <button type="submit" id="search-button"
                             class="btn-hover-shine w-full md:w-auto justify-center bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-primary hover:to-primary-hover text-white font-bold py-3.5 px-6 rounded-2xl transition-all duration-300 shadow-md shadow-emerald-500/20 flex items-center gap-2 hover:scale-[1.02] md:hover:scale-105 focus:outline-none focus:ring-4 focus:ring-primary/30 disabled:opacity-70 disabled:cursor-not-allowed flex-shrink-0">
-                            Enviar
+                            Sintetizar
                             <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24"
                                 fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"
                                 stroke-linejoin="round" class="lucide lucide-corner-down-left">
@@ -1737,7 +1740,7 @@ qu
                     <button type="button" id="btn-toggle-filters"
                         class="inline-flex items-center gap-2 rounded-full border border-emerald-100 bg-white/85 px-4 py-2 text-[11px] font-black uppercase tracking-[0.18em] text-slate-700 shadow-sm transition-all hover:border-emerald-200 hover:bg-emerald-50">
                         <svg class="w-4 h-4 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z"/></svg>
-                        <span id="toggle-filters-label">Filtros</span>
+                        <span id="toggle-filters-label">Refinar parámetros</span>
                         <svg id="toggle-filters-icon" class="w-4 h-4 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="m6 9 6 6 6-6" />
                         </svg>
@@ -1748,8 +1751,8 @@ qu
                     <div class="filters-shell relative isolate rounded-[2rem] p-3 md:p-4">
                         <div class="relative z-[180] flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
                             <div>
-                                <p id="guided-search-title" class="text-[11px] font-black uppercase tracking-[0.22em] text-emerald-700">Búsqueda guiada</p>
-                                <p id="guided-search-copy" class="text-sm text-slate-500 font-medium">Ajustes opcionales para afinar resultados cuando ya tengas clara la búsqueda.</p>
+                                <p id="guided-search-title" class="text-[11px] font-black uppercase tracking-[0.22em] text-emerald-700">Parámetros inteligentes</p>
+                                <p id="guided-search-copy" class="text-sm text-slate-500 font-medium">Ajusta región, condición, ubicación y nivel de confianza antes de comparar.</p>
                             </div>
                             <div class="flex items-center gap-2 flex-wrap overflow-visible">
                                 <div class="relative z-[190] w-full sm:w-auto overflow-visible">

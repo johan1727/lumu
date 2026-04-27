@@ -87,7 +87,10 @@ function normalizeText(value) {
 }
 
 function canonicalizeStoreName(name = '', url = '') {
-    const source = `${normalizeText(name)} ${normalizeText(url)}`;
+    const normalizedName = normalizeText(name);
+    const normalizedUrl = normalizeText(url);
+    const isGoogleRedirectUrl = /(^https?:\/\/)?(www\.)?google\./i.test(normalizedUrl);
+    const source = `${normalizedName} ${isGoogleRedirectUrl ? '' : normalizedUrl}`;
     if (!source) return 'desconocida';
     if (/amazon\.|\bamazon\b/.test(source)) return 'amazon';
     if (/mercadolibre\.|mercado libre|\bmeli\b/.test(source)) return 'mercado libre';

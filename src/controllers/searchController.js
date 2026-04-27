@@ -996,6 +996,76 @@ function buildMatchSignals(searchText = '', titleText = '') {
     };
 }
 
+
+const ACCESSORY_TERMS_PATTERN = /\b(funda|fundas|case|cases|cover|carcasa|protector|protectores|mica|micas|templado|vidrio\s*templado|screen\s*protector|cable|cables|cargador|charger|adaptador|adapter|correa|strap|soporte|holder|mount|repuesto|replacement|bateria|bater[ií]a|pantalla|display|lens\s*protector|protecci[oó]n|proteccion)\b/i;
+const ACCESSORY_INTENT_PATTERN = /\b(funda|case|cover|carcasa|protector|mica|templado|cable|cargador|charger|adaptador|correa|repuesto|pantalla|display|bateria|bater[ií]a|accesorio|accesorios)\b/i;
+const UNAVAILABLE_PATTERN = /\b(no disponible|agotado|sin stock|fuera de stock|out of stock|currently unavailable|temporarily unavailable|sold out|no hay ofertas destacadas|no se sabe si este producto volver[aá]|no disponible por el momento)\b/i;
+
+function normalizeCoherenceText(value = '') {
+    return String(value || '')
+        .toLowerCase()
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .replace(/\s+/g, ' ')
+        .trim();
+}
+
+function detectPrimaryPhoneModel(value = '') {
+    const normalized = normalizeCoherenceText(value);
+    const match = normalized.match(/\biphone\s*(\d{1,2})(?:\s*(pro\s*max|pro|max|plus|mini|se))?\b/i);
+    if (!match) return null;
+    return {
+        family: 'iphone',
+        number: match[1],
+        variant: String(match[2] || '').replace(/\s+/g, ' ').trim()
+    };
+}
+
+function hasClearUnavailableSignal(product = {}) {
+    const text = `${product.titulo || product.title || ''} ${product.snippet || ''} ${product.shippingText || ''} ${product.availability || ''} ${product.stockStatus || ''}`;
+    return UNAVAILABLE_PATTERN.test(text);
+}
+
+function evaluateResultCoherence(product = {}, searchQuery = '', llmAnalysis = {}) {
+    const queryText = normalizeCoherenceText(searchQuery);
+    const titleText = normalizeCoherenceText(product.titulo || product.title || '');
+    const snippetText = normalizeCoherenceText(product.snippet || product.shippingText || '');
+    const combinedText = `${titleText} ${snippetText}`;
+    const productCategory = String(llmAnalysis.productCategory || product.productCategory || '').toLowerCase();
+    const userWantsAccessory = ACCESSORY_INTENT_PATTERN.test(queryText);
+    const looksAccessory = ACCESSORY_TERMS_PATTERN.test(combinedText);
+    const queryPhoneModel = detectPrimaryPhoneModel(queryText);
+    const titlePhoneModel = detectPrimaryPhoneModel(titleText);
+    const unavailableSignal = hasClearUnavailableSignal(product);
+    let wrongModel = false;
+    if (queryPhoneModel && titlePhoneModel) {
+        wrongModel = queryPhoneModel.family !== titlePhoneModel.family || queryPhoneModel.number !== titlePhoneModel.number;
+        if (!wrongModel && queryPhoneModel.variant && titlePhoneModel.variant && queryPhoneModel.variant !== titlePhoneModel.variant) {
+            wrongModel = true;
+        }
+    }
+    const isMainProductSearch = !userWantsAccessory && (
+        productCategory === 'smartphone' ||
+        Boolean(queryPhoneModel) ||
+        /\b(celular|smartphone|telefono|tel[eé]fono|laptop|macbook|consola|playstation|xbox|nintendo|switch)\b/i.test(queryText)
+    );
+    const isAccessoryMismatch = isMainProductSearch && looksAccessory;
+    const modelSignals = buildMatchSignals(searchQuery, product.titulo || product.title || '');
+    const lowRelevance = isMainProductSearch && !queryPhoneModel && modelSignals.weakMatch && Number(product._modelMatchScore || 0) < 0.2;
+    const status = isAccessoryMismatch ? 'accessory'
+        : wrongModel ? 'wrong_model'
+            : unavailableSignal ? 'unavailable_signal'
+                : lowRelevance ? 'uncertain'
+                    : 'exact_match';
+    return {
+        status,
+        reject: status === 'accessory' || status === 'wrong_model' || lowRelevance,
+        unavailableSignal,
+        penalty: status === 'unavailable_signal' ? 0.35 : status === 'uncertain' ? 0.18 : 0,
+        matchSignals: modelSignals
+    };
+}
+
 function buildBroadSearchProfile(text = '') {
     const normalized = String(text || '').toLowerCase().trim();
     const tokens = [...new Set(tokenizeSearchText(normalized))];
@@ -2445,7 +2515,22 @@ exports.searchProduct = async (req, res) => {
         const queryStructuredTokens = extractStructuredProductTokens(searchQuery);
         const isVagueQuery = tokenizeSearchText(searchQuery).length <= 3 && queryStructuredTokens.length === 0;
         const policyFilteredResults = applySearchPolicyFilters(shoppingResults, searchPolicy);
-        const qualityFilteredResults = policyFilteredResults.filter(product => {
+        const coherenceReviewedResults = policyFilteredResults
+            .map(product => {
+                const coherence = evaluateResultCoherence(product, searchQuery, llmAnalysis);
+                return {
+                    ...product,
+                    aiCoherenceStatus: coherence.status,
+                    aiCoherencePenalty: coherence.penalty,
+                    isPotentiallyUnavailable: product.isPotentiallyUnavailable || coherence.unavailableSignal,
+                    hasStockSignal: coherence.unavailableSignal ? false : product.hasStockSignal
+                };
+            })
+            .filter(product => product.aiCoherenceStatus !== 'accessory' && product.aiCoherenceStatus !== 'wrong_model' && product.aiCoherenceStatus !== 'uncertain');
+        if (policyFilteredResults.length !== coherenceReviewedResults.length) {
+            console.log(`[Coherence Filter] query="${searchQuery}" kept=${coherenceReviewedResults.length}/${policyFilteredResults.length}`);
+        }
+        const qualityFilteredResults = coherenceReviewedResults.filter(product => {
             if (isVagueQuery) return true;
             if (product._clonePenalty >= 0.65 && product._modelMatchScore <= 0.15) return false;
             return true;

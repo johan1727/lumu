@@ -272,9 +272,15 @@ function buildStoreFocusedShoppingQuery(query = '', countryCode = 'MX', searchPo
     const policy = normalizeSearchPolicy(searchPolicy);
     const normalizedQuery = String(query || '').trim();
     if (!policy.preferredStoreKeys.length) return normalizedQuery;
-    const preferredDomains = resolvePreferredStoreDomains(countryCode, policy.preferredStoreKeys);
-    if (policy.preferredStoreMode === 'exclusive' && preferredDomains.length > 0) {
-        return `${normalizedQuery} (${preferredDomains.map(domain => `site:${domain}`).join(' OR ')})`.trim();
+    const storeTerms = policy.preferredStoreKeys
+        .map(storeKey => {
+            if (storeKey === 'mercado libre') return 'Mercado Libre';
+            if (storeKey === 'best buy') return 'Best Buy';
+            return storeKey;
+        })
+        .filter(storeTerm => storeTerm && !normalizedQuery.toLowerCase().includes(String(storeTerm).toLowerCase()));
+    if (policy.preferredStoreMode === 'exclusive') {
+        return `${normalizedQuery} ${storeTerms.join(' ')}`.trim();
     }
     if (policy.preferredStoreMode === 'prefer') {
         const missingPreferredKeys = policy.preferredStoreKeys.filter(storeKey => !normalizedQuery.toLowerCase().includes(storeKey));
@@ -307,14 +313,15 @@ function matchesPreferredStore(result = {}, storeKey = '') {
 
     // 4. URL / dominio
     const url = String(result.url || result.urlOriginal || result.urlMonetizada || result.link || '').toLowerCase();
+    const isGoogleRedirectUrl = /(^https?:\/\/)?(www\.)?google\./i.test(url);
     if (url) {
-        if (key === 'amazon' && /amazon\.(com|com\.mx|com\.br|co\.uk|de|fr|es|ca|com\.au|co\.jp)/.test(url)) return true;
-        if (key === 'mercado libre' && /mercadolibre\.(com\.mx|com\.ar|com\.br|cl|com\.co|com\.pe|com\.uy|com\.ve|com)/.test(url)) return true;
-        if (key === 'walmart' && /walmart\.(com|com\.mx)/.test(url)) return true;
-        if (key === 'liverpool' && /liverpool\.(com\.mx)/.test(url)) return true;
-        if (key === 'costco' && /costco\.(com|com\.mx)/.test(url)) return true;
-        if (key === 'best buy' && /bestbuy\.com/.test(url)) return true;
-        if (key === 'falabella' && /falabella\.(com|cl|com\.co|com\.pe)/.test(url)) return true;
+        if (key === 'amazon' && !isGoogleRedirectUrl && /amazon\.(com|com\.mx|com\.br|co\.uk|de|fr|es|ca|com\.au|co\.jp)/.test(url)) return true;
+        if (key === 'mercado libre' && !isGoogleRedirectUrl && /mercadolibre\.(com\.mx|com\.ar|com\.br|cl|com\.co|com\.pe|com\.uy|com\.ve|com)/.test(url)) return true;
+        if (key === 'walmart' && !isGoogleRedirectUrl && /walmart\.(com|com\.mx)/.test(url)) return true;
+        if (key === 'liverpool' && !isGoogleRedirectUrl && /liverpool\.(com\.mx)/.test(url)) return true;
+        if (key === 'costco' && !isGoogleRedirectUrl && /costco\.(com|com\.mx)/.test(url)) return true;
+        if (key === 'best buy' && !isGoogleRedirectUrl && /bestbuy\.com/.test(url)) return true;
+        if (key === 'falabella' && !isGoogleRedirectUrl && /falabella\.(com|cl|com\.co|com\.pe)/.test(url)) return true;
     }
 
     return false;
@@ -1687,13 +1694,7 @@ exports.searchGoogleShopping = async (query, radius, lat, lng, intentType, abort
             // For non-local results, require valid price
             if (!result.isLocalStore) {
                 const price = Number(result?.price);
-                const canKeepWithoutPrice = Boolean(
-                    result.isKnownStoreDomain
-                    || result.isDirectProductPage
-                    || result.isOfficialBrandResult
-                    || /amazon\.|mercadolibre\.|walmart\.|liverpool\.|costco\.|bestbuy\.|target\./i.test(url)
-                );
-                if ((!Number.isFinite(price) || price <= 0) && !canKeepWithoutPrice) {
+                if (!Number.isFinite(price) || price <= 0) {
                     return false;
                 }
             }

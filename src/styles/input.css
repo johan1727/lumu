@@ -44,6 +44,232 @@
 }
 
 @layer utilities {
+    .lumu-stitch-redesign {
+        background-color: #020617 !important;
+        background-image:
+            radial-gradient(circle at 78% 4%, rgba(99, 102, 241, 0.14), transparent 34%),
+            radial-gradient(circle at 10% 42%, rgba(16, 185, 129, 0.08), transparent 32%),
+            linear-gradient(to right, rgba(255, 255, 255, 0.025) 1px, transparent 1px),
+            linear-gradient(to bottom, rgba(255, 255, 255, 0.025) 1px, transparent 1px),
+            linear-gradient(180deg, #020617 0%, #030712 48%, #020617 100%) !important;
+        background-size: auto, auto, 40px 40px, 40px 40px, auto !important;
+        color: rgba(230, 224, 233, 0.96) !important;
+    }
+
+    .lumu-stitch-redesign .lumu-topbar {
+        background: rgba(2, 6, 23, 0.78) !important;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.09) !important;
+        box-shadow: 0 20px 52px rgba(79, 70, 229, 0.10) !important;
+        backdrop-filter: blur(22px) !important;
+    }
+
+    .lumu-stitch-redesign .lumu-topbar > div:first-child {
+        background: transparent !important;
+        border: 0 !important;
+        box-shadow: none !important;
+        border-radius: 0 !important;
+    }
+
+    .lumu-stitch-redesign .lumu-topbar nav {
+        background: rgba(15, 23, 42, 0.46) !important;
+        border-color: rgba(255, 255, 255, 0.08) !important;
+        box-shadow: 0 14px 34px rgba(0, 0, 0, 0.24) !important;
+    }
+
+    .lumu-stitch-redesign .nav-link,
+    .lumu-stitch-redesign #nav-favoritos,
+    .lumu-stitch-redesign #continuity-open-history {
+        color: rgba(203, 213, 225, 0.86) !important;
+        border-radius: 9999px !important;
+        padding: 0.45rem 0.72rem !important;
+        text-transform: uppercase;
+        letter-spacing: 0.08em;
+        font-size: 0.72rem;
+    }
+
+    .lumu-stitch-redesign .nav-link:hover,
+    .lumu-stitch-redesign #nav-favoritos:hover,
+    .lumu-stitch-redesign #continuity-open-history:hover {
+        color: rgba(196, 181, 253, 0.98) !important;
+        background: rgba(255, 255, 255, 0.055) !important;
+    }
+
+    .lumu-stitch-redesign #nav-b2b {
+        background: linear-gradient(135deg, #34d399 0%, #10b981 48%, #2dd4bf 100%) !important;
+        color: #02130d !important;
+        border-color: rgba(110, 231, 183, 0.34) !important;
+        box-shadow: 0 16px 34px rgba(16, 185, 129, 0.22) !important;
+    }
+
+    .lumu-stitch-redesign #auth-container {
+        border-left-color: rgba(255, 255, 255, 0.08) !important;
+    }
+
+    .lumu-stitch-redesign #btn-login {
+        background: rgba(15, 23, 42, 0.66) !important;
+        color: rgba(226, 232, 240, 0.94) !important;
+        border-color: rgba(255, 255, 255, 0.08) !important;
+    }
+
+    .lumu-stitch-redesign #btn-login:hover {
+        background: rgba(255, 255, 255, 0.07) !important;
+        color: rgba(255, 255, 255, 0.98) !important;
+    }
+
+    .lumu-stitch-hero::before {
+        content: "";
+        position: absolute;
+        inset: -4rem -2rem -2rem;
+        border-radius: 9999px;
+        background:
+            radial-gradient(circle at 50% 18%, rgba(99, 102, 241, 0.16), transparent 48%),
+            radial-gradient(circle at 35% 72%, rgba(16, 185, 129, 0.10), transparent 46%);
+        filter: blur(34px);
+        opacity: 0.9;
+        pointer-events: none;
+        z-index: -2;
+    }
+
+    .lumu-ai-orb {
+        background: radial-gradient(circle at center, rgba(99, 102, 241, 0.20), transparent 64%);
+        filter: blur(70px);
+        transform: translateY(-18%);
+    }
+
+    .lumu-gradient-text {
+        background: linear-gradient(135deg, #e0d2ff 0%, #cfbcff 38%, #5eead4 100%);
+        -webkit-background-clip: text;
+        background-clip: text;
+        -webkit-text-fill-color: transparent;
+    }
+
+    .lumu-stitch-redesign #hero-title {
+        color: rgba(248, 250, 252, 0.98) !important;
+        text-shadow: 0 18px 52px rgba(99, 102, 241, 0.16);
+    }
+
+    .lumu-stitch-redesign #hero-subtitle {
+        color: rgba(203, 213, 225, 0.84) !important;
+    }
+
+    .lumu-stitch-redesign .lumu-ai-search-card {
+        background: linear-gradient(180deg, rgba(8, 13, 28, 0.88) 0%, rgba(4, 8, 18, 0.94) 100%) !important;
+        border: 1px solid rgba(255, 255, 255, 0.09) !important;
+        box-shadow:
+            0 0 0 1px rgba(255, 255, 255, 0.035) inset,
+            0 0 48px rgba(99, 102, 241, 0.13),
+            0 30px 92px rgba(0, 0, 0, 0.46) !important;
+        overflow: hidden;
+    }
+
+    .lumu-stitch-redesign .lumu-ai-search-card::before {
+        content: "";
+        position: absolute;
+        inset: -1px;
+        border-radius: inherit;
+        background: linear-gradient(120deg, rgba(99, 102, 241, 0.22), rgba(16, 185, 129, 0.10), rgba(99, 102, 241, 0.16));
+        opacity: 0;
+        filter: blur(12px);
+        transition: opacity 0.45s ease;
+        pointer-events: none;
+        z-index: -1;
+    }
+
+    .lumu-stitch-redesign .lumu-ai-search-card:focus-within::before,
+    .lumu-stitch-redesign .lumu-ai-search-card:hover::before {
+        opacity: 1;
+    }
+
+    .lumu-stitch-redesign #search-input {
+        min-height: 4.8rem !important;
+        background: rgba(2, 6, 23, 0.52) !important;
+        border: 1px solid rgba(255, 255, 255, 0.07) !important;
+        border-radius: 1.25rem !important;
+        padding: 1rem 1.1rem !important;
+    }
+
+    .lumu-stitch-redesign #search-input:focus {
+        border-color: rgba(129, 140, 248, 0.42) !important;
+        box-shadow: 0 0 0 1px rgba(129, 140, 248, 0.20), 0 0 34px rgba(99, 102, 241, 0.12) !important;
+    }
+
+    .lumu-stitch-redesign #btn-attach-image,
+    .lumu-stitch-redesign #btn-voice-input {
+        color: rgba(203, 213, 225, 0.82) !important;
+        background: rgba(255, 255, 255, 0.035) !important;
+        border: 1px solid rgba(255, 255, 255, 0.06) !important;
+    }
+
+    .lumu-stitch-redesign #btn-attach-image:hover,
+    .lumu-stitch-redesign #btn-voice-input:hover {
+        color: rgba(196, 181, 253, 0.98) !important;
+        background: rgba(99, 102, 241, 0.10) !important;
+        border-color: rgba(129, 140, 248, 0.22) !important;
+    }
+
+    .lumu-stitch-redesign #btn-search-mode-normal,
+    .lumu-stitch-redesign #btn-deep-research {
+        border: 1px solid rgba(255, 255, 255, 0.07) !important;
+        box-shadow: none !important;
+    }
+
+    .lumu-stitch-redesign #btn-search-mode-normal {
+        background: rgba(255, 255, 255, 0.08) !important;
+        color: rgba(226, 232, 240, 0.96) !important;
+    }
+
+    .lumu-stitch-redesign #btn-deep-research {
+        color: rgba(196, 181, 253, 0.95) !important;
+    }
+
+    .lumu-stitch-redesign #search-button {
+        background: linear-gradient(135deg, #34d399 0%, #10b981 52%, #2dd4bf 100%) !important;
+        color: #02130d !important;
+        box-shadow: 0 16px 34px rgba(16, 185, 129, 0.24) !important;
+    }
+
+    .lumu-stitch-redesign #search-button:hover {
+        filter: brightness(1.06);
+        box-shadow: 0 18px 44px rgba(16, 185, 129, 0.30) !important;
+    }
+
+    .lumu-stitch-redesign #btn-toggle-filters,
+    .lumu-stitch-redesign .browse-nav-chip,
+    .lumu-stitch-redesign .active-filter-pill {
+        background: rgba(15, 23, 42, 0.66) !important;
+        border: 1px solid rgba(255, 255, 255, 0.08) !important;
+        color: rgba(203, 213, 225, 0.90) !important;
+        box-shadow: 0 10px 24px rgba(0, 0, 0, 0.20) !important;
+        backdrop-filter: blur(16px);
+    }
+
+    .lumu-stitch-redesign #btn-toggle-filters:hover,
+    .lumu-stitch-redesign .browse-nav-chip:hover {
+        border-color: rgba(129, 140, 248, 0.26) !important;
+        color: rgba(224, 210, 255, 0.98) !important;
+        background: rgba(30, 41, 59, 0.78) !important;
+    }
+
+    .lumu-stitch-redesign .filters-shell {
+        background: linear-gradient(180deg, rgba(7, 12, 26, 0.92) 0%, rgba(4, 8, 18, 0.96) 100%) !important;
+        border-color: rgba(255, 255, 255, 0.09) !important;
+        box-shadow: 0 26px 72px rgba(0, 0, 0, 0.40), 0 0 36px rgba(99, 102, 241, 0.08) !important;
+    }
+
+    @media (max-width: 767px) {
+        .lumu-stitch-redesign main {
+            padding-top: 2rem !important;
+        }
+
+        .lumu-stitch-redesign #hero-title {
+            font-size: clamp(2.35rem, 12vw, 3.65rem) !important;
+        }
+
+        .lumu-stitch-redesign .lumu-ai-search-card {
+            border-radius: 1.35rem !important;
+        }
+    }
+
     .dark .bg-white { background-color: var(--color-surface) !important; }
     .dark .bg-slate-50 { background-color: rgba(15, 23, 42, 0.35) !important; }
     .dark .bg-slate-100 { background-color: rgba(15, 23, 42, 0.55) !important; }
