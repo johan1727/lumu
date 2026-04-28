@@ -8,6 +8,8 @@ const visionService = require('../services/visionService');
 const couponService = require('../services/couponService');
 const storeTrustService = require('../services/storeTrustService');
 const regionConfigService = require('../services/regionConfigService');
+const buyTimingService = require('../services/buyTimingService');
+const userProfileService = require('../services/userProfileService');
 
 const DEV_VIP_BYPASS = process.env.NODE_ENV !== 'production' && String(process.env.DEV_VIP_BYPASS || '').toLowerCase() === 'true';
 
@@ -2708,6 +2710,44 @@ exports.searchProduct = async (req, res) => {
             userId: Boolean(userId),
             resultCount: balancedProducts.length
         });
+
+        // Get buy timing prediction for the winner (non-blocking)
+        if (balancedProducts.length > 0 && balancedProducts[0].urlOriginal) {
+            try {
+                const predictionTimeout = new Promise((_, reject) => 
+                    setTimeout(() => reject(new Error('Prediction timeout')), 3000)
+                );
+                const predictionPromise = buyTimingService.getQuickPredictionForWinner(
+                    balancedProducts[0],
+                    searchQuery,
+                    countryCode
+                );
+                const prediction = await Promise.race([predictionPromise, predictionTimeout]);
+                if (prediction) {
+                    res.locals.buyTimingPrediction = prediction;
+                }
+            } catch (predErr) {
+                console.log('[Search] Buy timing prediction skipped:', predErr.message);
+            }
+        }
+
+        // Apply personalization re-ranking if user is authenticated
+        // NOTE: Profile update happens via POST /api/me/search-feedback from frontend
+        // to avoid double-counting searches and to capture real sessionDurationSec.
+        let personalizedProducts = balancedProducts;
+        let personalizationApplied = false;
+        if (userId && balancedProducts.length > 0) {
+            try {
+                const reRanked = await userProfileService.personalizeResults(userId, balancedProducts);
+                if (reRanked && reRanked.length > 0) {
+                    personalizedProducts = reRanked;
+                    personalizationApplied = true;
+                }
+            } catch (personalizationErr) {
+                console.log('[Search] Personalization skipped:', personalizationErr.message);
+            }
+        }
+
         return res.json({
             tipo_respuesta: 'resultados',
             intencion_detectada: {
@@ -2754,18 +2794,21 @@ exports.searchProduct = async (req, res) => {
                 }
                 : null,
             suggested_variants: deepResearchEnhancements?.suggestedVariants || null,
-            best_buy_pick: balancedProducts.length > 0
+            best_buy_pick: personalizedProducts.length > 0
                 ? {
-                    title: balancedProducts[0].titulo,
-                    store: balancedProducts[0].tienda,
-                    price: balancedProducts[0].precio,
-                    score: balancedProducts[0].bestBuyScore,
-                    label: balancedProducts[0].bestBuyLabel,
-                    url: balancedProducts[0].urlMonetizada || balancedProducts[0].urlOriginal,
-                    winner_reason: balancedProducts[0].winnerReason,
-                    is_preferred_store: balancedProducts[0].isPreferredStoreResult,
-                    savings_vs_preferred: balancedProducts[0].savingsVsPreferred,
-                    price_confidence_label: balancedProducts[0].priceConfidenceLabel
+                    title: personalizedProducts[0].titulo,
+                    store: personalizedProducts[0].tienda,
+                    price: personalizedProducts[0].precio,
+                    score: personalizedProducts[0].bestBuyScore,
+                    label: personalizedProducts[0].bestBuyLabel,
+                    url: personalizedProducts[0].urlMonetizada || personalizedProducts[0].urlOriginal,
+                    winner_reason: personalizedProducts[0].winnerReason,
+                    is_preferred_store: personalizedProducts[0].isPreferredStoreResult,
+                    savings_vs_preferred: personalizedProducts[0].savingsVsPreferred,
+                    price_confidence_label: personalizedProducts[0].priceConfidenceLabel,
+                    buy_timing_prediction: res.locals?.buyTimingPrediction || null,
+                    is_personalized: personalizedProducts[0]._isPersonalized || false,
+                    personalized_reason: personalizedProducts[0]._personalizedReason || null
                 }
                 : null,
             // NUEVO: Metadata de tienda preferida y alternativa más barata
@@ -2810,8 +2853,13 @@ exports.searchProduct = async (req, res) => {
                 locale: regionCfg.locale,
                 label: regionCfg.regionLabel
             },
-            top_5_baratos: balancedProducts,
+            top_5_baratos: personalizedProducts,
             top_resultados: [],
+            personalization: {
+                applied: personalizationApplied,
+                user_id: userId || null,
+                top_personalized_product: personalizedProducts.find(p => p._isPersonalized)?.titulo || null
+            },
             vip_auto_alert: vipAutoAlert,
             advertencia_uso: usageWarning,
             lumu_coins_awarded: userId ? 1 : 0

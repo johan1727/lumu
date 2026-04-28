@@ -7,6 +7,7 @@ const supabase = require('../config/supabase');
  */
 async function authMiddleware(req, res, next) {
     req.userId = null;
+    req.userEmail = null;
 
     const authHeader = req.headers.authorization;
     if (!authHeader || !authHeader.startsWith('Bearer ')) {
@@ -22,6 +23,7 @@ async function authMiddleware(req, res, next) {
         const { data: { user }, error } = await supabase.auth.getUser(token);
         if (!error && user) {
             req.userId = user.id;
+            req.userEmail = user.email || null;
         }
     } catch (err) {
         console.warn('[Auth] Token verification failed:', err.message);

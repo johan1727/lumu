@@ -90,6 +90,30 @@ const trackEventSchema = z.object({
     brand: z.string().max(120).optional()
 });
 
+const searchResultItemSchema = z.object({
+    titulo: z.string().max(500).optional(),
+    tienda: z.string().max(200).optional(),
+    precio: z.number().min(0).max(999999999).optional(),
+    categoria: z.string().max(120).optional()
+});
+
+const searchFeedbackSchema = z.object({
+    query: z.string().trim().min(1).max(300),
+    resultsCount: z.number().int().min(0).max(500).optional(),
+    clickedResult: z.string().max(500).nullable().optional(),
+    sessionDurationSec: z.number().min(0).max(86400).optional(),
+    results: z.array(searchResultItemSchema).max(10).optional()
+});
+
+const productClickSchema = z.object({
+    productId: z.string().max(2000).optional(),
+    productTitle: z.string().trim().min(1).max(500),
+    productStore: z.string().max(200).optional(),
+    productPrice: z.number().min(0).max(999999999).optional(),
+    productCategory: z.string().max(120).optional(),
+    searchQuery: z.string().max(300).optional()
+});
+
 module.exports = {
     searchProductSchema,
     bulkSearchSchema,
@@ -97,5 +121,7 @@ module.exports = {
     memorySchema,
     feedbackSchema,
     priceAlertSchema,
-    trackEventSchema
+    trackEventSchema,
+    searchFeedbackSchema,
+    productClickSchema
 };

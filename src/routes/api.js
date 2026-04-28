@@ -4,7 +4,7 @@ const searchController = require('../controllers/searchController');
 const { validateBody } = require('../middleware/validateRequest');
 const authMiddleware = require('../middleware/authMiddleware');
 const { requireAuth } = require('../middleware/authMiddleware');
-const { searchProductSchema, bulkSearchSchema, visionSchema, memorySchema, feedbackSchema, priceAlertSchema, trackEventSchema } = require('../schemas/searchSchemas');
+const { searchProductSchema, bulkSearchSchema, visionSchema, memorySchema, feedbackSchema, priceAlertSchema, trackEventSchema, searchFeedbackSchema, productClickSchema } = require('../schemas/searchSchemas');
 const imageProxy = require('../controllers/imageProxy');
 
 const memoryController = require('../controllers/memoryController');
@@ -13,7 +13,9 @@ const priceAlertController = require('../controllers/priceAlertController');
 const dropshipController = require('../controllers/dropshipController');
 const analyticsController = require('../controllers/analyticsController');
 const priceHistoryController = require('../controllers/priceHistoryController');
+const buyTimingController = require('../controllers/buyTimingController');
 const autocompleteController = require('../controllers/autocompleteController');
+const personalizationController = require('../controllers/personalizationController');
 const supplierChecker = require('../services/supplierChecker');
 const meliService = require('../services/meliService');
 
@@ -48,6 +50,43 @@ function burstRateLimiter(req, res, next) {
     if (Math.random() < 0.01) {
         for (const [k, v] of _burstLog.entries()) {
             if (now - v.windowStart > BURST_WINDOW_MS * 2) _burstLog.delete(k);
+        }
+    }
+    next();
+}
+
+// --- Rate limiter para endpoints de personalización (más permisivo) ---
+const PERSONALIZATION_MAX = 60;     // 60 requests per minute
+const PERSONALIZATION_WINDOW_MS = 60000;
+const _personalizationLog = new Map();
+
+function personalizationRateLimiter(req, res, next) {
+    if (process.env.NODE_ENV !== 'production') return next();
+    // Usar userId si ya fue verificado por authMiddleware, o IP como fallback seguro (no el token completo)
+    const ip = req.headers['x-vercel-forwarded-for']?.split(',')[0]?.trim()
+        || req.headers['x-real-ip']
+        || req.headers['x-forwarded-for']?.split(',').pop()?.trim()
+        || req.ip || 'unknown';
+    const userId = req.userId || ip;
+    const now = Date.now();
+    let entry = _personalizationLog.get(userId);
+    if (!entry || now - entry.windowStart > PERSONALIZATION_WINDOW_MS) {
+        entry = { windowStart: now, count: 0 };
+        _personalizationLog.set(userId, entry);
+    }
+    entry.count++;
+    if (entry.count > PERSONALIZATION_MAX) {
+        const retryAfter = Math.ceil((entry.windowStart + PERSONALIZATION_WINDOW_MS - now) / 1000);
+        console.warn(`[Personalization Limiter] User ${userId.slice(0, 8)}... blocked: ${entry.count} reqs`);
+        return res.status(429).json({
+            error: 'Límite de personalización alcanzado. Espera un momento.',
+            retry_after: retryAfter
+        });
+    }
+    // Cleanup ocasional
+    if (Math.random() < 0.01) {
+        for (const [k, v] of _personalizationLog.entries()) {
+            if (now - v.windowStart > PERSONALIZATION_WINDOW_MS * 2) _personalizationLog.delete(k);
         }
     }
     next();
@@ -101,6 +140,10 @@ router.post('/track', authMiddleware, validateBody(trackEventSchema), analyticsC
 
 // GET /api/price-history — Public price trends (cached)
 router.get('/price-history', priceHistoryController.getPriceHistory);
+
+// GET /api/buy-timing — AI-powered buy timing prediction
+router.get('/buy-timing', burstRateLimiter, buyTimingController.getBuyTiming);
+router.post('/buy-timing/batch', burstRateLimiter, authMiddleware, authMiddleware.requireAuth, buyTimingController.getBatchTiming);
 
 router.get('/deals', async (req, res) => {
     try {
@@ -212,6 +255,23 @@ router.get('/scraper-health', (req, res) => {
 
 // NUEVO: Fase 6 - Lumu Coins endpoint
 router.get('/me/coins', authMiddleware, authMiddleware.requireAuth, searchController.getCoins);
+
+// ============================================================
+// Personalización Predictiva (Fase 8)
+// ============================================================
+router.get('/me/profile', authMiddleware, authMiddleware.requireAuth, personalizationRateLimiter, personalizationController.getMyProfile);
+router.get('/me/profile/full', authMiddleware, authMiddleware.requireAuth, (req, res, next) => {
+    const ADMIN_EMAILS_FULL = ['jhonatanvillagomez38@gmail.com', 'gastrolbg@gmail.com'];
+    if (!req.userEmail || !ADMIN_EMAILS_FULL.includes(req.userEmail)) {
+        return res.status(403).json({ error: 'Acceso restringido a administradores' });
+    }
+    next();
+}, personalizationController.getFullProfile);
+router.put('/me/profile', authMiddleware, authMiddleware.requireAuth, personalizationRateLimiter, personalizationController.updatePreferences);
+router.post('/me/personalization/toggle', authMiddleware, authMiddleware.requireAuth, personalizationRateLimiter, personalizationController.togglePersonalization);
+router.get('/recommendations/personalized', authMiddleware, authMiddleware.requireAuth, personalizationRateLimiter, personalizationController.getPersonalizedRecommendations);
+router.post('/me/search-feedback', authMiddleware, authMiddleware.requireAuth, personalizationRateLimiter, validateBody(searchFeedbackSchema), personalizationController.recordSearchFeedback);
+router.post('/me/product-click', authMiddleware, authMiddleware.requireAuth, personalizationRateLimiter, validateBody(productClickSchema), personalizationController.recordProductClick);
 
 // ============================================================
 // Admin Routes (private — requires ADMIN_API_KEY + allowed email)

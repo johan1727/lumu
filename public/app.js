@@ -38,6 +38,33 @@ function trackFunnelEvent(eventType, extra = {}) {
     });
 }
 
+// NUEVO: Tracking de clicks en productos para personalización predictiva
+async function recordProductClick(product, currentQuery) {
+    if (!currentUser?.id || !product) return;
+    
+    try {
+        const token = localStorage.getItem('access_token') || sessionStorage.getItem('access_token') || '';
+        await fetch('/api/me/product-click', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${token}`
+            },
+            body: JSON.stringify({
+                productId: product.id || product.urlMonetizada || product.urlOriginal,
+                productTitle: product.titulo,
+                productStore: product.tienda,
+                productPrice: product.precio,
+                productCategory: product.productCategory,
+                searchQuery: currentQuery || window._lastSearchQuery || ''
+            })
+        });
+    } catch (err) {
+        // Silencioso - no queremos bloquear la navegación
+        console.log('[Product Click Tracking] Error:', err.message);
+    }
+}
+
 window.addEventListener('load', () => {
     trackFunnelEvent('page_view', {
         action_context: 'home'
@@ -4116,6 +4143,50 @@ async function initApp() {
             if (statusBadge) statusBadge.textContent = (plan === 'b2b' || plan === 'b2b_annual') ? 'B2B' : (isVIP ? 'VIP' : ui.profile.statusFree);
             if (searchesLeft) searchesLeft.textContent = remainingSearchesText;
 
+            // NUEVO: Configurar toggle de personalización
+            const personalizationToggle = document.getElementById('toggle-personalization');
+            if (personalizationToggle) {
+                // Sync de estado cada vez que se abre el modal (Fix #5)
+                const token = localStorage.getItem('access_token') || sessionStorage.getItem('access_token') || '';
+                fetch('/api/me/profile', {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                })
+                .then(r => r.ok ? r.json() : null)
+                .then(data => {
+                    if (data?.profile) {
+                        personalizationToggle.checked = data.profile.personalizationEnabled;
+                    }
+                })
+                .catch(() => {});
+
+                // Bind del listener una sola vez (Fix #5 memory leak)
+                if (!personalizationToggle._initialized) {
+                    personalizationToggle._initialized = true;
+                    personalizationToggle.addEventListener('change', async (e) => {
+                        const enabled = e.target.checked;
+                        try {
+                            const tok = localStorage.getItem('access_token') || sessionStorage.getItem('access_token') || '';
+                            const res = await fetch('/api/me/personalization/toggle', {
+                                method: 'POST',
+                                headers: {
+                                    'Content-Type': 'application/json',
+                                    'Authorization': `Bearer ${tok}`
+                                },
+                                body: JSON.stringify({ enabled })
+                            });
+                            if (!res.ok) {
+                                // Revertir UI si falla (Fix #6)
+                                e.target.checked = !enabled;
+                                console.warn('[Personalization] Toggle failed, reverted');
+                            }
+                        } catch (err) {
+                            e.target.checked = !enabled; // Revertir en error de red (Fix #6)
+                            console.error('[Personalization] Toggle error:', err.message);
+                        }
+                    });
+                }
+            }
+
             profileModal.classList.remove('invisible', 'opacity-0');
             const panel = profileModal.querySelector('.glass-panel');
             if (panel) {
@@ -5012,6 +5083,7 @@ async function initApp() {
 
                 // Track search event for conversion analytics
                 const searchId = `search_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+                const searchStartTime = Date.now(); // NUEVO: para personalización predictiva
                 window._lastSearchQuery = finalQuery;
                 window._lastSearchHadClick = false;
                 window._lastSearchContext = { canonical_key: '', product_category: '', search_id: searchId, search_query: finalQuery };
@@ -5306,6 +5378,9 @@ async function initApp() {
                     }
 
                     if (data.top_5_baratos && data.top_5_baratos.length > 0) {
+                        // Guardar buy timing prediction para mostrar en el producto ganador
+                        window._lastBuyTimingPrediction = data.best_buy_pick?.buy_timing_prediction || null;
+
                         await renderProducts(data.top_5_baratos, {
                             preferredStoreKey: _lastSearchPolicy.preferredStoreKey,
                             preferredStoreKeys: _lastSearchPolicy.preferredStoreKeys,
@@ -5334,6 +5409,32 @@ async function initApp() {
                             resultsContainer.insertBefore(aiPickCard, resultsContainer.firstChild);
                             observeSearchFlowElement(aiPickCard, 0);
                         }
+
+                        // NUEVO: Banner de Personalización Predictiva
+                        if (data.personalization?.applied && data.best_buy_pick?.is_personalized) {
+                            const personalizationCard = document.createElement('div');
+                            const reason = data.best_buy_pick.personalized_reason || 'Recomendado para ti';
+                            const isUS = currentRegion === 'US';
+                            personalizationCard.className = 'col-span-full mb-4 rounded-3xl border border-violet-200 bg-gradient-to-r from-violet-50 via-white to-violet-50 px-5 py-4 shadow-sm';
+                            personalizationCard.innerHTML = `
+                                <div class="flex items-start gap-3">
+                                    <div class="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-2xl bg-violet-500 text-white shadow-md shadow-violet-500/20">
+                                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" /></svg>
+                                    </div>
+                                    <div class="min-w-0">
+                                        <div class="flex flex-wrap items-center gap-2">
+                                            <span class="inline-flex items-center rounded-full bg-violet-100 px-2.5 py-1 text-[11px] font-black uppercase tracking-wide text-violet-700">${getLocalizedText('Para Ti', 'For You')}</span>
+                                            <span class="text-xs font-bold text-violet-700">${getLocalizedText('Personalizado', 'Personalized')}</span>
+                                        </div>
+                                        <p class="mt-2 text-sm font-semibold leading-relaxed text-slate-800">${getLocalizedText('Este resultado subió de posición porque ' + reason, 'This result moved up because ' + reason)}</p>
+                                        <p class="mt-1 text-xs text-slate-500">${getLocalizedText('Basado en tu historial de búsquedas', 'Based on your search history')}</p>
+                                    </div>
+                                </div>
+                            `;
+                            resultsContainer.insertBefore(personalizationCard, resultsContainer.firstChild);
+                            observeSearchFlowElement(personalizationCard, 100);
+                        }
+
                         if (window.innerWidth < 768) {
                             resultsWrapper.scrollIntoView({ behavior: 'smooth', block: 'start' });
                         }
@@ -5350,6 +5451,28 @@ async function initApp() {
                         // Track search in Google Analytics
                         if (typeof trackSearch === 'function') {
                             trackSearch(data.intencion_detectada?.busqueda || finalQuery);
+                        }
+
+                        // NUEVO: Enviar feedback para personalización predictiva
+                        if (currentUser?.id) {
+                            fetch('/api/me/search-feedback', {
+                                method: 'POST',
+                                headers: {
+                                    'Content-Type': 'application/json',
+                                    'Authorization': `Bearer ${localStorage.getItem('access_token') || sessionStorage.getItem('access_token') || ''}`
+                                },
+                                body: JSON.stringify({
+                                    query: finalQuery,
+                                    resultsCount: data.top_5_baratos?.length || 0,
+                                    sessionDurationSec: Math.round((Date.now() - searchStartTime) / 1000),
+                                    results: data.top_5_baratos?.slice(0, 5).map(p => ({
+                                        titulo: p.titulo,
+                                        tienda: p.tienda,
+                                        precio: p.precio,
+                                        categoria: p.productCategory || data.intencion_detectada?.categoria
+                                    }))
+                                })
+                            }).catch(err => console.log('[Personalization] search-feedback failed:', err.message));
                         }
 
                         chatContainer.classList.remove('hidden');
@@ -6436,9 +6559,55 @@ async function initApp() {
             }
         }
 
+        // Helper para generar badge de Buy Timing
+        function getBuyTimingBadgeHtml(prediction, isUS) {
+            if (!prediction || !prediction.recommendation) return '';
+            
+            const config = {
+                buy_now: {
+                    icon: '🟢',
+                    bgClass: 'bg-emerald-500',
+                    textClass: 'text-white',
+                    ringClass: 'ring-emerald-300',
+                    labelEs: 'COMPRAR AHORA',
+                    labelEn: 'BUY NOW',
+                    tooltip: prediction.reasoning
+                },
+                wait: {
+                    icon: '🟡',
+                    bgClass: 'bg-amber-500',
+                    textClass: 'text-white',
+                    ringClass: 'ring-amber-300',
+                    labelEs: 'ESPERAR',
+                    labelEn: 'WAIT',
+                    tooltip: prediction.reasoning || (isUS ? 'Wait for better price' : 'Espera mejor precio')
+                },
+                uncertain: {
+                    icon: '⚪',
+                    bgClass: 'bg-slate-400',
+                    textClass: 'text-white',
+                    ringClass: 'ring-slate-300',
+                    labelEs: 'INCIERTO',
+                    labelEn: 'UNCERTAIN',
+                    tooltip: prediction.reasoning || (isUS ? 'Not enough data' : 'Datos insuficientes')
+                }
+            };
+            
+            const cfg = config[prediction.recommendation] || config.uncertain;
+            const label = isUS ? cfg.labelEn : cfg.labelEs;
+            const confidence = Math.round((prediction.confidence || 0) * 100);
+            const nextDrop = prediction.nextDropEstimate 
+                ? (isUS ? `Drop ~${prediction.nextDropEstimate}` : `Baja ~${prediction.nextDropEstimate}`)
+                : '';
+            const tooltip = `${cfg.tooltip}${nextDrop ? ' | ' + nextDrop : ''} (${confidence}% conf)`;
+            
+            return `<span class="text-[9px] font-black ${cfg.textClass} ${cfg.bgClass} px-2 py-0.5 rounded-full ring-2 ${cfg.ringClass} shadow-sm cursor-help tooltip" data-tip="${sanitize(tooltip)}">${cfg.icon} ${label}</span>`;
+        }
+
         function renderProductCards(products, userFavorites) {
             resultsContainer.innerHTML = '';
             const isUS = currentRegion === 'US';
+            const buyTimingPrediction = window._lastBuyTimingPrediction || null;
 
             // --- NUEVO: Comparador Local vs Online ---
             const localProducts = products.filter(p => p.isLocalStore && typeof p.precio === 'number' && p.precio > 0);
@@ -6522,8 +6691,11 @@ async function initApp() {
                 }
 
                 const isBestPrice = minPrice && precioNumerico === minPrice && precioNumerico > 0;
+                const buyTimingBadgeHtml = (index === 0 && buyTimingPrediction) 
+                    ? getBuyTimingBadgeHtml(buyTimingPrediction, isUS) 
+                    : '';
                 const rankingBadgeHtml = index === 0
-                    ? `<span class="text-[9px] font-bold text-white bg-gradient-to-r from-violet-600 to-fuchsia-500 px-2 py-0.5 rounded-full ring-2 ring-violet-200 shadow-sm">#1 ${isUS ? 'BEST MATCH' : 'MEJOR MATCH'}</span>`
+                    ? `<span class="text-[9px] font-bold text-white bg-gradient-to-r from-violet-600 to-fuchsia-500 px-2 py-0.5 rounded-full ring-2 ring-violet-200 shadow-sm">#1 ${isUS ? 'BEST MATCH' : 'MEJOR MATCH'}</span>${buyTimingBadgeHtml}`
                     : index === 1
                         ? `<span class="text-[9px] font-bold text-violet-700 bg-violet-50 px-2 py-0.5 rounded-full ring-1 ring-violet-200">#2 ${isUS ? 'TOP' : 'TOP'}</span>`
                         : index === 2
@@ -6964,6 +7136,9 @@ async function initApp() {
                     if (typeof trackProductClick === 'function') {
                         trackProductClick(product.titulo, product.tienda, precioNumerico);
                     }
+
+                    // NUEVO: Tracking para personalización predictiva
+                    recordProductClick(product, window._lastSearchQuery);
 
                     // Show price disclaimer on first click per session
                     if (!sessionStorage.getItem('lumu_price_disclaimer_shown')) {
