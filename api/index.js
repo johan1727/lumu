@@ -115,7 +115,7 @@ app.use(helmet({
             imgSrc: ["'self'", "data:", "https:", "blob:", "https://www.facebook.com", "https://connect.facebook.net"],
             connectSrc: ["'self'", "https://*.supabase.co", "https://generativelanguage.googleapis.com", "https://google.serper.dev", "https://api.stripe.com", "https://pagead2.googlesyndication.com", "https://imasdk.googleapis.com", "https://ep1.adtrafficquality.google", "https://ep2.adtrafficquality.google", "https://*.googlesyndication.com", "https://www.google-analytics.com", "https://region1.google-analytics.com", "https://www.facebook.com", "https://connect.facebook.net", "https://skimlinks.com", "https://*.skimlinks.com", "https://cdn.jsdelivr.net"],
             fontSrc: ["'self'", "https://fonts.gstatic.com", "https://cdn.jsdelivr.net"],
-            frameSrc: ["https://js.stripe.com", "https://accounts.google.com", "https://pagead2.googlesyndication.com", "https://imasdk.googleapis.com", "https://www.google.com", "https://ep1.adtrafficquality.google", "https://googleads.g.doubleclick.net", "https://tpc.googlesyndication.com"],
+            frameSrc: ["https://js.stripe.com", "https://accounts.google.com", "https://pagead2.googlesyndication.com", "https://imasdk.googleapis.com", "https://www.google.com", "https://ep1.adtrafficquality.google", "https://ep2.adtrafficquality.google", "https://googleads.g.doubleclick.net", "https://tpc.googlesyndication.com"],
             objectSrc: ["'none'"],
             baseUri: ["'self'"],
             formAction: ["'self'"],

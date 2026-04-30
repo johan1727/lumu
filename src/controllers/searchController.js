@@ -93,7 +93,7 @@ function isVipProfile(profile = null) {
     return Boolean(
         profile.is_premium
         || hasTempVIP
-        || ['personal_vip', 'personal_vip_annual', 'b2b', 'b2b_annual'].includes(normalizedPlan)
+        || ['personal_vip', 'personal_vip_annual', 'b2b', 'b2b_annual', 'vip', 'pro'].includes(normalizedPlan)
     );
 }
 
@@ -1575,7 +1575,7 @@ exports.searchProduct = async (req, res) => {
                 let reqLimit = 10;
                 let isDaily = false;
                 let planName = 'Gratis';
-                const isFreePlan = !profile.is_premium && !['personal_vip', 'personal_vip_annual', 'b2b', 'b2b_annual'].includes(String(profile.plan || '').toLowerCase());
+                const isFreePlan = !profile.is_premium && !['personal_vip', 'personal_vip_annual', 'b2b', 'b2b_annual', 'vip', 'pro'].includes(String(profile.plan || '').toLowerCase());
 
                 // SEC-3: Check if user has active temporary VIP from Lumu Coins (1 hour window)
                 const VIP_TEMP_DURATION_MS = 60 * 60 * 1000; // 1 hour
@@ -1586,7 +1586,7 @@ exports.searchProduct = async (req, res) => {
                     reqLimit = 200;
                     isDaily = false;
                     planName = profile.plan === 'b2b_annual' ? 'Revendedor B2B Anual' : 'Revendedor B2B';
-                } else if (profile.is_premium || profile.plan === 'personal_vip' || profile.plan === 'personal_vip_annual') {
+                } else if (profile.is_premium || ['personal_vip', 'personal_vip_annual', 'vip', 'pro'].includes(String(profile.plan || '').toLowerCase())) {
                     reqLimit = 40;
                     isDaily = false;
                     planName = (profile.plan === 'personal_vip_annual') ? 'VIP Anual' : 'VIP';
