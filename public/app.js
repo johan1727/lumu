@@ -3,6 +3,10 @@ console.log('SCRIPT TOP: app.js is starting...');
 let supabaseClient = null;
 let stripePaymentLink = null;
 let currentUser = null;
+
+// Canonical list of plans that grant VIP/premium access
+const VIP_PLANS = ['personal_vip', 'personal_vip_annual', 'b2b', 'b2b_annual', 'vip', 'pro'];
+function isVipPlan(plan) { return VIP_PLANS.includes(String(plan || '').toLowerCase()); }
 let _allProducts = [];
 let latestFlashDealsRequestId = 0;
 
@@ -1031,7 +1035,7 @@ function showDeepResearchSelectorNotice(message, tone = 'info') {
 
 async function hasVipAccess() {
     const currentPlan = String(currentUser?.plan || '').toLowerCase();
-    if (currentUser?.is_premium || ['personal_vip', 'personal_vip_annual', 'b2b', 'b2b_annual', 'vip', 'pro'].includes(currentPlan)) {
+    if (currentUser?.is_premium || isVipPlan(currentPlan)) {
         return true;
     }
     if (!currentUser || !supabaseClient) return false;
@@ -1042,7 +1046,7 @@ async function hasVipAccess() {
             .eq('id', currentUser.id)
             .single();
         const plan = String(profileData?.plan || '').toLowerCase();
-        return Boolean(profileData?.is_premium || ['personal_vip', 'personal_vip_annual', 'b2b', 'b2b_annual', 'vip', 'pro'].includes(plan));
+        return Boolean(profileData?.is_premium || isVipPlan(plan));
     } catch {
         return false;
     }
@@ -4121,7 +4125,7 @@ async function initApp() {
 
                     if (profileData) {
                         plan = profileData.plan || 'free';
-                        isVIP = !!profileData.is_premium || ['personal_vip', 'personal_vip_annual', 'b2b', 'b2b_annual'].includes(plan);
+                        isVIP = !!profileData.is_premium || isVipPlan(plan);
                     }
 
                     const lifetimeSearches = usageData?.lifetime_searches || 0;
@@ -4280,7 +4284,7 @@ async function initApp() {
                 // Show PRO Badge if premium
                 const proBadge = document.getElementById('pro-badge-nav');
                 if (proBadge) {
-                    const isPremium = user.is_premium || user.plan === 'personal_vip' || user.plan === 'b2b' || user.plan === 'personal_vip_annual' || user.plan === 'b2b_annual';
+                    const isPremium = user.is_premium || isVipPlan(user.plan);
                     if (isPremium) {
                         proBadge.classList.remove('hidden');
                         proBadge.classList.add('flex');
@@ -4498,6 +4502,27 @@ async function initApp() {
         if (btnGoogleLogin) {
             btnGoogleLogin.addEventListener('click', handleGoogleLogin);
         }
+
+        // Refresh plan when user returns to tab (e.g. after Stripe checkout)
+        document.addEventListener('visibilitychange', async () => {
+            if (document.visibilityState !== 'visible' || !supabaseClient || !currentUser) return;
+            try {
+                const { data } = await supabaseClient
+                    .from('profiles')
+                    .select('is_premium, plan')
+                    .eq('id', currentUser.id)
+                    .single();
+                if (data && (data.is_premium !== currentUser.is_premium || data.plan !== currentUser.plan)) {
+                    currentUser = { ...currentUser, is_premium: data.is_premium, plan: data.plan };
+                    window.currentUser = currentUser;
+                    updateAuthUI(currentUser);
+                    if (data.is_premium && !window._premiumRefreshToastShown) {
+                        window._premiumRefreshToastShown = true;
+                        safeToast(currentRegion === 'US' ? '✅ Your VIP plan is now active!' : '✅ ¡Tu plan VIP ya está activo!', 'success');
+                    }
+                }
+            } catch { /* silent — best effort */ }
+        });
 
         // --- Email/Password auth removed (only Google OAuth is supported) ---
 
@@ -7612,7 +7637,7 @@ window.maybeSuggestPush = () => {
         if (!sb || !user) return;
         sb.from('profiles').select('is_premium, plan').eq('id', user.id).single()
             .then(({ data }) => {
-                if (data && (data.is_premium || data.plan === 'personal_vip' || data.plan === 'b2b')) {
+                if (data && (data.is_premium || isVipPlan(data.plan))) {
                     document.querySelectorAll('.ad-container').forEach(el => {
                         el.style.display = 'none';
                     });
@@ -9249,7 +9274,7 @@ window.startInteractiveTutorial = startInteractiveTutorial;
         if (!body) return;
         const ACHIEVEMENTS = getAchievementsConfig();
         const count = getSearchCount();
-        const isPremium = window.currentUser?.is_premium || window.currentUser?.plan === 'personal_vip' || window.currentUser?.plan === 'b2b';
+        const isPremium = window.currentUser?.is_premium || isVipPlan(window.currentUser?.plan);
 
         body.innerHTML = ACHIEVEMENTS.map(a => {
             const unlocked = a.premiumOnly ? isPremium : count >= a.threshold;

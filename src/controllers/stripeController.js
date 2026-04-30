@@ -3,8 +3,10 @@ const supabase = require('../config/supabase');
 const stripe = process.env.STRIPE_SECRET_KEY ? require('stripe')(process.env.STRIPE_SECRET_KEY) : null;
 
 const STRIPE_PRICE_PLAN_MAP = {
-    price_1TEGf71H4K5iuzsCFMZMnkmR: 'personal_vip_annual',
-    price_1TEGeh1H4K5iuzsCVDKHlDXc: 'b2b_annual'
+    price_1TLnG1E8s9f9Vj9DnhnKCbEr: 'b2b_annual',
+    price_1TLnDlE8s9f9Vj9D5aLb8ZoV: 'b2b',
+    price_1TLnF5E8s9f9Vj9DvSWnEARF: 'personal_vip_annual',
+    price_1TLnDGE8s9f9Vj9DxFjYHI5r: 'personal_vip'
 };
 
 // FIX #1: Helper que lanza si Supabase devuelve error en operaciones críticas
@@ -280,6 +282,70 @@ exports.handleWebhook = async (req, res) => {
                     } else {
                         console.log(`ℹ️ Usuario ${data.user_id} tiene otra suscripción activa — no se pausa VIP.`);
                     }
+                }
+                break;
+            }
+
+            case 'invoice.payment_succeeded': {
+                const invoice = event.data.object;
+                if (!invoice.subscription) break;
+                console.log(`✅ Pago de factura exitoso para suscripción: ${invoice.subscription}`);
+
+                const { data: subData, error: subFetchErr } = await supabase
+                    .from('subscriptions')
+                    .update({ status: 'active', updated_at: new Date().toISOString() })
+                    .eq('stripe_subscription_id', invoice.subscription)
+                    .select('user_id, plan')
+                    .maybeSingle();
+
+                if (subFetchErr) {
+                    console.warn('[Stripe] invoice.payment_succeeded: no se encontró suscripción local:', subFetchErr.message);
+                    break;
+                }
+
+                if (subData?.user_id) {
+                    const { error: reactivateErr } = await supabase
+                        .from('profiles')
+                        .update({ is_premium: true, plan: subData.plan || 'personal_vip' })
+                        .eq('id', subData.user_id);
+                    assertNoSupabaseError(reactivateErr, 'invoice.payment_succeeded/profile reactivate');
+                    console.log(`✅ Perfil reactivado (renovación) para usuario ${subData.user_id} → plan: ${subData.plan}`);
+                }
+                break;
+            }
+
+            case 'customer.subscription.updated': {
+                const sub = event.data.object;
+                const newPriceId = sub.items?.data?.[0]?.price?.id || '';
+                const newPlan = STRIPE_PRICE_PLAN_MAP[newPriceId] || null;
+                const newStatus = sub.status; // active, past_due, canceled, etc.
+                console.log(`🔄 Suscripción actualizada: ${sub.id} | status: ${newStatus} | priceId: ${newPriceId} | plan: ${newPlan || '(sin cambio)'}`);
+
+                const { data: updSub, error: updSubErr } = await supabase
+                    .from('subscriptions')
+                    .update({
+                        status: newStatus === 'active' ? 'active' : newStatus,
+                        ...(newPlan ? { plan: newPlan } : {}),
+                        updated_at: new Date().toISOString()
+                    })
+                    .eq('stripe_subscription_id', sub.id)
+                    .select('user_id, plan')
+                    .maybeSingle();
+
+                if (updSubErr) {
+                    console.warn('[Stripe] customer.subscription.updated: suscripción no encontrada localmente:', updSubErr.message);
+                    break;
+                }
+
+                if (updSub?.user_id) {
+                    const effectivePlan = newPlan || updSub.plan || 'personal_vip';
+                    const isPremiumNow = newStatus === 'active';
+                    const { error: profileUpdErr } = await supabase
+                        .from('profiles')
+                        .update({ is_premium: isPremiumNow, plan: isPremiumNow ? effectivePlan : 'free' })
+                        .eq('id', updSub.user_id);
+                    assertNoSupabaseError(profileUpdErr, 'subscription.updated/profile update');
+                    console.log(`✅ Perfil actualizado tras cambio de plan: usuario ${updSub.user_id} → plan: ${effectivePlan}, is_premium: ${isPremiumNow}`);
                 }
                 break;
             }
