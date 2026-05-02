@@ -3,12 +3,55 @@ console.log('SCRIPT TOP: app.js is starting...');
 let supabaseClient = null;
 let stripePaymentLink = null;
 let currentUser = null;
+let stripeB2bPaymentLink = null;
+let stripeVipAnnualPaymentLink = null;
+let stripeB2bAnnualPaymentLink = null;
 
 // Canonical list of plans that grant VIP/premium access
 const VIP_PLANS = ['personal_vip', 'personal_vip_annual', 'b2b', 'b2b_annual', 'vip', 'pro'];
 function isVipPlan(plan) { return VIP_PLANS.includes(String(plan || '').toLowerCase()); }
 let _allProducts = [];
 let latestFlashDealsRequestId = 0;
+
+function appendClientReferenceId(baseUrl, userId) {
+    if (!baseUrl || !userId) return baseUrl;
+    const separator = baseUrl.includes('?') ? '&' : '?';
+    return `${baseUrl}${separator}client_reference_id=${encodeURIComponent(userId)}`;
+}
+
+async function startStripeCheckout(plan, fallbackUrl = '') {
+    if (!currentUser) {
+        showToast('Inicia sesión primero para suscribirte', 'info');
+        openModal();
+        return;
+    }
+
+    try {
+        const { data: sessionData } = await supabaseClient.auth.getSession();
+        const token = sessionData?.session?.access_token || '';
+        const res = await fetch('/api/stripe/create-checkout-session', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${token}`
+            },
+            body: JSON.stringify({ plan, email: currentUser.email || '' })
+        });
+        const data = await res.json().catch(() => ({}));
+        if (res.ok && data.url) {
+            window.location.href = data.url;
+            return;
+        }
+        throw new Error(data.error || 'No se pudo iniciar checkout');
+    } catch (error) {
+        console.warn('[Stripe] Checkout Session fallback:', error.message);
+        if (fallbackUrl) {
+            window.open(appendClientReferenceId(fallbackUrl, currentUser.id), '_blank');
+        } else {
+            showToast('No se pudo iniciar el checkout. Intenta más tarde.', 'error');
+        }
+    }
+}
 
 function trackMetaEventSafe(eventName, params = {}) {
     if (typeof window.trackMetaEvent === 'function') {
@@ -3219,9 +3262,12 @@ async function initApp() {
                     window.supabaseClient = supabaseClient; // Polyfill for the rest of the app
                 }
                 if (config.stripePaymentLink) stripePaymentLink = config.stripePaymentLink;
-                if (config.stripeB2bPaymentLink) window.stripeB2bPaymentLink = config.stripeB2bPaymentLink;
-                if (config.stripeVipAnnualPaymentLink) window.stripeVipAnnualPaymentLink = config.stripeVipAnnualPaymentLink;
-                if (config.stripeB2bAnnualPaymentLink) window.stripeB2bAnnualPaymentLink = config.stripeB2bAnnualPaymentLink;
+                if (config.stripeB2bPaymentLink) stripeB2bPaymentLink = config.stripeB2bPaymentLink;
+                if (config.stripeVipAnnualPaymentLink) stripeVipAnnualPaymentLink = config.stripeVipAnnualPaymentLink;
+                if (config.stripeB2bAnnualPaymentLink) stripeB2bAnnualPaymentLink = config.stripeB2bAnnualPaymentLink;
+                window.stripeB2bPaymentLink = stripeB2bPaymentLink;
+                window.stripeVipAnnualPaymentLink = stripeVipAnnualPaymentLink;
+                window.stripeB2bAnnualPaymentLink = stripeB2bAnnualPaymentLink;
                 // Store config globally for push notifications and ad tags
                 window.__LUMU_CONFIG = {
                     vapidPublicKey: config.vapidPublicKey || '',
@@ -6729,7 +6775,10 @@ async function initApp() {
                 
                 const heartColor = isAlreadyFav ? 'text-red-500' : 'text-slate-300';
                 const tiendaLower = (product.tienda || product.fuente || '').toLowerCase();
-                const preferredClickTarget = product.urlOriginal || product.urlMonetizada || '';
+                let preferredClickTarget = product.urlMonetizada || product.urlOriginal || '';
+                if (preferredClickTarget.includes('google.com') && product.urlOriginal && !product.urlOriginal.includes('google.com')) {
+                    preferredClickTarget = product.urlOriginal;
+                }
                 const hasPriceHistory = Array.isArray(product.priceTrend?.history) && product.priceTrend.history.length > 0;
 
                 const card = document.createElement('div');

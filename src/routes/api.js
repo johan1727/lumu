@@ -16,6 +16,7 @@ const priceHistoryController = require('../controllers/priceHistoryController');
 const buyTimingController = require('../controllers/buyTimingController');
 const autocompleteController = require('../controllers/autocompleteController');
 const personalizationController = require('../controllers/personalizationController');
+const stripeController = require('../controllers/stripeController');
 const supplierChecker = require('../services/supplierChecker');
 const meliService = require('../services/meliService');
 
@@ -186,6 +187,9 @@ router.delete('/price-alerts/:id', authMiddleware, requireAuth, priceAlertContro
 
 // Push notification subscription (requires auth)
 router.post('/push-subscribe', authMiddleware, requireAuth, priceAlertController.savePushSubscription);
+
+// Stripe Checkout Session (requires auth)
+router.post('/stripe/create-checkout-session', authMiddleware, requireAuth, requireFrontendRequest, stripeController.createCheckoutSession);
 
 // Rewarded Ads: Claim bonus searches
 router.post('/claim-reward', authMiddleware, requireAuth, requireFrontendRequest, searchController.claimReward);

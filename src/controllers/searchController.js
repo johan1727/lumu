@@ -13,6 +13,32 @@ const userProfileService = require('../services/userProfileService');
 
 const DEV_VIP_BYPASS = process.env.NODE_ENV !== 'production' && String(process.env.DEV_VIP_BYPASS || '').toLowerCase() === 'true';
 
+function cleanProductTitleForUI(title = '', llmAnalysis = {}) {
+    if (!title) return '';
+    let cleaned = String(title).trim();
+    
+    if (llmAnalysis.searchQuery && llmAnalysis.queryType === 'brand_model') {
+        const brandModelBase = llmAnalysis.searchQuery.replace(/\s+/g, ' ').trim();
+        const specs = cleaned.match(/\b(8gb|16gb|32gb|64gb|128gb|256gb|512gb|1tb|5g|4k|8k|oled|qled|wifi|wi-fi|cellular)\b/ig);
+        if (specs) {
+            const uniqueSpecs = [...new Set(specs.map(s => s.toUpperCase()))].join(' - ');
+            // If the original title is very long, we replace it. If it's short, maybe leave it.
+            if (cleaned.length > brandModelBase.length + 15) {
+                return `${brandModelBase} (${uniqueSpecs})`;
+            }
+        }
+    }
+    
+    cleaned = cleaned.replace(/\b(original|nuevo|sellado|caja|garant[ií]a|meses|msi|env[ií]o gratis|oferta|descuento|remate|liquidacion|liquidaci[oó]n|promocion|promoci[oó]n|100%|importado|nacional|liberado|desbloqueado|global|version|versi[oó]n|envio inmedaito|env[ií]o inmediato)\b/gi, '')
+                     .replace(/\s{2,}/g, ' ').trim();
+    
+    if (cleaned.length > 80) {
+        cleaned = cleaned.substring(0, 77) + '...';
+    }
+    
+    return cleaned;
+}
+
 function buildFallbackSuggestions(baseQuery, altQueries = [], countryCode = 'MX') {
     const cleanBase = String(baseQuery || '').trim();
     const isUS = countryCode === 'US';
@@ -1054,16 +1080,32 @@ function evaluateResultCoherence(product = {}, searchQuery = '', llmAnalysis = {
     const isAccessoryMismatch = isMainProductSearch && looksAccessory;
     const modelSignals = buildMatchSignals(searchQuery, product.titulo || product.title || '');
     const lowRelevance = isMainProductSearch && !queryPhoneModel && modelSignals.weakMatch && Number(product._modelMatchScore || 0) < 0.2;
+    
+    const expectedMin = Number(llmAnalysis.expectedPriceMin) || 0;
+    const currentPrice = Number(product.price || product.precio) || 0;
+    const isSuspiciouslyCheap = expectedMin > 0 && currentPrice > 0 && currentPrice < expectedMin * 0.6;
+    
+    // Hard filter for LLM-defined excludeTerms (negative keywords)
+    let hasExcludeTerm = false;
+    if (Array.isArray(llmAnalysis.excludeTerms) && llmAnalysis.excludeTerms.length > 0) {
+        const excludeRegex = new RegExp(`\\b(${llmAnalysis.excludeTerms.join('|')})\\b`, 'i');
+        if (excludeRegex.test(combinedText)) {
+            hasExcludeTerm = true;
+        }
+    }
+
     const status = isAccessoryMismatch ? 'accessory'
-        : wrongModel ? 'wrong_model'
-            : unavailableSignal ? 'unavailable_signal'
-                : lowRelevance ? 'uncertain'
-                    : 'exact_match';
+        : hasExcludeTerm ? 'excluded_term'
+            : wrongModel ? 'wrong_model'
+                : isSuspiciouslyCheap ? 'suspicious_price'
+                    : unavailableSignal ? 'unavailable_signal'
+                        : lowRelevance ? 'uncertain'
+                            : 'exact_match';
     return {
         status,
-        reject: status === 'accessory' || status === 'wrong_model' || lowRelevance,
+        reject: status === 'accessory' || status === 'wrong_model' || status === 'suspicious_price' || status === 'excluded_term' || lowRelevance,
         unavailableSignal,
-        penalty: status === 'unavailable_signal' ? 0.35 : status === 'uncertain' ? 0.18 : 0,
+        penalty: status === 'unavailable_signal' ? 0.35 : status === 'uncertain' ? 0.18 : ((status === 'suspicious_price' || status === 'excluded_term') ? 0.8 : 0),
         matchSignals: modelSignals
     };
 }
@@ -2044,7 +2086,8 @@ exports.searchProduct = async (req, res) => {
 
         const isLocalFastMode = process.env.NODE_ENV !== 'production';
         const preSearchTimeoutMs = isLocalFastMode ? 1200 : 4000;
-        const shouldUseCache = llmAnalysis.intent_type !== 'servicio_local';
+        const shouldBypassCacheForExclusive = searchPolicy.preferredStoreMode === 'exclusive' && (searchPolicy.preferredStoreKeys || []).length > 0;
+        const shouldUseCache = llmAnalysis.intent_type !== 'servicio_local' && !shouldBypassCacheForExclusive;
 
         // PERF: Run cache lookup + intent memory lookup IN PARALLEL (saves 1-4s)
         const cachePromise = shouldUseCache
@@ -2186,7 +2229,7 @@ exports.searchProduct = async (req, res) => {
                         locale: regionCfg.locale,
                         label: regionCfg.regionLabel
                     },
-                    top_5_baratos: filteredCachedResults,
+                    top_5_baratos: filteredCachedResults.map(p => ({ ...p, titulo: cleanProductTitleForUI(p.titulo || p.title, llmAnalysis) })),
                     advertencia_uso: usageWarning,
                     vip_auto_alert: null
                 });
@@ -2796,7 +2839,7 @@ exports.searchProduct = async (req, res) => {
             suggested_variants: deepResearchEnhancements?.suggestedVariants || null,
             best_buy_pick: personalizedProducts.length > 0
                 ? {
-                    title: personalizedProducts[0].titulo,
+                    title: cleanProductTitleForUI(personalizedProducts[0].titulo || personalizedProducts[0].title, llmAnalysis),
                     store: personalizedProducts[0].tienda,
                     price: personalizedProducts[0].precio,
                     score: personalizedProducts[0].bestBuyScore,
@@ -2816,7 +2859,7 @@ exports.searchProduct = async (req, res) => {
                 ? {
                     has_preferred_result: true,
                     best_preferred: {
-                        title: bestPreferredResult.titulo,
+                        title: cleanProductTitleForUI(bestPreferredResult.titulo || bestPreferredResult.title, llmAnalysis),
                         store: bestPreferredResult.canonicalStore,
                         price: bestPreferredResult.precio,
                         url: bestPreferredResult.urlMonetizada || bestPreferredResult.urlOriginal,
@@ -2826,7 +2869,7 @@ exports.searchProduct = async (req, res) => {
                     },
                     cheaper_alternative: bestCheaperAlternative
                         ? {
-                            title: bestCheaperAlternative.titulo,
+                            title: cleanProductTitleForUI(bestCheaperAlternative.titulo || bestCheaperAlternative.title, llmAnalysis),
                             store: bestCheaperAlternative.canonicalStore,
                             price: bestCheaperAlternative.precio,
                             url: bestCheaperAlternative.urlMonetizada || bestCheaperAlternative.urlOriginal,
@@ -2853,7 +2896,7 @@ exports.searchProduct = async (req, res) => {
                 locale: regionCfg.locale,
                 label: regionCfg.regionLabel
             },
-            top_5_baratos: personalizedProducts,
+            top_5_baratos: personalizedProducts.map(p => ({ ...p, titulo: cleanProductTitleForUI(p.titulo || p.title, llmAnalysis) })),
             top_resultados: [],
             personalization: {
                 applied: personalizationApplied,

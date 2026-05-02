@@ -9,6 +9,13 @@ const STRIPE_PRICE_PLAN_MAP = {
     price_1TLnDGE8s9f9Vj9DxFjYHI5r: 'personal_vip'
 };
 
+const PLAN_PRICE_ID_MAP = {
+    b2b_annual: process.env.STRIPE_B2B_ANNUAL_PRICE_ID || 'price_1TLnG1E8s9f9Vj9DnhnKCbEr',
+    b2b: process.env.STRIPE_B2B_PRICE_ID || 'price_1TLnDlE8s9f9Vj9D5aLb8ZoV',
+    personal_vip_annual: process.env.STRIPE_VIP_ANNUAL_PRICE_ID || 'price_1TLnF5E8s9f9Vj9DvSWnEARF',
+    personal_vip: process.env.STRIPE_VIP_PRICE_ID || 'price_1TLnDGE8s9f9Vj9DxFjYHI5r'
+};
+
 // FIX #1: Helper que lanza si Supabase devuelve error en operaciones críticas
 function assertNoSupabaseError(error, context) {
     if (error) {
@@ -41,6 +48,13 @@ async function resolveUserIdFromSession(session) {
         .ilike('email', candidateEmail)
         .maybeSingle();
     return userByEmail?.id || null;
+}
+
+function normalizeRequestedPlan(plan = '') {
+    const normalized = String(plan || '').trim().toLowerCase();
+    if (normalized === 'vip') return 'personal_vip';
+    if (normalized === 'vip_annual') return 'personal_vip_annual';
+    return PLAN_PRICE_ID_MAP[normalized] ? normalized : null;
 }
 
 async function trackPurchaseEvent({ userId = null, session, plan }) {
@@ -93,6 +107,52 @@ async function hasOtherActiveSubscription(userId, excludeStripeSubId) {
     }
     return (data?.length || 0) > 0;
 }
+
+exports.createCheckoutSession = async (req, res) => {
+    if (!stripe) {
+        return res.status(500).json({ error: 'Stripe no está configurado.' });
+    }
+    if (!req.userId) {
+        return res.status(401).json({ error: 'Inicia sesión para suscribirte.' });
+    }
+
+    const plan = normalizeRequestedPlan(req.body?.plan);
+    const priceId = plan ? PLAN_PRICE_ID_MAP[plan] : null;
+    if (!plan || !priceId) {
+        return res.status(400).json({ error: 'Plan inválido.' });
+    }
+
+    try {
+        const origin = process.env.PUBLIC_APP_URL
+            || process.env.NEXT_PUBLIC_APP_URL
+            || `${req.protocol}://${req.get('host')}`;
+        const userEmail = req.userEmail || req.body?.email || undefined;
+
+        const session = await stripe.checkout.sessions.create({
+            mode: 'subscription',
+            line_items: [{ price: priceId, quantity: 1 }],
+            client_reference_id: req.userId,
+            customer_email: userEmail,
+            success_url: `${origin}/?checkout=success&plan=${encodeURIComponent(plan)}`,
+            cancel_url: `${origin}/?checkout=cancelled`,
+            metadata: {
+                user_id: req.userId,
+                plan
+            },
+            subscription_data: {
+                metadata: {
+                    user_id: req.userId,
+                    plan
+                }
+            }
+        });
+
+        return res.json({ url: session.url, id: session.id });
+    } catch (error) {
+        console.error('[Stripe] Error creando checkout session:', error.message);
+        return res.status(500).json({ error: 'No se pudo iniciar el checkout.' });
+    }
+};
 
 exports.handleWebhook = async (req, res) => {
     if (!stripe) {

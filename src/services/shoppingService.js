@@ -526,9 +526,22 @@ function isRegionCompatibleUrl(url = '', countryCode = 'MX') {
     const normalizedUrl = String(url || '').toLowerCase();
     const normalizedCountry = String(countryCode || 'MX').toUpperCase();
     if (!normalizedUrl) return false;
-    if (normalizedCountry !== 'MX') return true;
-    if (/apple\.com\/(us-edu|ca|us-es)\//i.test(normalizedUrl)) return false;
-    if (/apple\.com\/.+\/newsroom\//i.test(normalizedUrl) || /apple\.com\/newsroom\//i.test(normalizedUrl)) return false;
+    if (normalizedCountry === 'MX') {
+        if (/amazon\.com(?!\.mx)/i.test(normalizedUrl)) return false;
+        if (/walmart\.com(?!\.mx)/i.test(normalizedUrl)) return false;
+        if (/bestbuy\.com(?!\.mx)/i.test(normalizedUrl)) return false;
+        if (/target\.com/i.test(normalizedUrl)) return false;
+        if (/apple\.com\/(us|us-edu|ca|us-es|uk)\//i.test(normalizedUrl)) return false;
+        if (/apple\.com\/.+\/newsroom\//i.test(normalizedUrl) || /apple\.com\/newsroom\//i.test(normalizedUrl)) return false;
+        if (/\.co\.uk|\.de|\.fr|\.it|\.es|\.ca|\.com\.au|\.co\.jp/i.test(normalizedUrl)) {
+            try {
+                const hostname = new URL(normalizedUrl.startsWith('http') ? normalizedUrl : `https://${normalizedUrl}`).hostname;
+                if (/\.co\.uk$|\.de$|\.fr$|\.it$|\.es$|\.ca$|\.com\.au$|\.co\.jp$/i.test(hostname)) return false;
+            } catch (e) {
+                // Ignore invalid URLs
+            }
+        }
+    }
     return true;
 }
 
@@ -752,6 +765,7 @@ function scoreMeliCandidate(result = {}, canonicalQuery = '', productCategory = 
     const genericTitlePenalty = /\b(android|smartphone|telefono|celular)\b/i.test(title) && specificTokens.length >= 2 && exactModelScore < 0.5
         ? 0.22
         : 0;
+    const clonePenalty = /\b(clon|generico|gen[eé]rico|replica|r[eé]plica|copia|1\.1|oem|similar|calidad\s*original|tipo\s*original)\b/i.test(title) ? 0.8 : 0;
     const categoryPenalty = ['smartphone', 'laptop', 'audio', 'gaming', 'tv'].includes(String(productCategory || '').toLowerCase())
         && /\b(refaccion|compatible|reemplazo|display|pantalla|funda|case|mica|protector)\b/i.test(title)
         ? 0.18
@@ -783,6 +797,7 @@ function scoreMeliCandidate(result = {}, canonicalQuery = '', productCategory = 
         - gameContentPenalty
         - genericTitlePenalty
         - categoryPenalty
+        - clonePenalty
         - pagePenalty
     ));
     return {
@@ -795,6 +810,7 @@ function scoreMeliCandidate(result = {}, canonicalQuery = '', productCategory = 
         gameContentPenalty,
         genericTitlePenalty,
         categoryPenalty,
+        clonePenalty,
         mlScore: Number(score.toFixed(3))
     };
 }

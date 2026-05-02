@@ -72,7 +72,9 @@ const llmResponseSchema = z.object({
     commercialReadiness: z.number().min(0).max(1).optional().default(0.8),
     searchLanguage: z.enum(['es', 'en', 'auto']).optional().default('auto'),
     excludeTerms: z.array(z.string().max(60)).max(8).optional(),
-    reasoning: z.string().max(400).nullable().optional()
+    reasoning: z.string().max(400).nullable().optional(),
+    expectedPriceMin: z.number().positive().max(100000000).nullable().optional(),
+    expectedPriceMax: z.number().positive().max(100000000).nullable().optional()
 });
 
 // --- PRE-PROCESSING: LatAm slang/abbreviation expansion ---
@@ -668,6 +670,8 @@ function repairAnalysis(rawAnalysis, originalText) {
         alternativeQueries,
         brandOfficialQuery,
         universalQueryDomain,
+        expectedPriceMin: analysis.expectedPriceMin || null,
+        expectedPriceMax: analysis.expectedPriceMax || null,
         reasoning: analysis.reasoning || 'LLM response repaired with deterministic query enrichment'
     };
 }
@@ -910,6 +914,7 @@ ${extraContext}`;
     - disambiguationOptions: opciones concretas cuando la query es ambigua
     - isSpeculative: true si el producto aún no existe, es rumor o es futuro
     - isComparison + comparisonProducts: úsalo cuando el usuario compare 2+ productos
+    - expectedPriceMin / expectedPriceMax: Si el query es un producto MUY específico (ej: "Sony WH-1000XM5"), estima el rango de precio realista (MSRP actual) en la moneda de la región. Si es vago o genérico ("celular barato"), pon null.
 
     === REGLAS GENERALES ===
     1. ACCIÓN: "search" si hay producto/compra, "search_service" para servicios locales (plomero, dentista, restaurante), "ask" SOLO si realmente no puedes buscar.
@@ -976,7 +981,9 @@ ${extraContext}`;
                     commercialReadiness: { type: "NUMBER", description: "0.0-1.0 score: 1.0=specific buyable product, 0.5=generic, 0.1=speculative" },
                     searchLanguage: { type: "STRING", enum: ["es", "en", "auto"], description: "Best language for search results in this region" },
                     excludeTerms: { type: "ARRAY", items: { type: "STRING" }, description: "Terms to exclude to avoid accessories/junk results" },
-                    reasoning: { type: "STRING", description: "Brief explanation of search strategy decision (max 50 words)" }
+                    reasoning: { type: "STRING", description: "Brief explanation of search strategy decision (max 50 words)" },
+                    expectedPriceMin: { type: "NUMBER", description: "Minimum expected real price (MSRP) for this product in the active region currency. e.g. for a PS5 it might be 7000. Use null if unknown or generic search." },
+                    expectedPriceMax: { type: "NUMBER", description: "Maximum expected real price (MSRP) for this product. e.g. for a PS5 it might be 12000." }
                 },
                 required: ["action", "searchQuery", "queryType"]
             }
