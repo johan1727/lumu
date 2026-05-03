@@ -1669,11 +1669,13 @@ exports.searchProduct = async (req, res) => {
                     const monthlyRemaining = Math.max(0, FREE_MONTHLY_LIMIT - monthlyUsed);
 
                     if (!dailySearches.error && !monthlySearches.error) {
+                        const _stripeUrl = process.env.STRIPE_PAYMENT_LINK || null;
                         if (monthlyUsed >= FREE_MONTHLY_LIMIT) {
                             return res.status(402).json({
                                 error: 'Ya agotaste tus 10 búsquedas gratis de este mes. Hazte VIP para seguir buscando sin límites mensuales.',
                                 paywall: true,
-                                upgrade_required: false
+                                upgrade_required: false,
+                                stripe_url: _stripeUrl
                             });
                         }
 
@@ -1681,7 +1683,8 @@ exports.searchProduct = async (req, res) => {
                             return res.status(402).json({
                                 error: 'Ya usaste tus 2 búsquedas gratis de hoy. Vuelve mañana o hazte VIP para seguir buscando ahora mismo.',
                                 paywall: true,
-                                upgrade_required: false
+                                upgrade_required: false,
+                                stripe_url: _stripeUrl
                             });
                         }
 
@@ -1727,7 +1730,8 @@ exports.searchProduct = async (req, res) => {
                             return res.status(402).json({
                                 error: errorMsg,
                                 paywall: !profile.is_premium && !hasTempVIP,
-                                upgrade_required: !!profile.is_premium && !hasTempVIP
+                                upgrade_required: !!profile.is_premium && !hasTempVIP,
+                                stripe_url: process.env.STRIPE_PAYMENT_LINK || null
                             });
                         }
 
@@ -3135,6 +3139,123 @@ exports.claimReward = async (req, res) => {
 };
 
 // NUEVO: Fase 6 - Lumu Coins (with real 1-hour VIP unlock)
+// ─── Referral System ────────────────────────────────────────────────────────
+
+exports.getReferralCode = async (req, res) => {
+    const userId = req.userId || null;
+    if (!userId) return res.status(401).json({ error: 'Inicia sesión para obtener tu código de referido.' });
+    if (!supabase) return res.status(503).json({ error: 'Base de datos no disponible.' });
+
+    try {
+        const { data: profile, error } = await supabase
+            .from('profiles')
+            .select('referral_code')
+            .eq('id', userId)
+            .single();
+
+        if (error) throw error;
+
+        let code = profile?.referral_code;
+        if (!code) {
+            // Generar código único de 8 chars basado en userId
+            code = userId.replace(/-/g, '').slice(0, 8).toUpperCase();
+            // Verificar unicidad y agregar sufijo si colisiona
+            const { data: collision } = await supabase
+                .from('profiles')
+                .select('id')
+                .eq('referral_code', code)
+                .neq('id', userId)
+                .maybeSingle();
+            if (collision) code = code.slice(0, 6) + Math.floor(Math.random() * 99).toString().padStart(2, '0');
+
+            await supabase.from('profiles').update({ referral_code: code }).eq('id', userId);
+        }
+
+        const appUrl = process.env.PUBLIC_APP_URL || 'https://lumu.ai';
+        return res.json({ code, url: `${appUrl}/?ref=${code}` });
+    } catch (err) {
+        console.error('[Referral] getReferralCode error:', err);
+        return res.status(500).json({ error: 'No se pudo obtener el código de referido.' });
+    }
+};
+
+exports.claimReferral = async (req, res) => {
+    const newUserId = req.userId || null;
+    const { code } = req.body || {};
+
+    if (!newUserId) return res.status(401).json({ error: 'Inicia sesión para usar un código de referido.' });
+    if (!code || typeof code !== 'string') return res.status(400).json({ error: 'Código de referido inválido.' });
+    if (!supabase) return res.status(503).json({ error: 'Base de datos no disponible.' });
+
+    const BONUS_NEW_USER = 5;
+    const BONUS_REFERRER = 5;
+
+    try {
+        // 1. Verificar que este usuario no haya ya canjeado un código
+        const alreadyUsedKey = `referral-used:user:${newUserId}`;
+        const { count: alreadyUsed } = await supabase
+            .from('rate_limits')
+            .select('*', { count: 'exact', head: true })
+            .eq('ip', alreadyUsedKey);
+        if (alreadyUsed > 0) {
+            return res.status(409).json({ error: 'Ya canjeaste un código de referido anteriormente.' });
+        }
+
+        // 2. Buscar al referidor por código
+        const cleanCode = String(code).trim().toUpperCase();
+        const { data: referrer, error: referrerErr } = await supabase
+            .from('profiles')
+            .select('id')
+            .eq('referral_code', cleanCode)
+            .neq('id', newUserId)
+            .maybeSingle();
+
+        if (referrerErr) throw referrerErr;
+        if (!referrer) return res.status(404).json({ error: 'Código de referido no encontrado.' });
+
+        const referrerId = referrer.id;
+
+        // 3. Verificar que la cuenta del nuevo usuario sea reciente (máx 7 días)
+        const MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000;
+        const { data: newProfile } = await supabase
+            .from('profiles')
+            .select('created_at')
+            .eq('id', newUserId)
+            .maybeSingle();
+        const createdAtMs = newProfile?.created_at ? new Date(newProfile.created_at).getTime() : 0;
+        if (createdAtMs && (Date.now() - createdAtMs) > MAX_AGE_MS) {
+            return res.status(403).json({ error: 'El código de referido solo es válido para cuentas nuevas (menos de 7 días).' });
+        }
+
+        // 4. Registrar que este usuario ya canjeó (idempotencia)
+        await supabase.from('rate_limits').insert({ ip: alreadyUsedKey, created_at: new Date().toISOString() });
+
+        // 5. Dar bonus al nuevo usuario
+        const newUserBonusEntries = Array.from({ length: BONUS_NEW_USER }, () => ({
+            ip: `bonus:user:${newUserId}`,
+            created_at: new Date().toISOString()
+        }));
+        await supabase.from('rate_limits').insert(newUserBonusEntries);
+
+        // 6. Dar bonus al referidor
+        const referrerBonusEntries = Array.from({ length: BONUS_REFERRER }, () => ({
+            ip: `bonus:user:${referrerId}`,
+            created_at: new Date().toISOString()
+        }));
+        await supabase.from('rate_limits').insert(referrerBonusEntries);
+
+        // 7. Registrar en profiles quién refirió a quién (para el bonus VIP posterior)
+        await supabase.from('profiles').update({ referred_by: referrerId }).eq('id', newUserId);
+
+        console.log(`[Referral] ${newUserId} canjeó código de ${referrerId}. +${BONUS_NEW_USER} búsquedas a cada uno.`);
+        return res.json({ success: true, bonus_new_user: BONUS_NEW_USER, bonus_referrer: BONUS_REFERRER });
+
+    } catch (err) {
+        console.error('[Referral] claimReferral error:', err);
+        return res.status(500).json({ error: 'No se pudo canjear el código de referido.' });
+    }
+};
+
 exports.claimSignupBonus = async (req, res) => {
     try {
         const userId = req.userId || null;

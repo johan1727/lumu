@@ -285,6 +285,30 @@ exports.handleWebhook = async (req, res) => {
 
                     await trackPurchaseEvent({ userId, session, plan: resolvedPlan });
                     console.log('✅ Perfil y suscripción actualizados exitosamente.');
+
+                    // Referral VIP reward: si este usuario fue referido, dar 1 mes bonus al referidor
+                    try {
+                        const { data: newSubProfile } = await supabase
+                            .from('profiles')
+                            .select('referred_by, referral_vip_rewarded')
+                            .eq('id', userId)
+                            .maybeSingle();
+                        const referrerId = newSubProfile?.referred_by;
+                        const alreadyRewarded = newSubProfile?.referral_vip_rewarded;
+                        if (referrerId && !alreadyRewarded) {
+                            const VIP_BONUS_MONTH = 40; // Equivale a 1 mes del plan VIP
+                            const bonusEntries = Array.from({ length: VIP_BONUS_MONTH }, () => ({
+                                ip: `bonus:user:${referrerId}`,
+                                created_at: new Date().toISOString()
+                            }));
+                            await supabase.from('rate_limits').insert(bonusEntries);
+                            // Marcar que ya se otorgó la recompensa (evita duplicados)
+                            await supabase.from('profiles').update({ referral_vip_rewarded: true }).eq('id', userId);
+                            console.log(`[Referral] 🎁 Referidor ${referrerId} recibió +${VIP_BONUS_MONTH} búsquedas por conversión VIP de ${userId}`);
+                        }
+                    } catch (refErr) {
+                        console.warn('[Referral] Error otorgando bonus VIP al referidor:', refErr.message);
+                    }
                 }
                 break;
             }

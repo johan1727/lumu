@@ -15,9 +15,6 @@ const missingAffiliateConfigs = [];
 if (!ML_AFFILIATE_CAMPAIGN) missingAffiliateConfigs.push('ML_AFFILIATE_CAMPAIGN');
 if (!AMAZON_AFFILIATE_TAG) missingAffiliateConfigs.push('AMAZON_AFFILIATE_TAG');
 if (!ALIEXPRESS_TRACKING_ID) missingAffiliateConfigs.push('ALIEXPRESS_TRACKING_ID');
-if (!LIVERPOOL_AFFILIATE_ID) missingAffiliateConfigs.push('LIVERPOOL_AFFILIATE_ID (pending)');
-if (!WALMART_AFFILIATE_ID) missingAffiliateConfigs.push('WALMART_AFFILIATE_ID (pending)');
-if (!COPPEL_AFFILIATE_ID) missingAffiliateConfigs.push('COPPEL_AFFILIATE_ID (pending)');
 if (missingAffiliateConfigs.length > 0) {
     console.warn(`[Affiliate] Variables faltantes: ${missingAffiliateConfigs.join(', ')}. Se usarán enlaces sin afiliado en esas tiendas.`);
 }

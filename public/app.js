@@ -1619,25 +1619,59 @@ function applyOnboardingPreference(preference = '') {
     }
 
     const btnSafeStores = document.getElementById('btn-safe-stores');
-    if (btnSafeStores && normalizedPreference === 'trusted') {
-        btnSafeStores.setAttribute('data-safe', 'true');
-        btnSafeStores.classList.remove('border-slate-200', 'bg-white', 'text-slate-600');
-        btnSafeStores.classList.add('border-emerald-500', 'bg-emerald-50', 'text-emerald-700');
-    } else if (btnSafeStores && btnSafeStores.getAttribute('data-safe') !== 'true') {
+    const onlyRealDealsInput = document.getElementById('only-real-deals');
+    const includeKnownMarketplacesInput = document.getElementById('include-known-marketplaces');
+    const btnKnownMarketplaces = document.getElementById('btn-known-marketplaces');
+    const btnOnlyRealDeals = document.getElementById('btn-only-real-deals');
+
+    // Reset all first
+    if (btnSafeStores) {
         btnSafeStores.setAttribute('data-safe', 'false');
         btnSafeStores.classList.remove('border-emerald-500', 'bg-emerald-50', 'text-emerald-700');
         btnSafeStores.classList.add('border-slate-200', 'bg-white', 'text-slate-600');
     }
 
-    if (searchInput) {
-        if (normalizedPreference === 'cheapest' && !searchInput.placeholder.toLowerCase().includes('barato')) {
+    // Apply preference-specific filters
+    if (normalizedPreference === 'deal_hunter') {
+        // Deal hunter: real deals only + sort by price
+        if (onlyRealDealsInput) onlyRealDealsInput.value = 'true';
+        localStorage.setItem('lumu_default_sort', 'price_asc');
+        if (btnOnlyRealDeals) {
+            btnOnlyRealDeals.setAttribute('data-enabled', 'true');
+            btnOnlyRealDeals.classList.add('border-emerald-500', 'bg-emerald-50', 'text-emerald-700');
+            btnOnlyRealDeals.classList.remove('border-slate-200', 'bg-white', 'text-slate-600');
+        }
+        // Update placeholder
+        if (searchInput) {
             searchInput.placeholder = isEnglishRegion()
-                ? 'Search products and find the cheapest real option...'
-                : 'Busca productos y encuentra la opción más barata real...';
-        } else if (normalizedPreference === 'best_value' && !searchInput.placeholder.toLowerCase().includes('value')) {
+                ? 'Hunting deals? Type a product and we sort by lowest price...'
+                : '¿Buscas ofertas? Escribe un producto y ordenamos por precio...';
+        }
+    } else if (normalizedPreference === 'safe_buyer') {
+        // Safe buyer: safe stores + known marketplaces
+        if (btnSafeStores) {
+            btnSafeStores.setAttribute('data-safe', 'true');
+            btnSafeStores.classList.remove('border-slate-200', 'bg-white', 'text-slate-600');
+            btnSafeStores.classList.add('border-emerald-500', 'bg-emerald-50', 'text-emerald-700');
+        }
+        if (includeKnownMarketplacesInput) includeKnownMarketplacesInput.value = 'true';
+        if (btnKnownMarketplaces) {
+            btnKnownMarketplaces.setAttribute('data-enabled', 'true');
+            btnKnownMarketplaces.classList.add('border-emerald-500', 'bg-emerald-50', 'text-emerald-700');
+            btnKnownMarketplaces.classList.remove('border-slate-200', 'bg-white', 'text-slate-600');
+        }
+        if (searchInput) {
             searchInput.placeholder = isEnglishRegion()
-                ? 'Search products and compare the best value options...'
-                : 'Busca productos y compara las opciones que más convienen...';
+                ? 'Search safely — we only show verified stores...'
+                : 'Busca seguro — solo tiendas verificadas...';
+        }
+    } else if (normalizedPreference === 'fast_searcher') {
+        // Fast searcher: default mode, no extra filters
+        localStorage.setItem('lumu_default_sort', 'relevance');
+        if (searchInput) {
+            searchInput.placeholder = isEnglishRegion()
+                ? 'What are you looking for?'
+                : '¿Qué estás buscando?';
         }
     }
 
@@ -1675,9 +1709,9 @@ function buildWelcomeOnboardingModal() {
                 </div>
                 <div id="welcome-onboarding-step-2" class="hidden space-y-4">
                     <div class="grid gap-3">
-                        <button type="button" data-pref-choice="cheapest" class="welcome-pref-option rounded-2xl border border-slate-200 px-4 py-4 text-left transition hover:border-emerald-300 hover:bg-emerald-50"><div class="text-sm font-black text-slate-900">${_onbEs ? '💰 Precio más bajo' : '💰 Cheapest price'}</div><div class="mt-1 text-xs font-medium text-slate-500">${_onbEs ? 'Priorizamos los precios más bajos primero.' : 'We prioritize lower prices first.'}</div></button>
-                        <button type="button" data-pref-choice="best_value" class="welcome-pref-option rounded-2xl border border-slate-200 px-4 py-4 text-left transition hover:border-emerald-300 hover:bg-emerald-50"><div class="text-sm font-black text-slate-900">${_onbEs ? '⭐ Mejor relación calidad-precio' : '⭐ Best value'}</div><div class="mt-1 text-xs font-medium text-slate-500">${_onbEs ? 'Equilibrio entre precio, confianza y calidad.' : 'Balance price, trust and product quality.'}</div></button>
-                        <button type="button" data-pref-choice="trusted" class="welcome-pref-option rounded-2xl border border-slate-200 px-4 py-4 text-left transition hover:border-emerald-300 hover:bg-emerald-50"><div class="text-sm font-black text-slate-900">${_onbEs ? '🏪 Solo tiendas seguras' : '🏪 Trusted stores only'}</div><div class="mt-1 text-xs font-medium text-slate-500">${_onbEs ? 'Empezar con tiendas oficiales y vendedores verificados.' : 'Start with safer stores and official sellers.'}</div></button>
+                        <button type="button" data-pref-choice="deal_hunter" class="welcome-pref-option rounded-2xl border border-slate-200 px-4 py-4 text-left transition hover:border-emerald-300 hover:bg-emerald-50"><div class="text-sm font-black text-slate-900">${_onbEs ? '🏆 Cazador de ofertas' : '🏆 Deal hunter'}</div><div class="mt-1 text-xs font-medium text-slate-500">${_onbEs ? 'Filtro "Solo oferta real" activado. Ordenamos por precio automáticamente.' : '"Real deals only" filter on. We sort by price automatically.'}</div></button>
+                        <button type="button" data-pref-choice="safe_buyer" class="welcome-pref-option rounded-2xl border border-slate-200 px-4 py-4 text-left transition hover:border-emerald-300 hover:bg-emerald-50"><div class="text-sm font-black text-slate-900">${_onbEs ? '🛡️ Comprador seguro' : '🛡️ Safe buyer'}</div><div class="mt-1 text-xs font-medium text-slate-500">${_onbEs ? 'Tiendas verificadas + marketplaces conocidos. Sin riesgos.' : 'Verified stores + known marketplaces. No risks.'}</div></button>
+                        <button type="button" data-pref-choice="fast_searcher" class="welcome-pref-option rounded-2xl border border-slate-200 px-4 py-4 text-left transition hover:border-emerald-300 hover:bg-emerald-50"><div class="text-sm font-black text-slate-900">${_onbEs ? '⚡ Buscador rápido' : '⚡ Fast searcher'}</div><div class="mt-1 text-xs font-medium text-slate-500">${_onbEs ? 'Búsqueda normal. Tú decides los filtros después.' : 'Normal search. You decide filters later.'}</div></button>
                     </div>
                 </div>
                 <div class="mt-6 flex items-center justify-between gap-3 border-t border-slate-100 pt-4">
@@ -1733,10 +1767,10 @@ function initWelcomeOnboarding() {
         const _sEs = !isEnglishRegion(selectedRegion || currentRegion);
         title.textContent = isStepOne
             ? (_sEs ? '¿Desde dónde compras?' : 'Where are you shopping from?')
-            : (_sEs ? '¿Qué es lo más importante para ti?' : 'What matters most to you?');
+            : (_sEs ? '¿Qué tipo de comprador eres?' : 'What type of shopper are you?');
         copy.textContent = isStepOne
             ? (_sEs ? 'Elige tu país para mostrarte las tiendas, precios y moneda correctos.' : 'Pick your country so we can show the right stores, prices and currency from the start.')
-            : (_sEs ? 'Elige un estilo de búsqueda. Puedes cambiar los filtros cuando quieras.' : 'Choose a default shopping style. You can still change filters any time.');
+            : (_sEs ? 'Elige un perfil. Activamos los filtros automáticamente (puedes cambiarlos después).' : 'Choose a profile. We auto-activate filters (you can change them later).');
         nextBtn.textContent = isStepOne
             ? (_sEs ? 'Continuar' : 'Continue')
             : (_sEs ? 'Empezar a usar Lumu' : 'Start using Lumu');
@@ -4193,6 +4227,52 @@ async function initApp() {
             if (statusBadge) statusBadge.textContent = (plan === 'b2b' || plan === 'b2b_annual') ? 'B2B' : (isVIP ? 'VIP' : ui.profile.statusFree);
             if (searchesLeft) searchesLeft.textContent = remainingSearchesText;
 
+            // Cargar link de referido en la tarjeta del perfil
+            const referralInput = document.getElementById('referral-link-input');
+            const btnCopyReferral = document.getElementById('btn-copy-referral');
+            const btnShareReferral = document.getElementById('btn-share-referral');
+            if (referralInput && sb) {
+                try {
+                    const { data: sessionData } = await sb.auth.getSession();
+                    const token = sessionData?.session?.access_token || '';
+                    const rRes = await fetch('/api/referral/code', {
+                        headers: { 'Authorization': `Bearer ${token}` }
+                    });
+                    if (rRes.ok) {
+                        const rData = await rRes.json();
+                        const refUrl = rData.url || `${window.location.origin}/?ref=${rData.code}`;
+                        referralInput.value = refUrl;
+
+                        if (btnCopyReferral && !btnCopyReferral._refBound) {
+                            btnCopyReferral._refBound = true;
+                            btnCopyReferral.addEventListener('click', () => {
+                                navigator.clipboard?.writeText(refUrl).then(() => {
+                                    btnCopyReferral.textContent = '✓ Copiado';
+                                    setTimeout(() => { btnCopyReferral.textContent = 'Copiar'; }, 2000);
+                                });
+                            });
+                        }
+
+                        if (btnShareReferral && !btnShareReferral._refBound) {
+                            btnShareReferral._refBound = true;
+                            btnShareReferral.addEventListener('click', () => {
+                                const shareMsg = (currentRegion === 'US')
+                                    ? `I found the best prices with Lumu AI 🤖 — use my link and we both get 5 free searches: ${refUrl}`
+                                    : `Encontré los mejores precios con Lumu AI 🤖 — usa mi link y los dos ganamos 5 búsquedas gratis: ${refUrl}`;
+                                if (navigator.share) {
+                                    navigator.share({ title: 'Lumu AI', text: shareMsg, url: refUrl }).catch(() => {});
+                                } else {
+                                    const waUrl = `https://wa.me/?text=${encodeURIComponent(shareMsg)}`;
+                                    window.open(waUrl, '_blank');
+                                }
+                            });
+                        }
+                    }
+                } catch (refErr) {
+                    console.warn('[Referral] Error cargando código:', refErr.message);
+                }
+            }
+
             // NUEVO: Configurar toggle de personalización
             const personalizationToggle = document.getElementById('toggle-personalization');
             if (personalizationToggle) {
@@ -4522,6 +4602,25 @@ async function initApp() {
                             });
                         }, 500);
                         sessionStorage.setItem('lumu_confetti_fired', 'true');
+
+                        // Referral: canjear ?ref=CODE automáticamente si existe en la URL o sessionStorage
+                        const _refCode = new URLSearchParams(window.location.search).get('ref') || sessionStorage.getItem('lumu_pending_ref');
+                        if (_refCode) {
+                            fetch('/api/referral/claim', {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${session.access_token || ''}` },
+                                body: JSON.stringify({ code: _refCode })
+                            }).then(r => r.json()).then(d => {
+                                if (d?.success) {
+                                    _trackEvent('referral_claimed', { search_query: _refCode });
+                                    showGlobalFeedback(currentRegion === 'US'
+                                        ? `🎁 Referral applied! You and your friend each got ${d.bonus_new_user} extra searches.`
+                                        : `🎁 ¡Referido aplicado! Tú y tu amigo recibieron ${d.bonus_new_user} búsquedas extra.`, 'success');
+                                }
+                                sessionStorage.removeItem('lumu_pending_ref');
+                            }).catch(() => { sessionStorage.removeItem('lumu_pending_ref'); });
+                        }
+
                         fetch('/api/signup-bonus', {
                             method: 'POST',
                             headers: {
@@ -5152,6 +5251,9 @@ async function initApp() {
                     } catch (e) { /* session expired, continue anonymously */ }
                 }
 
+                // Cancelar nudge de inactividad si estaba activo
+                document.dispatchEvent(new Event('lumu:search-started'));
+
                 // Track search event for conversion analytics
                 const searchId = `search_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
                 const searchStartTime = Date.now(); // NUEVO: para personalización predictiva
@@ -5234,7 +5336,7 @@ async function initApp() {
                             return;
                         }
                         const isPaywall = data.paywall;
-                        const vipLink = stripePaymentLink || '#';
+                        const vipLink = stripePaymentLink || data.stripe_url || '#';
                         const vipUrl = vipLink !== '#' && currentUser ? `${vipLink}?client_reference_id=${encodeURIComponent(currentUser.id)}` : vipLink;
                         if (isPaywall) {
                             const rewardAvailable = typeof hasRealRewardedAdConfigured === 'function' && hasRealRewardedAdConfigured();
@@ -5328,6 +5430,11 @@ async function initApp() {
                     localStorage.setItem('lumu_searches_data', JSON.stringify(sgData));
                     // Fase 7: check achievements
                     if (typeof window.checkAchievementsOnSearch === 'function') window.checkAchievementsOnSearch();
+                    // Psicología de ventas: mostrar contador de búsquedas restantes con urgencia
+                    if (!currentUser) {
+                        const _vipLink = stripePaymentLink || '/precios.html';
+                        showSearchesRemainingBanner(sgData.count, 5, _vipLink);
+                    }
 
                     // Fase 6: Lumu Coins UI Update
                     if (data.lumu_coins_awarded === 1) {
@@ -7535,6 +7642,20 @@ async function initApp() {
 }; // End initApp
 
 
+// Referral: capturar ?ref=CODE antes del OAuth redirect y guardarlo en sessionStorage
+(function () {
+    try {
+        const _urlRef = new URLSearchParams(window.location.search).get('ref');
+        if (_urlRef) {
+            sessionStorage.setItem('lumu_pending_ref', _urlRef.trim().toUpperCase());
+            // Limpiar el parámetro de la URL sin recargar
+            const cleanUrl = new URL(window.location.href);
+            cleanUrl.searchParams.delete('ref');
+            window.history.replaceState({}, '', cleanUrl.toString());
+        }
+    } catch { /* silent */ }
+})();
+
 if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', () => {
         initApp();
@@ -9372,6 +9493,160 @@ window.startInteractiveTutorial = startInteractiveTutorial;
         });
         lastCheckedCount = count;
     };
+})();
+
+// Psicología de ventas: Banner de búsquedas restantes con urgencia (Escasez artificial)
+function showSearchesRemainingBanner(usedCount, dailyLimit, vipUrl) {
+    const remaining = Math.max(0, dailyLimit - usedCount);
+    const existingBanner = document.getElementById('searches-remaining-banner');
+    if (existingBanner) existingBanner.remove();
+
+    // Solo mostrar desde la 2da búsqueda en adelante
+    if (usedCount < 2) return;
+
+    const isES = (typeof currentRegion === 'undefined' || currentRegion !== 'US');
+    const banner = document.createElement('div');
+    banner.id = 'searches-remaining-banner';
+    banner.style.cssText = 'position:fixed;bottom:24px;left:50%;transform:translateX(-50%);z-index:9000;max-width:480px;width:calc(100% - 32px);animation:slideUpFadeIn 0.4s ease-out';
+
+    let bgClass, iconHTML, messageHTML, urgencyClass;
+    if (remaining >= 3) {
+        bgClass = 'bg-white border border-slate-200 shadow-xl';
+        iconHTML = '🔍';
+        urgencyClass = 'text-slate-700';
+        messageHTML = isES
+            ? `Te quedan <strong class="text-emerald-600">${remaining} búsquedas</strong> gratis hoy.`
+            : `You have <strong class="text-emerald-600">${remaining} searches</strong> left today.`;
+    } else if (remaining === 2) {
+        bgClass = 'bg-amber-50 border border-amber-200 shadow-xl';
+        iconHTML = '⚠️';
+        urgencyClass = 'text-amber-800';
+        messageHTML = isES
+            ? `Solo <strong class="text-amber-700">2 búsquedas</strong> gratis restantes hoy. Pásate a VIP para buscar sin límite.`
+            : `Only <strong class="text-amber-700">2 free searches</strong> left today. Go VIP for unlimited searches.`;
+    } else if (remaining === 1) {
+        bgClass = 'bg-orange-50 border border-orange-300 shadow-xl';
+        iconHTML = '🔥';
+        urgencyClass = 'text-orange-800';
+        messageHTML = isES
+            ? `¡<strong class="text-orange-700">Última búsqueda gratis</strong> del día! Mañana se reinicia o pásate a VIP.`
+            : `<strong class="text-orange-700">Last free search</strong> of the day! Resets tomorrow or go VIP.`;
+    } else {
+        bgClass = 'bg-rose-50 border border-rose-300 shadow-xl';
+        iconHTML = '🚫';
+        urgencyClass = 'text-rose-800';
+        messageHTML = isES
+            ? `<strong class="text-rose-700">Agotaste tus búsquedas de hoy.</strong> Crea cuenta gratis o pásate a VIP.`
+            : `<strong class="text-rose-700">Daily searches exhausted.</strong> Create free account or go VIP.`;
+    }
+
+    const vipSafeUrl = (vipUrl && vipUrl !== '#') ? vipUrl : '/precios.html';
+    const ctaLabel = isES ? 'Quiero VIP →' : 'Go VIP →';
+    const dismissLabel = isES ? '✕' : '✕';
+
+    banner.innerHTML = `
+        <div class="rounded-2xl ${bgClass} px-4 py-3 flex items-center gap-3">
+            <span class="text-xl flex-shrink-0">${iconHTML}</span>
+            <p class="${urgencyClass} text-sm font-medium flex-grow leading-snug">${messageHTML}</p>
+            <a href="${vipSafeUrl}" target="_blank"
+               class="flex-shrink-0 bg-emerald-500 hover:bg-emerald-600 text-white text-xs font-black px-3 py-1.5 rounded-xl transition-colors whitespace-nowrap shadow-sm">
+               ${ctaLabel}
+            </a>
+            <button onclick="this.closest('#searches-remaining-banner').remove()"
+                    class="flex-shrink-0 text-slate-400 hover:text-slate-600 font-bold text-base leading-none">
+                ${dismissLabel}
+            </button>
+        </div>
+    `;
+
+    // Agregar keyframe si no existe
+    if (!document.getElementById('slide-up-style')) {
+        const style = document.createElement('style');
+        style.id = 'slide-up-style';
+        style.textContent = '@keyframes slideUpFadeIn{from{opacity:0;transform:translate(-50%,20px)}to{opacity:1;transform:translate(-50%,0)}}';
+        document.head.appendChild(style);
+    }
+
+    document.body.appendChild(banner);
+
+    // Auto-dismiss después de 8 segundos
+    setTimeout(() => {
+        if (banner.parentNode) {
+            banner.style.animation = 'none';
+            banner.style.opacity = '0';
+            banner.style.transition = 'opacity 0.4s ease';
+            setTimeout(() => banner.remove(), 400);
+        }
+    }, 8000);
+}
+
+// Nudge de inactividad: aparece si el usuario lleva 90s sin buscar (solo anónimos)
+(function initInactivityNudge() {
+    const DELAY_MS = 90 * 1000;
+    const STORAGE_KEY = 'lumu_nudge_dismissed';
+
+    // No mostrar si ya buscó algo, ya lo cerró esta sesión, o ya es usuario logueado
+    if (sessionStorage.getItem(STORAGE_KEY)) return;
+    if (localStorage.getItem('lumu_searches_data')) {
+        try {
+            const d = JSON.parse(localStorage.getItem('lumu_searches_data'));
+            if ((d.count || 0) > 0) return;
+        } catch { /* silent */ }
+    }
+
+    let _nudgeTimer = null;
+    let _nudgeShown = false;
+
+    function showNudge() {
+        if (_nudgeShown || (typeof currentUser !== 'undefined' && currentUser)) return;
+        _nudgeShown = true;
+
+        const isES = (typeof currentRegion === 'undefined' || currentRegion !== 'US');
+        const nudge = document.createElement('div');
+        nudge.id = 'inactivity-nudge';
+        nudge.style.cssText = 'position:fixed;bottom:24px;left:50%;transform:translateX(-50%);z-index:8900;max-width:420px;width:calc(100% - 32px);animation:slideUpFadeIn 0.4s ease-out';
+
+        nudge.innerHTML = `
+            <div class="rounded-2xl bg-slate-900 text-white px-4 py-3 flex items-center gap-3 shadow-2xl">
+                <span class="text-xl flex-shrink-0">🤖</span>
+                <p class="text-sm font-medium flex-grow leading-snug">
+                    ${isES
+                        ? '<strong class="text-emerald-400">¿Buscando algo?</strong> Escríbelo y encontramos el precio más bajo en segundos.'
+                        : '<strong class="text-emerald-400">Looking for something?</strong> Type it and we\'ll find the best price in seconds.'
+                    }
+                </p>
+                <button id="nudge-dismiss" class="flex-shrink-0 text-slate-400 hover:text-white font-bold text-base leading-none px-1">✕</button>
+            </div>`;
+
+        document.body.appendChild(nudge);
+
+        // Click en dismiss
+        document.getElementById('nudge-dismiss')?.addEventListener('click', () => {
+            nudge.remove();
+            sessionStorage.setItem(STORAGE_KEY, '1');
+        });
+
+        // Auto-dismiss tras 12s
+        setTimeout(() => { if (nudge.parentNode) nudge.remove(); }, 12000);
+    }
+
+    function cancelNudge() {
+        if (_nudgeTimer) { clearTimeout(_nudgeTimer); _nudgeTimer = null; }
+        const existing = document.getElementById('inactivity-nudge');
+        if (existing) existing.remove();
+        sessionStorage.setItem(STORAGE_KEY, '1');
+    }
+
+    // Arrancar timer al cargar
+    _nudgeTimer = setTimeout(showNudge, DELAY_MS);
+
+    // Cancelar si el usuario hace focus en el input de búsqueda o escribe algo
+    document.addEventListener('focusin', (e) => {
+        if (e.target && e.target.id === 'search-input') cancelNudge();
+    });
+
+    // Cancelar si ejecuta una búsqueda
+    document.addEventListener('lumu:search-started', cancelNudge, { once: true });
 })();
 
 // UX-3: Global keyboard shortcuts

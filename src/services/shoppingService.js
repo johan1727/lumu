@@ -924,13 +924,13 @@ exports.searchGoogleShopping = async (query, radius, lat, lng, intentType, abort
     const restrictToPreferredStore = searchPolicy.preferredStoreKeys.length > 0 && searchPolicy.preferredStoreMode === 'exclusive';
     const preferredIncludesMeli = restrictToPreferredStore && searchPolicy.preferredStoreKeys.some(k => /mercado.?libre|meli/i.test(k));
     const preferredIncludesAmazon = restrictToPreferredStore && searchPolicy.preferredStoreKeys.some(k => /amazon/i.test(k));
-    const shouldQueryBroadWeb = !restrictToPreferredStore && !isSpecificProduct && shouldRunBroadWebQuery(webQuery, {
+    const shouldQueryBroadWeb = isVipSearch && !restrictToPreferredStore && !isSpecificProduct && shouldRunBroadWebQuery(webQuery, {
         productCategory,
         preferredStoreKeys,
         isBroadExploration: isBroadExploration && !['smartphone', 'laptop', 'audio', 'tv'].includes(String(productCategory || '').toLowerCase()),
         alternativeQueries
     });
-    const shouldQueryOfficialWeb = !restrictToPreferredStore && !isSpecificProduct && (isVipSearch || shouldRunOfficialWebQuery(webQuery, brandOfficialQuery, countryCode));
+    const shouldQueryOfficialWeb = !restrictToPreferredStore && !isSpecificProduct && deepSearchEnabled && shouldRunOfficialWebQuery(webQuery, brandOfficialQuery, countryCode);
     const shouldQueryMlPriority = (!restrictToPreferredStore && !isSpecificProduct && (isVipSearch || searchPolicy.preferredStoreKeys.length === 0)) || preferredIncludesMeli;
     const shouldRunDirectScrapers = !isService
         && intentType !== 'mayoreo_perecedero'
@@ -1120,7 +1120,7 @@ exports.searchGoogleShopping = async (query, radius, lat, lng, intentType, abort
                 signal: abortSignal
             }, serperRetries).catch(err => { console.error('Error Serper MercadoLibre Priority:', err.message); return null; });
 
-        const serperAltQueryCount = isSpecificProduct ? 0 : (deepSearchEnabled ? 6 : (isVipSearch ? 5 : 2));
+        const serperAltQueryCount = isSpecificProduct ? 0 : (deepSearchEnabled ? 5 : (isVipSearch ? 2 : 0));
         const plannedAltShoppingCalls = Math.min((alternativeQueries || []).filter(Boolean).length, serperAltQueryCount);
         const expectedSerperCallCount = [
             1,

@@ -6,6 +6,102 @@
 
 ## 📋 Historial de Sesiones
 
+### 2026-05-03 - Psicología de Ventas Fase 1 — Conversión a VIP/B2B
+
+**Objetivo**: Aumentar conversión a planes de pago aplicando 7 técnicas de psicología de ventas.
+
+**Archivos modificados**:
+- `public/index.html` — Hero copy + franja de tiendas + Pricing CTA rediseñado
+- `public/precios.html` — Reordenamiento de tarjetas + testimonios + copy mejorado
+- `public/app.js` — Banner de urgencia de búsquedas restantes
+
+**Cambios implementados**:
+
+**`index.html` — Hero (Reciprocidad + Autoridad Prestada)**
+- ✅ Título reformulado: *"Te regalamos el precio más bajo. En segundos, en 10+ tiendas."*
+- ✅ Badge: *"Gratis para siempre — sin tarjeta"* (elimina miedo al compromiso)
+- ✅ Franja de logos: Amazon · Mercado Libre · Walmart · Liverpool · Coppel · Best Buy · Sam's
+- ✅ Subtítulo actualizado con valor concreto: "para que nunca pagues de más"
+
+**`index.html` — Pricing CTA (Ancla Cognitiva + Contraste Perceptual)**
+- ✅ Muestra `$199 B2B` primero → `$39 VIP` parece accesible por contraste
+- ✅ Grid Free (negativo/gris) vs VIP (positivo/verde) — contraste visual directo
+- ✅ Social proof: "+1,200 usuarios ya comparan con VIP"
+- ✅ Anti-objeción: "Sin compromisos · Cancela cuando quieras · Pago seguro con Stripe"
+- ✅ CTA principal: "Quiero VIP por $39/mes →" (orientado a acción)
+
+**`precios.html` — Estructura (Ancla + Prueba Social + Escasez)**
+- ✅ Tarjetas reordenadas: B2B $199 → VIP $39 (centro, destacado) → Free (atenuado, al final)
+- ✅ VIP tiene botón CTA sólido verde con gradiente (antes era solo borde)
+- ✅ Precio tachado en VIP: "Valor de mercado: ~$120 MXN/mes" — ancla de referencia
+- ✅ 3 micro-testimonios con nombre, ciudad, 5 estrellas bajo las tarjetas
+- ✅ Hero reformulado con ancla cognitiva y social proof arriba del fold
+
+**`app.js` — Banner de Escasez (Urgencia Real)**
+- ✅ Función `showSearchesRemainingBanner(usedCount, dailyLimit, vipUrl)` al final del archivo
+- ✅ Aparece después de la 2ª búsqueda exitosa para usuarios sin cuenta (anónimos)
+- ✅ 4 niveles de urgencia progresiva: blanco → amarillo → naranja → rojo
+- ✅ CTA embebido: "Quiero VIP →" apuntando a `stripePaymentLink || '/precios.html'`
+- ✅ Auto-dismiss en 8 segundos, botón ✕ para cerrar manualmente
+- ✅ Bilingual: ES/EN según `currentRegion`
+
+**Técnicas aplicadas** (del framework de 7 técnicas):
+1. ✅ Reciprocidad — "Te regalamos..." en hero
+2. ✅ Ancla cognitiva — B2B $199 hace que $39 parezca barato
+3. ✅ Contraste perceptual — Free (negativo) vs VIP (positivo)
+4. ✅ Prueba social — testimonios + conteo de usuarios
+5. ✅ Autoridad prestada — logos de tiendas reconocidas
+6. ✅ Escasez artificial — contador de búsquedas restantes con urgencia
+7. ⏳ Compromiso y consistencia — pendiente (micro-compromiso guardar búsqueda)
+
+**KPIs a monitorear post-deploy**:
+- CTR del botón "Quiero VIP" en pricing section (GA4)
+- Tasa de conversión free → VIP en /precios.html
+- Bounce rate de la página de precios
+- % usuarios que hacen click en el banner de urgencia
+
+**Pendiente (Fase 2-3)**:
+- [ ] Modal upgrade con exit-intent + contraste de precio
+- [ ] Referral 5+5 (da 5 búsquedas, gana 5)
+- [ ] Micro-compromiso: guardar búsqueda antes del registro completo
+- [ ] Contador dinámico de usuarios activos en resultados
+
+**Tags**: `#ventas` `#conversion` `#psicologia-ventas` `#pricing` `#ux` `#feature` `#2026-05-03`
+
+---
+
+### 2026-05-03 - Sistema de Referidos 5+5 + Bonus VIP
+
+**Objetivo**: Programa de referidos completo — compromiso + consistencia + reciprocidad.
+
+**Archivos modificados**:
+- `src/controllers/searchController.js` — Endpoints `getReferralCode` y `claimReferral`
+- `src/controllers/stripeController.js` — Bonus VIP al referidor cuando amigo paga
+- `src/routes/api.js` — Rutas `GET /api/referral/code` y `POST /api/referral/claim`
+- `public/app.js` — Captura `?ref=CODE`, auto-canje al registrarse, tarjeta UI en perfil
+- `public/index.html` — Tarjeta de referidos en modal de perfil
+- `migrations/015_referral_system.sql` — Columnas `referral_code`, `referred_by`, `referral_vip_rewarded`
+
+**Mecánica implementada**:
+- **5+5 al registrarse**: nuevo usuario usa `?ref=CODE` → ambos reciben 5 bonus en `rate_limits`
+- **40 bonus VIP**: cuando el nuevo referido paga VIP → webhook Stripe detecta `referred_by` → da 40 créditos extra al referidor (equivale a 1 mes gratis)
+- **Anti-abuse**: solo cuentas nuevas (< 7 días), 1 canje por usuario (`referral-used:user:{id}` en rate_limits), `referral_vip_rewarded` previene duplicados del bonus VIP
+- **UI**: tarjeta en modal de perfil con input copiable + botón "Compartir por WhatsApp / Redes" (usa `navigator.share` o fallback a `wa.me`)
+- **Persistencia OAuth**: `?ref=CODE` se guarda en `sessionStorage` antes del redirect OAuth, se recupera al volver
+
+**Patrón de bonus usado** (consistente con sistema existente):
+```
+bonus:user:{userId}     → créditos de búsqueda extra
+referral-used:user:{id} → idempotencia de canje
+```
+
+**⚠️ Acción requerida**:
+- Ejecutar `migrations/015_referral_system.sql` en Supabase SQL Editor
+
+**Tags**: `#ventas` `#referidos` `#feature` `#supabase` `#stripe` `#2026-05-03`
+
+---
+
 ### 2026-04-10 - SEO Completo Fases 3-4 Implementadas
 **Resumen**: Implementadas Fases 3 (Estructura) y 4 (Schema.org) del plan SEO completo.
 
@@ -288,5 +384,54 @@ Busca rápido usando estos tags:
 
 ---
 
+### 2026-05-03 — Auditoría Serper + Límites + Security Fixes + Afiliados
+
+**Objetivo**: Reducir gasto de créditos Serper, verificar límites de plan, fixear alertas de seguridad Supabase, y limpiar warnings de arranque.
+
+**Archivos modificados**:
+- `src/services/shoppingService.js` — Reducir llamadas Serper: free ~4 (antes ~7), VIP ~6 (antes ~10)
+- `src/controllers/searchController.js` — Incluir `stripe_url` en respuestas 402 paywall
+- `public/app.js` — Usar `data.stripe_url` como fallback para botón VIP en paywall
+- `migrations/016_security_fixes.sql` — Fix RLS en `blocked_ips`, convertir vistas a `security_invoker`, restringir a `service_role`
+- `public/app.js` — Nudge de inactividad 90s (solo anónimos, no intrusivo)
+- `src/utils/affiliateManager.js` — Eliminar warnings de `LIVERPOOL/WALMART/COPPEL_AFFILIATE_ID (pending)`
+
+**Cambios clave**:
+- `broadWebPromise` → solo `isVipSearch`
+- `officialWebPromise` → solo `deepSearchEnabled`
+- `serperAltQueryCount` → free=0, VIP=2, deep=5
+- Paywall 402 ahora incluye `stripe_url` directo del env → frontend siempre tiene link VIP funcional
+
+**⚠️ Acción requerida**:
+- Ejecutar `migrations/016_security_fixes.sql` en Supabase SQL Editor ✅ (ya ejecutado)
+
+**Tags**: `#serper` `#cost-optimization` `#security` `#paywall` `#referral` `#2026-05-03`
+
+---
+
+---
+
+### 2026-05-03 — Mejoras Onboarding + Hero Badge Honesto
+
+**Objetivo**: Hacer la encuesta de onboarding más útil (con impacto real en filtros) y reemplazar el badge "gratis para siempre" por algo más honesto.
+
+**Archivos modificados**:
+- `public/app.js` — Rediseñar onboarding paso 2:
+  - 3 opciones con efecto REAL: `deal_hunter`, `safe_buyer`, `fast_searcher`
+  - Cada opción activa filtros específicos automáticamente
+  - `deal_hunter` → "Solo oferta real" + orden por precio
+  - `safe_buyer` → "Solo seguras" + "Marketplaces conocidos"
+  - `fast_searcher` → default, sin filtros extra
+- `public/index.html` — Badge cambiado de "Gratis para siempre — sin tarjeta" a "Empieza gratis — 10 búsquedas/mes"
+
+**Cambios clave**:
+- Onboarding ahora tiene impacto perceptible en la experiencia de búsqueda
+- Badge transparente sobre el límite real del plan gratuito
+- Retrocompatible: usuarios previos no se ven afectados
+
+**Tags**: `#onboarding` `#ux` `#transparency` `#hero-badge` `#2026-05-03`
+
+---
+
 *Template creado: 2026-04-09*
-*Última actualización: 2026-04-09 - Integración de UI/UX best practices de investigación*
+*Última actualización: 2026-05-03 — Mejoras Onboarding + Hero Badge Honesto*

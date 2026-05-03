@@ -195,6 +195,10 @@ router.post('/stripe/create-checkout-session', authMiddleware, requireAuth, requ
 router.post('/claim-reward', authMiddleware, requireAuth, requireFrontendRequest, searchController.claimReward);
 router.post('/signup-bonus', authMiddleware, requireFrontendRequest, searchController.claimSignupBonus);
 
+// Referral Program: 5+5 búsquedas, 1 mes VIP si el amigo paga
+router.get('/referral/code', authMiddleware, requireAuth, searchController.getReferralCode);
+router.post('/referral/claim', authMiddleware, requireAuth, requireFrontendRequest, searchController.claimReferral);
+
 // GET /api/config
 const regionConfigService = require('../services/regionConfigService');
 router.get('/config', (req, res, next) => {
