@@ -1730,7 +1730,7 @@ exports.searchProduct = async (req, res) => {
                             return res.status(402).json({
                                 error: errorMsg,
                                 paywall: !profile.is_premium && !hasTempVIP,
-                                upgrade_required: !!profile.is_premium && !hasTempVIP,
+                                upgrade_required: !profile.is_premium && !hasTempVIP,
                                 stripe_url: process.env.STRIPE_PAYMENT_LINK || null
                             });
                         }
@@ -2971,18 +2971,19 @@ exports.bulkSearch = async (req, res) => {
             .eq('user_id', userId)
             .gte('created_at', queryDate.toISOString());
 
-        let usageWarning = null;
-        if (!error) {
-            if (count >= reqLimit) {
-                return res.status(402).json({ error: `Límite mensual B2B alcanzado(${reqLimit} búsquedas).Por favor espera a tu siguiente ciclo para más lotes.`, upgrade_required: false });
-            }
-            if (count >= reqLimit * 0.9) {
-                usageWarning = `âš ï¸ Límite mensual al ${Math.floor((count / reqLimit) * 100)}% (${count}/${reqLimit}).`;
-            }
-        }
-
         // Hard limit: max 5 queries per request (Vercel 60s timeout)
         const queriesToProcess = queries.slice(0, 5);
+
+        let usageWarning = null;
+        if (!error) {
+            if (count + queriesToProcess.length > reqLimit) {
+                const remaining = Math.max(0, reqLimit - count);
+                return res.status(402).json({ error: `Límite mensual B2B alcanzado. Te quedan ${remaining} búsqueda(s) disponibles (${count}/${reqLimit}).`, upgrade_required: false });
+            }
+            if (count >= reqLimit * 0.9) {
+                usageWarning = `⚠️ Límite mensual al ${Math.floor((count / reqLimit) * 100)}% (${count}/${reqLimit}).`;
+            }
+        }
 
         console.log(`[B2B BULK SEARCH] Procesando lote de ${queriesToProcess.length} artículos en paralelo...`);
 

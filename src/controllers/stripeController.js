@@ -297,14 +297,16 @@ exports.handleWebhook = async (req, res) => {
                         const alreadyRewarded = newSubProfile?.referral_vip_rewarded;
                         if (referrerId && !alreadyRewarded) {
                             const VIP_BONUS_MONTH = 40; // Equivale a 1 mes del plan VIP
-                            const bonusEntries = Array.from({ length: VIP_BONUS_MONTH }, () => ({
-                                ip: `bonus:user:${referrerId}`,
-                                created_at: new Date().toISOString()
-                            }));
-                            await supabase.from('rate_limits').insert(bonusEntries);
-                            // Marcar que ya se otorgó la recompensa (evita duplicados)
-                            await supabase.from('profiles').update({ referral_vip_rewarded: true }).eq('id', userId);
-                            console.log(`[Referral] 🎁 Referidor ${referrerId} recibió +${VIP_BONUS_MONTH} búsquedas por conversión VIP de ${userId}`);
+                            // Marcar primero para evitar duplicados si el webhook se reintenta
+                            const { error: rewardErr } = await supabase.from('profiles').update({ referral_vip_rewarded: true }).eq('id', userId);
+                            if (!rewardErr) {
+                                const bonusEntries = Array.from({ length: VIP_BONUS_MONTH }, () => ({
+                                    ip: `bonus:user:${referrerId}`,
+                                    created_at: new Date().toISOString()
+                                }));
+                                await supabase.from('rate_limits').insert(bonusEntries);
+                                console.log(`[Referral] 🎁 Referidor ${referrerId} recibió +${VIP_BONUS_MONTH} búsquedas por conversión VIP de ${userId}`);
+                            }
                         }
                     } catch (refErr) {
                         console.warn('[Referral] Error otorgando bonus VIP al referidor:', refErr.message);

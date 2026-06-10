@@ -178,6 +178,11 @@ const REGION_OVERRIDE_KEY = 'lumu_region_override';
 const ONBOARDING_V3_KEY = 'lumu_onboarding_v3';
 const ONBOARDING_PREF_KEY = 'lumu_onboarding_preference';
 
+function safeParseLocal(key, fallback) {
+    try { return JSON.parse(localStorage.getItem(key)) ?? fallback; }
+    catch { localStorage.removeItem(key); return fallback; }
+}
+
 const STORE_FOCUS_OPTIONS = {
     MX: [
         { key: 'amazon', label: 'Amazon' },
@@ -1261,7 +1266,7 @@ const _buildProductTrackingPayload = (product = {}, extra = {}) => ({
     product_title: product.titulo || '',
     store: product.tienda || '',
     url: product.urlMonetizada || product.urlOriginal || '',
-    price: Number(product.precio || 0) || undefined,
+    price: Number.isFinite(Number(product.precio)) ? Number(product.precio) : undefined,
     result_source: product.resultSource || undefined,
     store_tier: Number(product.storeTier || 0) || undefined,
     best_buy_score: typeof product.bestBuyScore === 'number' ? product.bestBuyScore : undefined,
@@ -1859,7 +1864,7 @@ function initWelcomeOnboarding() {
 }
 
 function getRecentHistoryEntries(limit = 4) {
-    const rawEntries = JSON.parse(localStorage.getItem('lumu_local_history') || '[]');
+    const rawEntries = safeParseLocal('lumu_local_history', []);
     return rawEntries
         .map((entry) => {
             if (typeof entry === 'string') {
@@ -2549,7 +2554,7 @@ function getSearchButtonCancelHTML() {
 
 function getSearchSnapshots() {
     try {
-        return JSON.parse(localStorage.getItem(SEARCH_SNAPSHOTS_KEY) || '{}');
+        return safeParseLocal(SEARCH_SNAPSHOTS_KEY, {});
     } catch (error) {
         console.warn('Could not parse search snapshots:', error);
         return {};
@@ -3686,7 +3691,7 @@ async function initApp() {
                     if (radius !== 'global' && radius !== 'local_only') {
                         if (navigator.geolocation && userLatInput && userLngInput) {
                             // Use cached location if available (less than 10 min old)
-                            const cachedLoc = JSON.parse(localStorage.getItem('lumu_geolocation') || 'null');
+                            const cachedLoc = safeParseLocal('lumu_geolocation', null);
                             if (cachedLoc && (Date.now() - cachedLoc.ts) < 600000) {
                                 userLatInput.value = cachedLoc.lat;
                                 userLngInput.value = cachedLoc.lng;
@@ -4187,7 +4192,7 @@ async function initApp() {
             const statusBadge = document.getElementById('profile-status-badge');
             const searchesLeft = document.getElementById('profile-searches-left');
 
-            if (profileName) profileName.textContent = user.user_metadata?.full_name || user.email.split('@')[0];
+            if (profileName) profileName.textContent = user.user_metadata?.full_name || (user.email || '').split('@')[0] || 'Usuario';
             if (profileEmail) profileEmail.textContent = user.email;
 
             const ui = getRegionUICopy();
@@ -4360,7 +4365,7 @@ async function initApp() {
                 // Usuario logueado
                 const rawAvatar = user.user_metadata?.avatar_url || '';
                 const safeAvatar = rawAvatar.startsWith('http') ? sanitize(rawAvatar) : 'https://ui-avatars.com/api/?name=' + encodeURIComponent(user.email || 'U') + '&background=10B981&color=fff';
-                const safeName = sanitize(user.user_metadata?.full_name || user.email.split('@')[0]);
+                const safeName = sanitize(user.user_metadata?.full_name || (user.email || '').split('@')[0] || 'Usuario');
                 authContainer.innerHTML = `
                 <div class="relative group cursor-pointer flex items-center gap-2 bg-white px-3 py-1.5 rounded-full border border-slate-200 shadow-sm">
                     <img src="${safeAvatar}" alt="Avatar" class="w-6 h-6 rounded-full">
@@ -4485,7 +4490,7 @@ async function initApp() {
                 if (user) {
                     const rawAvatar = user.user_metadata?.avatar_url || '';
                     const safeAvatar = rawAvatar.startsWith('http') ? sanitize(rawAvatar) : 'https://ui-avatars.com/api/?name=' + encodeURIComponent(user.email || 'U') + '&background=10B981&color=fff';
-                    const safeName = sanitize(user.user_metadata?.full_name || user.email.split('@')[0]);
+                    const safeName = sanitize(user.user_metadata?.full_name || (user.email || '').split('@')[0] || 'Usuario');
                     mobileAuthContainer.innerHTML = `
                         <div class="flex items-center gap-3 mb-3">
                             <img src="${safeAvatar}" alt="Avatar" class="w-10 h-10 rounded-full border-2 border-emerald-400">
@@ -4767,7 +4772,7 @@ async function initApp() {
             };
 
             if (!supabaseClient || !currentUser) {
-                const localHist = JSON.parse(localStorage.getItem('lumu_local_history') || '[]');
+                const localHist = safeParseLocal('lumu_local_history', []);
                 if (localHist.length === 0) {
                     historyList.innerHTML = `<div class="text-center py-6 text-slate-400 font-medium text-sm">${currentRegion === 'US' ? 'No recent searches.' : 'No hay búsquedas recientes.'}</div>`;
                     return;
@@ -4910,7 +4915,7 @@ async function initApp() {
                 
                 if (!val || val.length < 2) {
                     // Show recent searches when input is empty/short
-                    const recentSearches = JSON.parse(localStorage.getItem('lumu_local_history') || '[]').slice(0, 5);
+                    const recentSearches = safeParseLocal('lumu_local_history', []).slice(0, 5);
                     if (recentSearches.length > 0 && val.length === 0) {
                         renderAutocomplete(recentSearches, true);
                     } else {
@@ -5012,7 +5017,7 @@ async function initApp() {
             searchInput.addEventListener('focus', function () {
                 const val = this.value.trim();
                 if (!val || val.length < 2) {
-                    const recentSearches = JSON.parse(localStorage.getItem('lumu_local_history') || '[]').slice(0, 5);
+                    const recentSearches = safeParseLocal('lumu_local_history', []).slice(0, 5);
                     if (recentSearches.length > 0) {
                         renderAutocomplete(recentSearches, true);
                     }
@@ -5040,7 +5045,7 @@ async function initApp() {
                 // Freemium logic: Check local storage for free limits (Daily Reset)
                 const maxFreeSearches = 5;
 
-                let searchData = JSON.parse(localStorage.getItem('lumu_searches_data') || '{"count": 0, "date": null}');
+                let searchData = safeParseLocal('lumu_searches_data', { count: 0, date: null });
                 const todayStr = new Date().toDateString();
 
                 if (searchData.date !== todayStr) {
@@ -5425,7 +5430,7 @@ async function initApp() {
                         search_query: finalQuery
                     };
                     // Increment search count after successful result
-                    let sgData = JSON.parse(localStorage.getItem('lumu_searches_data') || '{"count": 0, "date": ""}');
+                    let sgData = safeParseLocal('lumu_searches_data', { count: 0, date: '' });
                     sgData.count = (sgData.count || 0) + 1;
                     localStorage.setItem('lumu_searches_data', JSON.stringify(sgData));
                     // Fase 7: check achievements
@@ -5515,7 +5520,7 @@ async function initApp() {
                         // SEC-2 FIX: Backend already logs authenticated searches — only save locally for anonymous users
                         if (!supabaseClient || !currentUser) {
                             // Guardar en LocalStorage
-                            let localHist = JSON.parse(localStorage.getItem('lumu_local_history') || '[]');
+                            let localHist = safeParseLocal('lumu_local_history', []);
                             localHist = [busqueda, ...localHist.filter(q => (typeof q === 'string' ? q : q?.query) !== busqueda)].slice(0, 50);
                             localStorage.setItem('lumu_local_history', JSON.stringify(localHist));
                         }
@@ -6725,7 +6730,7 @@ async function initApp() {
             if (resultsSummaryEl) resultsSummaryEl.textContent = `${renderableProducts.length} ${getRegionConfig().resultsFound}`;
             syncBestOptionButton(renderableProducts);
 
-            const localSearchData = JSON.parse(localStorage.getItem('lumu_searches_data') || '{"count":0}');
+            const localSearchData = safeParseLocal('lumu_searches_data', { count: 0 });
             updateCoinsProgress(localSearchData.count || 0);
 
             renderProductCards(renderableProducts, userFavorites);
@@ -7039,27 +7044,30 @@ async function initApp() {
                             : localizeCouponDetails(product.couponDetails || (isUS ? 'COUPON AVAILABLE' : 'CUPÓN DISPONIBLE'));
                         const isPremium = window.currentUser && (window.currentUser.is_premium || window.currentUser.plan === 'personal_vip' || window.currentUser.plan === 'b2b');
                     
+                        const safeCode = sanitize(code);
+                        const safeDiscountText = sanitize(discountText);
                         if (isPremium) {
+                            const copyLabel = isUS ? 'Copy' : 'Copiar';
                             couponHtml = `
                             <div class="mt-2 w-full p-2.5 bg-gradient-to-r from-emerald-50 to-teal-50 border border-emerald-100 rounded-xl relative overflow-hidden">
                                 <div class="absolute inset-0 border-2 border-dashed border-emerald-200/50 rounded-xl pointer-events-none"></div>
                                 <div class="flex items-center justify-between relative z-10">
                                     <div class="flex flex-col">
-                                        <span class="text-[9px] font-black text-emerald-800 uppercase tracking-widest leading-none mb-1">${discountText}</span>
-                                        <span class="text-[13px] font-black text-emerald-600 font-mono tracking-tighter leading-none">${code}</span>
+                                        <span class="text-[9px] font-black text-emerald-800 uppercase tracking-widest leading-none mb-1">${safeDiscountText}</span>
+                                        <span class="text-[13px] font-black text-emerald-600 font-mono tracking-tighter leading-none">${safeCode}</span>
                                     </div>
-                                    <button onclick="event.preventDefault(); event.stopPropagation(); navigator.clipboard.writeText('${code}'); const orig=this.innerHTML; this.innerHTML='${isUS ? 'Copied!' : '¡Copiado!'}'; setTimeout(()=>this.innerHTML=orig, 2000);" class="text-[10px] font-bold bg-white text-emerald-600 hover:bg-emerald-600 hover:text-white px-2 py-1 rounded-lg shadow-sm transition-all border border-emerald-100 z-20 cursor-pointer">${isUS ? 'Copy' : 'Copiar'}</button>
+                                    <button data-coupon-code="${safeCode}" data-copy-label="${copyLabel}" onclick="event.preventDefault(); event.stopPropagation(); navigator.clipboard.writeText(this.dataset.couponCode); const orig=this.innerHTML; this.innerHTML=(this.dataset.copyLabel==='Copy'?'Copied!':'¡Copiado!'); setTimeout(()=>this.innerHTML=orig, 2000);" class="text-[10px] font-bold bg-white text-emerald-600 hover:bg-emerald-600 hover:text-white px-2 py-1 rounded-lg shadow-sm transition-all border border-emerald-100 z-20 cursor-pointer">${copyLabel}</button>
                                 </div>
                                 ${product.couponDisclaimer ? `<p class="mt-2 text-[10px] leading-relaxed text-slate-500">${sanitize(product.couponDisclaimer)}</p>` : ''}
                                 ${product.couponSourceUrl ? `<a href="${sanitize(product.couponSourceUrl)}" target="_blank" rel="noopener noreferrer" onclick="event.stopPropagation();" class="mt-1 inline-flex text-[10px] font-bold text-emerald-700 hover:text-emerald-800">${isUS ? 'View terms →' : 'Ver términos →'}</a>` : ''}
                             </div>`;
                         } else {
                             couponHtml = `
-                            <div class="mt-2 w-full p-2.5 bg-gradient-to-r from-amber-50 to-orange-50 border border-amber-200 rounded-xl relative overflow-hidden group/upsell cursor-pointer hover:shadow-sm" onclick="event.preventDefault(); event.stopPropagation(); const btn = document.getElementById('stripe-checkout-btn') || document.querySelector('a[href*=\\'buy.stripe.com\\']'); if(btn) btn.click(); else alert('${isUS ? 'Go PRO to view coupons' : 'Hazte PRO para ver cupones'}')">
+                            <div class="mt-2 w-full p-2.5 bg-gradient-to-r from-amber-50 to-orange-50 border border-amber-200 rounded-xl relative overflow-hidden group/upsell cursor-pointer hover:shadow-sm" onclick="event.preventDefault(); event.stopPropagation(); const btn = document.getElementById('stripe-checkout-btn') || document.querySelector('a[href*=\'buy.stripe.com\']'); if(btn) btn.click();">
                                 <div class="absolute inset-0 border-2 border-dashed border-amber-300/50 rounded-xl pointer-events-none"></div>
                                 <div class="flex items-center justify-between relative z-10">
                                     <div class="flex flex-col w-full relative">
-                                        <span class="text-[9px] font-black text-amber-800 uppercase tracking-widest leading-none mb-1 flex items-center justify-between w-full"><span>${discountText}</span> <span class="bg-amber-100 px-1 rounded">⭐ PRO</span></span>
+                                        <span class="text-[9px] font-black text-amber-800 uppercase tracking-widest leading-none mb-1 flex items-center justify-between w-full"><span>${safeDiscountText}</span> <span class="bg-amber-100 px-1 rounded">⭐ PRO</span></span>
                                         <span class="text-[13px] font-black text-slate-800 font-mono tracking-tighter leading-none blur-[4px] select-none text-center">XXXXXXXX</span>
                                         <div class="absolute inset-0 flex items-center justify-center opacity-0 group-hover/upsell:opacity-100 transition-opacity drop-shadow-md">
                                             <span class="bg-gradient-to-r from-amber-500 to-orange-500 text-white text-[10px] font-bold px-3 py-1.5 rounded-full shadow-lg flex items-center gap-1">🔒 ${isUS ? 'Unlock' : 'Desbloquear'}</span>
@@ -7842,7 +7850,7 @@ let _alertsCache = [];
 
 // Fallback to localStorage for anonymous users
 function getLocalAlerts() {
-    return JSON.parse(localStorage.getItem('lumu_alerts') || '[]');
+    return safeParseLocal('lumu_alerts', []);
 }
 function saveLocalAlerts(alerts) {
     localStorage.setItem('lumu_alerts', JSON.stringify(alerts));
@@ -8703,20 +8711,18 @@ async function processB2bQueries() {
 
         window.lastB2bData = data.resultados;
 
-        tbody.innerHTML = '';
-        data.resultados.forEach(res => {
+        const rows = data.resultados.map(res => {
             if (!res.encontrado && !res.mejor_oferta) {
-                tbody.innerHTML += `
+                return `
             <tr class="bg-white hover:bg-slate-50 border-b">
                         <td class="px-4 py-3 font-medium text-slate-900">${sanitize(res.query_original)}</td>
                         <td class="px-4 py-3 text-slate-400 italic">${currentRegion === 'US' ? 'Not found' : 'No encontrado'}</td>
                         <td class="px-4 py-3">-</td>
                         <td class="px-4 py-3 text-center">-</td>
-                    </tr>
-            `;
+                    </tr>`;
             } else {
                 const priceFormatted = formatCurrencyByRegion(res.mejor_oferta.precio || 0);
-                tbody.innerHTML += `
+                return `
             <tr class="bg-white hover:bg-slate-50 border-b">
                         <td class="px-4 py-3 font-medium text-slate-900 truncate max-w-[200px]" title="${sanitize(res.query_original)}">${sanitize(res.query_original)}</td>
                         <td class="px-4 py-3 font-bold text-emerald-600">${priceFormatted}</td>
@@ -8728,10 +8734,10 @@ async function processB2bQueries() {
                                 ${currentRegion === 'US' ? 'Buy' : 'Comprar'} <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"></path></svg>
                             </a>
                         </td>
-                    </tr>
-            `;
+                    </tr>`;
             }
         });
+        tbody.innerHTML = rows.join('');
 
         if (data.resultados.length > 0) {
             btnExport.disabled = false;
@@ -9346,7 +9352,7 @@ window.startInteractiveTutorial = startInteractiveTutorial;
                         </div>
                         <div class="flex items-center justify-between p-4 bg-slate-50 rounded-2xl border border-slate-100">
                              <span class="text-slate-600 font-bold">Alertas activas</span>
-                             <span class="text-blue-600 font-black">${JSON.parse(localStorage.getItem('lumu_alerts') || '[]').length}</span>
+                             <span class="text-blue-600 font-black">${safeParseLocal('lumu_alerts', []).length}</span>
                         </div>
                     </div>
                     
@@ -9386,7 +9392,7 @@ window.startInteractiveTutorial = startInteractiveTutorial;
 
     yesBtn?.addEventListener('click', () => {
         // Mark as bought in localStorage
-        const bought = JSON.parse(localStorage.getItem('lumu_bought') || '[]');
+        const bought = safeParseLocal('lumu_bought', []);
         if (lastClickedUrl && !bought.includes(lastClickedUrl)) {
             bought.unshift(lastClickedUrl);
             localStorage.setItem('lumu_bought', JSON.stringify(bought.slice(0, 100)));
