@@ -1,4 +1,5 @@
 const supabase = require('../config/supabase');
+const profileCache = require('../utils/profileCache');
 
 const MAX_ALERTS_FREE = 3;
 const MAX_ALERTS_VIP = 50;
@@ -46,7 +47,7 @@ exports.createAlert = async (req, res) => {
 
     try {
         // Check plan limits
-        const { data: profile } = await supabase.from('profiles').select('plan, is_premium, vip_temp_unlocked_at').eq('id', userId).single();
+        const profile = await profileCache.getProfile(supabase, userId, 'plan, is_premium, vip_temp_unlocked_at');
         const VIP_TEMP_DURATION_MS = 60 * 60 * 1000; // 1 hour
         const hasTempVIP = profile?.vip_temp_unlocked_at &&
             (Date.now() - new Date(profile.vip_temp_unlocked_at).getTime()) < VIP_TEMP_DURATION_MS;

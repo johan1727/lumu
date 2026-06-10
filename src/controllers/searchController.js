@@ -3,6 +3,7 @@ const shoppingService = require('../services/shoppingService');
 const affiliateManager = require('../utils/affiliateManager');
 const cacheService = require('../services/cacheService');
 const supabase = require('../config/supabase');
+const profileCache = require('../utils/profileCache');
 const deepResearchEnhancer = require('../services/deepResearchEnhancer');
 const visionService = require('../services/visionService');
 const couponService = require('../services/couponService');
@@ -1610,7 +1611,7 @@ exports.searchProduct = async (req, res) => {
 
         // PAYWALL Enforcement: Verificar límites por plan en backend (authenticated users)
         if (userId && supabase) {
-            const { data: profile } = await supabase.from('profiles').select('plan, is_premium, vip_temp_unlocked_at').eq('id', userId).single();
+            const profile = await profileCache.getProfile(supabase, userId, 'plan, is_premium, vip_temp_unlocked_at');
             userProfile = profile || null;
             isVipSearch = DEV_VIP_BYPASS || isVipProfile(userProfile);
             if (profile) {
@@ -2955,7 +2956,7 @@ exports.bulkSearch = async (req, res) => {
         if (!supabase) {
             return res.status(503).json({ error: 'Base de datos no disponible' });
         }
-        const { data: profile } = await supabase.from('profiles').select('plan, is_premium').eq('id', userId).single();
+        const profile = await profileCache.getProfile(supabase, userId, 'plan, is_premium');
         if (!profile || (!profile.is_premium && profile.plan !== 'b2b' && profile.plan !== 'b2b_annual')) {
             return res.status(402).json({ error: 'Esta función es exclusiva del Plan Revendedor VIP ($199 MXN/mes). Actualiza tu cuenta para acceder.', upgrade_required: true });
         }

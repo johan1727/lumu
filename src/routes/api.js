@@ -162,6 +162,37 @@ router.get('/deals', async (req, res) => {
     }
 });
 
+// GET /api/stats — Public live counters for homepage social proof (cached 5 min)
+let _statsCache = null;
+let _statsCacheAt = 0;
+const STATS_CACHE_TTL_MS = 5 * 60 * 1000;
+router.get('/stats', async (req, res) => {
+    try {
+        const now = Date.now();
+        if (!_statsCache || (now - _statsCacheAt) > STATS_CACHE_TTL_MS) {
+            const supabase = require('../config/supabase');
+            if (!supabase) return res.status(503).json({ ok: false });
+            const [prices, searches, clicks] = await Promise.all([
+                supabase.from('price_history').select('*', { count: 'exact', head: true }),
+                supabase.from('searches').select('*', { count: 'exact', head: true }),
+                supabase.from('click_events').select('*', { count: 'exact', head: true })
+            ]);
+            _statsCache = {
+                ok: true,
+                prices_tracked: prices.count || 0,
+                searches: searches.count || 0,
+                clicks: clicks.count || 0
+            };
+            _statsCacheAt = now;
+        }
+        res.set('Cache-Control', 'public, max-age=300');
+        res.json(_statsCache);
+    } catch (error) {
+        console.error('[Stats API] Error:', error.message);
+        res.status(500).json({ ok: false });
+    }
+});
+
 // POST /api/buscar — authMiddleware verifies JWT and sets req.userId
 router.post('/buscar', burstRateLimiter, authMiddleware, validateBody(searchProductSchema), searchController.searchProduct);
 
