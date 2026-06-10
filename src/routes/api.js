@@ -146,14 +146,48 @@ router.get('/price-history', priceHistoryController.getPriceHistory);
 router.get('/buy-timing', burstRateLimiter, buyTimingController.getBuyTiming);
 router.post('/buy-timing/batch', burstRateLimiter, authMiddleware, authMiddleware.requireAuth, buyTimingController.getBatchTiming);
 
+// Fallback: caídas de precio reales detectadas por Lumu en price_history.
+// Cubre cuando MELI no devuelve ofertas (su API de búsqueda ya exige OAuth).
+async function getPriceDropDeals(limit = 8) {
+    const supabase = require('../config/supabase');
+    if (!supabase) return [];
+    const { data, error } = await supabase.rpc('get_price_drop_deals', {
+        p_days: 30,
+        p_min_drop: 0.10,
+        p_limit: limit
+    });
+    if (error || !Array.isArray(data)) {
+        if (error) console.warn('[Deals API] price-drop fallback error:', error.message);
+        return [];
+    }
+    return data.map((row, i) => ({
+        id: `lumu-drop-${i}`,
+        title: String(row.product_title || '').slice(0, 140),
+        price: Number(row.current_price),
+        originalPrice: Number(row.max_price),
+        discountPct: Number(row.discount_pct) || 1,
+        image: '',
+        url: '#',
+        source: row.store_name || 'Lumu',
+        shipping: '',
+        currencyCode: 'MXN'
+    }));
+}
+
 router.get('/deals', async (req, res) => {
     try {
         const country = String(req.query.country || req.app?.locals?.detectedCountry || 'MX').trim().toUpperCase();
-        const deals = await meliService.getFlashDeals(country, 8);
+        let deals = await meliService.getFlashDeals(country, 8);
+        let source = 'meli';
+        if (!Array.isArray(deals) || deals.length === 0) {
+            deals = await getPriceDropDeals(8);
+            source = 'price_history';
+        }
         res.set('Cache-Control', 'public, max-age=1800');
         res.json({
             ok: true,
             country,
+            source,
             deals
         });
     } catch (error) {

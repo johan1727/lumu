@@ -10,6 +10,7 @@ const fetchWithTimeout = require('../utils/fetchWithTimeout');
 
 const MELI_APP_ID = process.env.MERCADOLIBRE_APP_ID;
 const MELI_ACCESS_TOKEN = process.env.MELI_ACCESS_TOKEN;
+const MELI_CLIENT_SECRET = process.env.MERCADOLIBRE_SECRET || process.env.MELI_CLIENT_SECRET;
 const flashDealsCache = new Map();
 const searchCache = new Map();
 const SEARCH_CACHE_TTL_MS = 20 * 60 * 1000;
@@ -270,15 +271,55 @@ async function searchMeli(query, countryCode = 'MX', options = {}) {
     }
 }
 
+// MELI cerró el API público de búsqueda (/sites/X/search devuelve 403 sin auth).
+// Token de aplicación vía client_credentials: dura ~6h, se cachea y renueva solo.
+let _meliAppToken = null;
+
+async function getMeliAppToken() {
+    if (MELI_ACCESS_TOKEN) return MELI_ACCESS_TOKEN;
+    if (!MELI_APP_ID || !MELI_CLIENT_SECRET) return null;
+    if (_meliAppToken && _meliAppToken.expiresAt > Date.now()) return _meliAppToken.token;
+
+    try {
+        const response = await fetchWithTimeout(`${MELI_BASE}/oauth/token`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'Accept': 'application/json' },
+            body: new URLSearchParams({
+                grant_type: 'client_credentials',
+                client_id: MELI_APP_ID,
+                client_secret: MELI_CLIENT_SECRET
+            }).toString()
+        }, 8000);
+        if (!response.ok) {
+            console.warn(`[MELI OAuth] Token request failed: ${response.status}`);
+            return null;
+        }
+        const data = await response.json();
+        if (!data.access_token) return null;
+        // Renovar 5 min antes de expirar (expires_in viene en segundos, default 6h)
+        const ttlMs = Math.max(60, (Number(data.expires_in) || 21600) - 300) * 1000;
+        _meliAppToken = { token: data.access_token, expiresAt: Date.now() + ttlMs };
+        return _meliAppToken.token;
+    } catch (err) {
+        console.warn('[MELI OAuth] Error obteniendo token:', err.message);
+        return null;
+    }
+}
+
 async function fetchMeliSearch(url, signal) {
+    const headers = getMeliHeaders('MLM');
+    const token = await getMeliAppToken();
+    if (token) headers.Authorization = `Bearer ${token}`;
+
     const response = await fetchWithTimeout(url, {
         method: 'GET',
-        headers: getMeliHeaders('MLM'),
-        timeout: 10000,
+        headers,
         signal
-    });
+    }, 10000);
 
     if (!response.ok) {
+        // Token inválido/expirado: invalidar cache para reintentar en el siguiente request
+        if (response.status === 401 || response.status === 403) _meliAppToken = null;
         throw new Error(`meli_status_${response.status}`);
     }
 

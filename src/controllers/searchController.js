@@ -2747,6 +2747,13 @@ exports.searchProduct = async (req, res) => {
                 console.warn('[Cache Save] Error saving search results:', cacheSaveError.message);
             }
         }
+        // Snapshot de precios para historial/tendencias/buy-timing.
+        // La llamada se perdió en el refactor 4067fe9 (2026-03-26) y price_history
+        // dejó de alimentarse — se registra siempre, haya cache o no.
+        if (balancedProducts.length > 0) {
+            cacheService.savePriceSnapshot(searchQuery, radius, lat, lng, balancedProducts, countryCode)
+                .catch(e => console.warn('[Price Snapshot] Error:', e.message));
+        }
         await logSuccessfulSearchUsage({
             userId,
             query: searchQuery,
