@@ -541,7 +541,7 @@ const REGION_UI_COPY = {
         },
         pricing: {
             badge: 'Más valor por menos',
-            titleHtml: 'VIP por <span class="text-emerald-600">$39/mes</span> — búsquedas ilimitadas, sin anuncios',
+            titleHtml: 'VIP por <span class="text-emerald-600">$39/mes</span> — 4× más búsquedas, sin anuncios',
             copyHtml: 'Alertas de precio · Cupones exclusivos · Cancela cuando quieras',
             chipAds: 'Sin anuncios',
             chipAlerts: 'Alertas de precio',
@@ -778,7 +778,7 @@ const REGION_UI_COPY = {
         },
         pricing: {
             badge: 'More value for less',
-            titleHtml: 'VIP for <span class="text-emerald-600">$39/month</span> — unlimited searches, ad-free',
+            titleHtml: 'VIP for <span class="text-emerald-600">$39/month</span> — 4× more searches, ad-free',
             copyHtml: 'Price alerts · Exclusive coupons · Cancel anytime',
             chipAds: 'No ads',
             chipAlerts: 'Price alerts',
@@ -5369,7 +5369,7 @@ async function initApp() {
                                     <div class="grid grid-cols-2 gap-2 w-full max-w-xs mb-5 text-left">
                                         <div class="bg-white rounded-xl border border-amber-100 p-3 flex items-start gap-2">
                                             <span class="text-lg">🔍</span>
-                                            <div><p class="text-xs font-black text-slate-800">${getLocalizedText('Búsquedas ilimitadas', 'Unlimited searches')}</p><p class="text-[11px] text-slate-500">${getLocalizedText('Sin cortes por día', 'No daily cuts')}</p></div>
+                                            <div><p class="text-xs font-black text-slate-800">${getLocalizedText('40 búsquedas al mes', '40 searches per month')}</p><p class="text-[11px] text-slate-500">${getLocalizedText('Sin cortes por día', 'No daily cuts')}</p></div>
                                         </div>
                                         <div class="bg-white rounded-xl border border-amber-100 p-3 flex items-start gap-2">
                                             <span class="text-lg">🔬</span>
