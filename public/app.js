@@ -332,6 +332,12 @@ const REGION_FLAGS = {
 };
 
 function getVoiceRecognitionLocale(regionCode = 'MX') {
+    // El idioma del navegador gana sobre la región: un hispanohablante en US
+    // debe poder dictar en español aunque detectRegion() devuelva US
+    const navLang = String(navigator.language || '').trim();
+    if (/^es\b/i.test(navLang)) {
+        return /^es-[A-Z]{2}$/i.test(navLang) ? navLang : 'es-MX';
+    }
     const normalized = String(regionCode || 'MX').toUpperCase();
     const localeMap = {
         MX: 'es-MX',
@@ -535,12 +541,12 @@ const REGION_UI_COPY = {
         },
         pricing: {
             badge: 'Más valor por menos',
-            title: '¿Quieres más capacidad de búsqueda?',
-            copyHtml: 'Desde <strong class="text-emerald-600">$39 MXN/mes</strong> — sin anuncios, con alertas de precio y herramientas para encontrar más rápido las mejores ofertas.',
+            titleHtml: 'VIP por <span class="text-emerald-600">$39/mes</span> — búsquedas ilimitadas, sin anuncios',
+            copyHtml: 'Alertas de precio · Cupones exclusivos · Cancela cuando quieras',
             chipAds: 'Sin anuncios',
             chipAlerts: 'Alertas de precio',
             chipCoupons: 'Cupones exclusivos',
-            button: 'Ver Planes y Precios'
+            button: 'Activar VIP →'
         },
         footer: {
             supporting: 'Compara más claro. Decide más rápido.',
@@ -772,12 +778,12 @@ const REGION_UI_COPY = {
         },
         pricing: {
             badge: 'More value for less',
-            title: 'Want more search capacity?',
-            copyHtml: 'Starting at <strong class="text-emerald-600">$39 MXN/month</strong> — ad-free, with price alerts and tools to find the best deals faster.',
+            titleHtml: 'VIP for <span class="text-emerald-600">$39/month</span> — unlimited searches, ad-free',
+            copyHtml: 'Price alerts · Exclusive coupons · Cancel anytime',
             chipAds: 'No ads',
             chipAlerts: 'Price alerts',
             chipCoupons: 'Exclusive coupons',
-            button: 'View Plans & Pricing'
+            button: 'Activate VIP →'
         },
         footer: {
             supporting: 'Compare with more clarity. Decide faster.',
@@ -2016,6 +2022,9 @@ function applyRegionalCopy() {
         const labelNode = Array.from(searchButtonEl.childNodes).find(node => node.nodeType === Node.TEXT_NODE && node.textContent.trim());
         if (labelNode) labelNode.textContent = ` ${config.submitLabel} `;
     }
+
+    const quickTryLabel = document.getElementById('quick-try-label');
+    if (quickTryLabel) quickTryLabel.textContent = isEnglish ? 'Try' : 'Prueba con';
 
     const helperCopy = document.getElementById('location-helper-copy');
     if (helperCopy) {

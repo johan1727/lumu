@@ -77,7 +77,7 @@
 
     <!-- Preload Critical Resources for LCP -->
 
-    <link rel="preload" href="/styles.css?v=sw_auto_reload_v2" as="style">
+    <link rel="preload" href="/styles.css?v=hero_emerald_glass_v1" as="style">
 
     <link rel="preload" href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800;900&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" as="style">
 
@@ -141,7 +141,7 @@
 
     <!-- Tailwind CSS (local build) -->
 
-    <link rel="stylesheet" href="/styles.css?v=sw_auto_reload_v2">
+    <link rel="stylesheet" href="/styles.css?v=hero_emerald_glass_v1">
 
     <!-- Resource Hints & Preconnects (Fase 7) -->
 
@@ -3299,7 +3299,7 @@
 
             <div class="text-center max-w-4xl mx-auto mb-6 md:mb-8 relative z-20">
 
-                <div class="inline-flex items-center gap-2 rounded-full bg-emerald-50 border border-emerald-200 px-4 py-1.5 text-[11px] font-black uppercase tracking-[0.18em] text-emerald-700 mb-4 shadow-sm">
+                <div id="hero-badge-pill" class="inline-flex items-center gap-2 rounded-full bg-emerald-50 border border-emerald-200 px-4 py-1.5 text-[11px] font-black uppercase tracking-[0.18em] text-emerald-700 mb-4 shadow-sm">
                     <span>🎁</span> <span id="hero-gift-badge">Gratis para siempre — sin tarjeta</span>
                 </div>
 
@@ -3527,6 +3527,13 @@
                 </div>
 
 
+
+                <div id="quick-try-row" class="mt-3 flex flex-wrap items-center justify-center gap-2 px-2">
+                    <span id="quick-try-label" class="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">Prueba con</span>
+                    <button type="button" data-query-es="iPhone 15" data-query-en="iPhone 15" onclick="quickSearch('iPhone 15')" class="quick-try-chip bg-white border border-slate-200 px-3.5 py-1.5 rounded-full text-xs font-bold text-slate-700 hover:border-emerald-400 hover:text-emerald-700 hover:bg-emerald-50 transition-all shadow-sm">📱 iPhone 15</button>
+                    <button type="button" data-query-es="PlayStation 5" data-query-en="PlayStation 5" onclick="quickSearch('PlayStation 5')" class="quick-try-chip bg-white border border-slate-200 px-3.5 py-1.5 rounded-full text-xs font-bold text-slate-700 hover:border-emerald-400 hover:text-emerald-700 hover:bg-emerald-50 transition-all shadow-sm">🎮 PlayStation 5</button>
+                    <button type="button" data-query-es="AirPods Pro" data-query-en="AirPods Pro" onclick="quickSearch('AirPods Pro')" class="quick-try-chip bg-white border border-slate-200 px-3.5 py-1.5 rounded-full text-xs font-bold text-slate-700 hover:border-emerald-400 hover:text-emerald-700 hover:bg-emerald-50 transition-all shadow-sm">🎧 AirPods Pro</button>
+                </div>
 
                 <div class="mt-3 flex justify-center">
 
@@ -3920,6 +3927,38 @@
 
 
 
+        <!-- Demo Preview — muestra un resultado de ejemplo antes de que el usuario busque -->
+        <div id="demo-preview-section" class="w-full max-w-4xl mx-auto mb-10 px-4">
+            <div class="flex items-center justify-between mb-4">
+                <p class="text-xs font-black uppercase tracking-[0.2em] text-slate-400">Así se ve una comparación real</p>
+                <span class="text-[10px] font-bold text-emerald-600 bg-emerald-50 border border-emerald-100 px-2.5 py-1 rounded-full">Freidora de Aire Ninja</span>
+            </div>
+            <div class="grid grid-cols-1 sm:grid-cols-3 gap-3 pointer-events-none select-none">
+                <div class="rounded-2xl border-2 border-emerald-400 bg-white p-4 shadow-md relative">
+                    <div class="absolute -top-2.5 left-4 bg-emerald-500 text-white text-[9px] font-black uppercase tracking-widest px-2.5 py-0.5 rounded-full">Mejor precio</div>
+                    <p class="text-[10px] font-black uppercase tracking-widest text-emerald-600 mb-1">Amazon México</p>
+                    <p class="text-sm font-bold text-slate-800 mb-2 leading-tight">Ninja AF101 Freidora de Aire 3.8L</p>
+                    <p class="text-xl font-black text-emerald-600 mb-1">$1,299 <span class="text-sm font-medium text-slate-400 line-through">$1,799</span></p>
+                    <p class="text-xs text-emerald-600 font-bold">−27% · Envío gratis</p>
+                </div>
+                <div class="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+                    <p class="text-[10px] font-black uppercase tracking-widest text-slate-500 mb-1">Mercado Libre</p>
+                    <p class="text-sm font-bold text-slate-800 mb-2 leading-tight">Ninja AF101 Freidora de Aire 3.8L</p>
+                    <p class="text-xl font-black text-slate-700 mb-1">$1,450</p>
+                    <p class="text-xs text-slate-500 font-medium">Envío $89 · Vendedor oficial</p>
+                </div>
+                <div class="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm opacity-70">
+                    <p class="text-[10px] font-black uppercase tracking-widest text-slate-500 mb-1">Walmart</p>
+                    <p class="text-sm font-bold text-slate-800 mb-2 leading-tight">Ninja AF101 Freidora de Aire 3.8L</p>
+                    <p class="text-xl font-black text-slate-700 mb-1">$1,599</p>
+                    <p class="text-xs text-slate-500 font-medium">Envío gratis · En tienda</p>
+                </div>
+            </div>
+            <p class="text-center text-xs text-slate-400 mt-3 font-medium">Escribe cualquier producto arriba → Lumu compara en 10+ tiendas en segundos</p>
+        </div>
+
+
+
         <!-- Ofertas Relámpago (Estilo Mercado Libre/Amazon) -->
 
         <div id="flash-deals-section" class="w-full max-w-6xl mx-auto mb-16 fade-in px-4">
@@ -4220,47 +4259,26 @@
 
             <div class="flex gap-3 overflow-x-auto pb-2 custom-scrollbar -mx-4 px-4 sm:mx-0 sm:px-0 snap-x snap-mandatory">
 
-                <button id="trend-pill-1" data-emoji="🕶️" data-query-es="Lentes de Sol Ray-Ban polarizados" data-query-en="Polarized Ray-Ban sunglasses" onclick="quickSearch('Lentes de Sol Ray-Ban polarizados')"
+                <button id="trend-pill-1" data-emoji="🍳" data-query-es="Freidora de Aire Ninja" data-query-en="Ninja Air Fryer" onclick="quickSearch('Freidora de Aire Ninja')"
+                    class="flex-shrink-0 snap-start bg-white border border-slate-200 px-4 py-2.5 rounded-full text-sm font-bold text-slate-700 hover:border-emerald-400 hover:text-emerald-700 hover:bg-emerald-50 transition-all shadow-sm">🍳 Freidora Ninja</button>
 
-                    class="flex-shrink-0 snap-start bg-white border border-slate-200 px-4 py-2.5 rounded-full text-sm font-bold text-slate-700 hover:border-emerald-400 hover:text-emerald-700 hover:bg-emerald-50 transition-all shadow-sm">🕶️
+                <button id="trend-pill-2" data-emoji="🎮" data-query-es="Nintendo Switch OLED" data-query-en="Nintendo Switch OLED" onclick="quickSearch('Nintendo Switch OLED')"
+                    class="flex-shrink-0 snap-start bg-white border border-slate-200 px-4 py-2.5 rounded-full text-sm font-bold text-slate-700 hover:border-emerald-400 hover:text-emerald-700 hover:bg-emerald-50 transition-all shadow-sm">🎮 Nintendo Switch</button>
 
-                    Lentes de Sol</button>
+                <button id="trend-pill-3" data-emoji="📱" data-query-es="iPhone 17" data-query-en="iPhone 17" onclick="quickSearch('iPhone 17')"
+                    class="flex-shrink-0 snap-start bg-white border border-slate-200 px-4 py-2.5 rounded-full text-sm font-bold text-slate-700 hover:border-emerald-400 hover:text-emerald-700 hover:bg-emerald-50 transition-all shadow-sm">📱 iPhone 17</button>
 
-                <button id="trend-pill-2" data-emoji="👟" data-query-es="Tenis Nike Air Max 2025" data-query-en="Nike Air Max 2025 sneakers" onclick="quickSearch('Tenis Nike Air Max 2025')"
+                <button id="trend-pill-4" data-emoji="🎧" data-query-es="Audífonos Sony WH-1000XM5" data-query-en="Sony WH-1000XM5 headphones" onclick="quickSearch('Audífonos Sony WH-1000XM5')"
+                    class="flex-shrink-0 snap-start bg-white border border-slate-200 px-4 py-2.5 rounded-full text-sm font-bold text-slate-700 hover:border-emerald-400 hover:text-emerald-700 hover:bg-emerald-50 transition-all shadow-sm">🎧 Sony XM5</button>
 
-                    class="flex-shrink-0 snap-start bg-white border border-slate-200 px-4 py-2.5 rounded-full text-sm font-bold text-slate-700 hover:border-emerald-400 hover:text-emerald-700 hover:bg-emerald-50 transition-all shadow-sm">👟
+                <button id="trend-pill-5" data-emoji="📺" data-query-es="Smart TV 55 pulgadas 4K" data-query-en="55 inch 4K Smart TV" onclick="quickSearch('Smart TV 55 pulgadas 4K')"
+                    class="flex-shrink-0 snap-start bg-white border border-slate-200 px-4 py-2.5 rounded-full text-sm font-bold text-slate-700 hover:border-emerald-400 hover:text-emerald-700 hover:bg-emerald-50 transition-all shadow-sm">📺 Smart TV 4K</button>
 
-                    Tenis Nike</button>
+                <button id="trend-pill-6" data-emoji="💻" data-query-es="MacBook Air M3" data-query-en="MacBook Air M3" onclick="quickSearch('MacBook Air M3')"
+                    class="flex-shrink-0 snap-start bg-white border border-slate-200 px-4 py-2.5 rounded-full text-sm font-bold text-slate-700 hover:border-emerald-400 hover:text-emerald-700 hover:bg-emerald-50 transition-all shadow-sm">💻 MacBook Air M3</button>
 
-                <button id="trend-pill-3" data-emoji="🔊" data-query-es="Bocinas Bluetooth JBL contra agua" data-query-en="Waterproof JBL Bluetooth speakers" onclick="quickSearch('Bocinas Bluetooth JBL contra agua')"
-
-                    class="flex-shrink-0 snap-start bg-white border border-slate-200 px-4 py-2.5 rounded-full text-sm font-bold text-slate-700 hover:border-emerald-400 hover:text-emerald-700 hover:bg-emerald-50 transition-all shadow-sm">🔊
-
-                    Bocinas JBL</button>
-
-                <button id="trend-pill-4" data-emoji="🤖" data-query-es="Robot Aspiradora Roomba" data-query-en="Roomba robot vacuum" onclick="quickSearch('Robot Aspiradora Roomba')"
-
-                    class="flex-shrink-0 snap-start bg-white border border-slate-200 px-4 py-2.5 rounded-full text-sm font-bold text-slate-700 hover:border-emerald-400 hover:text-emerald-700 hover:bg-emerald-50 transition-all shadow-sm">🤖
-
-                    Robot Aspiradora</button>
-
-                <button id="trend-pill-5" data-emoji="🪑" data-query-es="Silla ergonómica gamer" data-query-en="Ergonomic gaming chair" onclick="quickSearch('Silla ergonómica gamer')"
-
-                    class="flex-shrink-0 snap-start bg-white border border-slate-200 px-4 py-2.5 rounded-full text-sm font-bold text-slate-700 hover:border-emerald-400 hover:text-emerald-700 hover:bg-emerald-50 transition-all shadow-sm">🪑
-
-                    Sillas Gamer</button>
-
-                <button id="trend-pill-6" data-emoji="📷" data-query-es="Cámaras Deportivas GoPro Hero" data-query-en="GoPro Hero action cameras" onclick="quickSearch('Cámaras Deportivas GoPro Hero')"
-
-                    class="flex-shrink-0 snap-start bg-white border border-slate-200 px-4 py-2.5 rounded-full text-sm font-bold text-slate-700 hover:border-emerald-400 hover:text-emerald-700 hover:bg-emerald-50 transition-all shadow-sm">📷
-
-                    GoPro</button>
-
-                <button id="trend-pill-7" data-emoji="📺" data-query-es="Smart TV 55 pulgadas 4K" data-query-en="55 inch 4K Smart TV" onclick="quickSearch('Smart TV 55 pulgadas 4K')"
-
-                    class="flex-shrink-0 snap-start bg-white border border-slate-200 px-4 py-2.5 rounded-full text-sm font-bold text-slate-700 hover:border-emerald-400 hover:text-emerald-700 hover:bg-emerald-50 transition-all shadow-sm">📺
-
-                    Smart TV 4K</button>
+                <button id="trend-pill-7" data-emoji="🤖" data-query-es="Robot Aspiradora Roomba" data-query-en="Roomba robot vacuum" onclick="quickSearch('Robot Aspiradora Roomba')"
+                    class="flex-shrink-0 snap-start bg-white border border-slate-200 px-4 py-2.5 rounded-full text-sm font-bold text-slate-700 hover:border-emerald-400 hover:text-emerald-700 hover:bg-emerald-50 transition-all shadow-sm">🤖 Robot Aspiradora</button>
 
             </div>
 
@@ -4728,69 +4746,23 @@
 
     <!-- Pricing CTA (full details at /precios.html) -->
 
-    <section id="pricing-section" class="w-full max-w-3xl mx-auto mb-16 px-4">
-
-        <div class="pricing-surface rounded-[2rem] p-8 md:p-12">
-
-            <div class="relative z-10 text-center mb-8">
-
-                <!-- Ancla cognitiva: mostrar B2B primero para hacer VIP parecer barato -->
-                <div id="pricing-badge" class="inline-flex items-center gap-2 rounded-full bg-emerald-500/10 px-3 py-1 text-[11px] font-black uppercase tracking-[0.2em] text-emerald-700 ring-1 ring-emerald-200 mb-4">Solo esta semana</div>
-
-                <h2 id="pricing-title" class="text-2xl md:text-3xl font-display font-black text-slate-900 tracking-tight mb-2">Deja de pagar de más.</h2>
-
-                <p id="pricing-copy" class="text-slate-600 font-medium mb-2 max-w-xl mx-auto">Profesionales pagan <strong class="text-slate-800">$199 MXN/mes</strong> por búsquedas masivas. Tú puedes obtener acceso completo por solo <strong class="text-emerald-600">$39 MXN/mes</strong> — menos que un café.</p>
-
-                <!-- Social proof dinámico -->
-                <p id="pricing-social-proof" class="text-xs font-bold text-slate-400 mb-6">⭐ Más de 1,200 usuarios ya comparan con VIP</p>
-
-                <!-- Contraste: columnas Free vs VIP -->
-                <div class="grid grid-cols-2 gap-3 mb-6 text-left text-sm">
-                    <div class="rounded-2xl border border-slate-200 bg-white/60 p-4">
-                        <p class="font-black text-slate-500 text-[11px] uppercase tracking-wider mb-3">Plan Gratis</p>
-                        <ul class="space-y-2 text-slate-500">
-                            <li class="flex items-center gap-2"><span class="text-slate-300">✗</span> Búsquedas limitadas/día</li>
-                            <li class="flex items-center gap-2"><span class="text-slate-300">✗</span> Con anuncios</li>
-                            <li class="flex items-center gap-2"><span class="text-slate-300">✗</span> Sin alertas de precio</li>
-                            <li class="flex items-center gap-2"><span class="text-slate-300">✗</span> Sin cupones</li>
-                        </ul>
-                    </div>
-                    <div class="rounded-2xl border-2 border-emerald-400 bg-emerald-50/60 p-4 relative">
-                        <div class="absolute -top-3 left-1/2 -translate-x-1/2 bg-emerald-500 text-white text-[9px] font-black uppercase tracking-widest px-3 py-0.5 rounded-full">Recomendado</div>
-                        <p class="font-black text-emerald-700 text-[11px] uppercase tracking-wider mb-3">Plan VIP ⚡</p>
-                        <ul class="space-y-2 text-slate-700 font-medium">
-                            <li class="flex items-center gap-2"><span class="text-emerald-500">✓</span> Búsquedas ilimitadas</li>
-                            <li class="flex items-center gap-2"><span class="text-emerald-500">✓</span> Sin anuncios</li>
-                            <li class="flex items-center gap-2"><span class="text-emerald-500">✓</span> Alertas de precio</li>
-                            <li class="flex items-center gap-2"><span class="text-emerald-500">✓</span> Cupones exclusivos</li>
-                        </ul>
-                    </div>
+    <section id="pricing-section" class="w-full max-w-4xl mx-auto mb-12 px-4">
+        <div class="flex flex-col sm:flex-row items-center justify-between gap-4 rounded-2xl border border-emerald-200 bg-gradient-to-r from-emerald-50 via-white to-teal-50 px-6 py-5 shadow-sm">
+            <div class="flex items-center gap-4">
+                <div class="h-10 w-10 flex-shrink-0 flex items-center justify-center rounded-2xl bg-gradient-to-br from-emerald-500 to-teal-400 text-white shadow-md text-lg">⚡</div>
+                <div>
+                    <p id="pricing-title" class="text-sm font-black text-slate-800">VIP por <span class="text-emerald-600">$39/mes</span> — búsquedas ilimitadas, sin anuncios</p>
+                    <p id="pricing-copy" class="text-xs text-slate-500 font-medium mt-0.5">Alertas de precio · Cupones exclusivos · Cancela cuando quieras</p>
                 </div>
-
             </div>
-
-            <div class="relative z-10 flex flex-col sm:flex-row gap-3 justify-center">
-
-                <a href="/precios.html"
-                    class="inline-flex items-center justify-center gap-2 bg-gradient-to-r from-emerald-500 to-green-500 hover:from-emerald-600 hover:to-green-600 text-white px-8 py-4 rounded-2xl font-black shadow-[0_20px_40px_rgba(16,185,129,0.22)] transition-all active:scale-95">
-
-                    <span id="pricing-button-label">Quiero VIP por $39/mes →</span>
-
+            <div class="flex items-center gap-3 shrink-0">
+                <a href="/precios.html" class="text-xs text-slate-500 hover:text-slate-700 font-semibold whitespace-nowrap transition-colors">Ver planes</a>
+                <a href="/precios.html" class="inline-flex items-center gap-1.5 bg-emerald-500 hover:bg-emerald-600 text-white px-5 py-2.5 rounded-xl font-black text-sm shadow transition-all active:scale-95 whitespace-nowrap">
+                    <span id="pricing-button-label">Activar VIP →</span>
                 </a>
-
-                <a href="/precios.html" class="inline-flex items-center justify-center gap-2 text-slate-500 hover:text-slate-700 text-sm font-semibold transition-colors">
-
-                    <span>Ver todos los planes</span>
-
-                </a>
-
             </div>
-
-            <!-- Garantía / anti-objeción -->
-            <p class="text-center text-xs text-slate-400 font-medium mt-4 relative z-10">🔒 Sin compromisos · Cancela cuando quieras · Pago seguro con Stripe</p>
-
         </div>
-
+        <p id="pricing-social-proof" class="text-center text-[11px] text-slate-400 font-medium mt-2">⭐ Más de 1,200 usuarios ya comparan con VIP · 🔒 Pago seguro con Stripe</p>
     </section>
 
 
@@ -6129,7 +6101,20 @@
 
     <!-- Lógica de la APP (JS Principal) -->
 
-    <script src="app.js?v=security_bugfixes_v1"></script>
+    <script src="app.js?v=design_refresh_v1"></script>
+
+    <!-- Ocultar demo preview cuando hay resultados activos -->
+    <script>
+    (function() {
+        const rw = document.getElementById('results-wrapper');
+        const dp = document.getElementById('demo-preview-section');
+        if (!rw || !dp) return;
+        const obs = new MutationObserver(function() {
+            dp.classList.toggle('hidden', !rw.classList.contains('hidden'));
+        });
+        obs.observe(rw, { attributes: true, attributeFilter: ['class'] });
+    })();
+    </script>
 
 
 

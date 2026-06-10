@@ -798,6 +798,50 @@
     .dark .shadow-xl,
     .dark .shadow-2xl { box-shadow: var(--shadow-card) !important; }
 
+    /* --- Above the fold: un solo material (vidrio oscuro + hairline emerald) --- */
+    .dark #hero-badge-pill {
+        background-color: rgba(16, 185, 129, 0.12) !important;
+        border-color: rgba(52, 211, 153, 0.45) !important;
+        color: rgba(110, 231, 183, 0.98) !important;
+        box-shadow: 0 0 24px rgba(16, 185, 129, 0.25), 0 0 0 1px rgba(16, 185, 129, 0.08) inset !important;
+    }
+
+    .dark #hero-store-strip > span:not(:first-child) {
+        background-color: rgba(9, 28, 23, 0.78) !important;
+        border-color: rgba(110, 231, 183, 0.20) !important;
+        color: rgba(203, 225, 216, 0.92) !important;
+    }
+
+    .dark #category-icon-bar > button {
+        background-color: rgba(9, 28, 23, 0.78) !important;
+        border-color: rgba(110, 231, 183, 0.18) !important;
+    }
+    .dark #category-icon-bar > button:hover {
+        border-color: rgba(52, 211, 153, 0.55) !important;
+        background-color: rgba(14, 38, 29, 0.92) !important;
+        box-shadow: 0 8px 24px rgba(16, 185, 129, 0.16) !important;
+    }
+    .dark #category-icon-bar > button > div {
+        background-color: rgba(16, 185, 129, 0.10) !important;
+    }
+    .dark #category-icon-bar > button span {
+        color: rgba(203, 225, 216, 0.92) !important;
+    }
+    .dark #category-icon-bar > button:hover span {
+        color: rgba(110, 231, 183, 0.98) !important;
+    }
+
+    .dark .quick-try-chip {
+        background-color: rgba(9, 28, 23, 0.78) !important;
+        border-color: rgba(110, 231, 183, 0.20) !important;
+        color: rgba(203, 225, 216, 0.92) !important;
+    }
+    .dark .quick-try-chip:hover {
+        border-color: rgba(52, 211, 153, 0.55) !important;
+        background-color: rgba(14, 38, 29, 0.92) !important;
+        color: rgba(110, 231, 183, 0.98) !important;
+    }
+
     .page-home .scroll-reveal {
         opacity: 0;
         transform: translateY(26px);
