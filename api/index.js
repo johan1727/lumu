@@ -268,6 +268,9 @@ app.use('/api/memory', rateLimiter);
 app.use('/api/price-alerts', rateLimiter);
 app.use('/api/push-subscribe', rateLimiter);
 app.use('/api/track', rateLimiter);
+app.use('/api/telegram/connect', rateLimiter);
+app.use('/api/telegram/status', rateLimiter);
+app.use('/api/telegram/disconnect', rateLimiter);
 app.use('/api', searchRoutes);
 
 // Manejo de rutas inexistentes

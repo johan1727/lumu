@@ -502,4 +502,21 @@ router.get('/health', async (req, res) => {
     });
 });
 
+// ============================================================
+// Telegram Bot Integration
+// ============================================================
+const telegramController = require('../controllers/telegramController');
+
+// Webhook called by Telegram — no auth, validated by TELEGRAM_WEBHOOK_SECRET header
+router.post('/telegram/webhook', telegramController.handleWebhook);
+
+// User-facing: generate magic link to connect Telegram account
+router.post('/telegram/connect', authMiddleware, requireAuth, telegramController.generateLinkToken);
+
+// User-facing: check if Telegram is connected
+router.get('/telegram/status', authMiddleware, requireAuth, telegramController.getStatus);
+
+// User-facing: disconnect Telegram
+router.delete('/telegram/disconnect', authMiddleware, requireAuth, telegramController.disconnect);
+
 module.exports = router;

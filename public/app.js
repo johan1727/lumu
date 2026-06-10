@@ -8130,6 +8130,126 @@ fetchServerAlerts().then(() => {
 });
 
 // ============================================
+// TELEGRAM CONNECT (price alert notifications)
+// ============================================
+let _telegramConnected = null; // null=unknown, true/false after check
+
+async function checkTelegramStatus() {
+    const sb = window.supabaseClient;
+    const user = window.currentUser;
+    if (!sb || !user) { _telegramConnected = false; return false; }
+    try {
+        const { data: session } = await sb.auth.getSession();
+        const token = session?.session?.access_token;
+        if (!token) { _telegramConnected = false; return false; }
+        const res = await fetch('/api/telegram/status', { headers: { 'Authorization': `Bearer ${token}` } });
+        if (res.ok) {
+            const json = await res.json();
+            _telegramConnected = json.connected === true;
+        }
+    } catch (e) {
+        console.warn('[Telegram] Status check failed:', e.message);
+        _telegramConnected = false;
+    }
+    return _telegramConnected;
+}
+
+async function renderTelegramBanner() {
+    const container = document.getElementById('telegram-connect-banner');
+    if (!container) return;
+    const user = window.currentUser;
+    if (!user) { container.innerHTML = ''; return; }
+
+    const isConnected = _telegramConnected !== null ? _telegramConnected : await checkTelegramStatus();
+    const isES = currentRegion !== 'US';
+
+    if (isConnected) {
+        container.innerHTML = `
+            <div class="flex items-center justify-between bg-emerald-900/30 border border-emerald-600/30 rounded-xl px-4 py-2.5 mb-4">
+                <div class="flex items-center gap-2">
+                    <svg class="w-4 h-4 text-emerald-400 flex-shrink-0" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 14.5v-9l6 4.5-6 4.5z"/></svg>
+                    <span class="text-xs font-semibold text-emerald-400">${isES ? 'Telegram conectado — recibirás alertas en tu celular' : 'Telegram connected — alerts sent to your phone'}</span>
+                </div>
+                <button onclick="disconnectTelegram()" class="text-xs text-slate-500 hover:text-red-400 transition-colors ml-2">${isES ? 'Desconectar' : 'Disconnect'}</button>
+            </div>`;
+    } else {
+        container.innerHTML = `
+            <button onclick="connectTelegram()" class="w-full flex items-center justify-between bg-[#1a2740] hover:bg-[#213050] border border-[#2481cc]/40 hover:border-[#2481cc]/70 rounded-xl px-4 py-3 mb-4 transition-all group">
+                <div class="flex items-center gap-3">
+                    <svg class="w-6 h-6 text-[#2481cc] flex-shrink-0" viewBox="0 0 24 24" fill="currentColor"><path d="M11.944 0A12 12 0 0 0 0 12a12 12 0 0 0 12 12 12 12 0 0 0 12-12A12 12 0 0 0 12 0a12 12 0 0 0-.056 0zm4.962 7.224c.1-.002.321.023.465.14a.506.506 0 0 1 .171.325c.016.093.036.306.02.472-.18 1.898-.962 6.502-1.36 8.627-.168.9-.499 1.201-.82 1.23-.696.065-1.225-.46-1.9-.902-1.056-.693-1.653-1.124-2.678-1.8-1.185-.78-.417-1.21.258-1.91.177-.184 3.247-2.977 3.307-3.23.007-.032.014-.15-.056-.212s-.174-.041-.249-.024c-.106.024-1.793 1.14-5.061 3.345-.48.33-.913.49-1.302.48-.428-.008-1.252-.241-1.865-.44-.752-.245-1.349-.374-1.297-.789.027-.216.325-.437.893-.663 3.498-1.524 5.83-2.529 6.998-3.014 3.332-1.386 4.025-1.627 4.476-1.635z"/></svg>
+                    <div class="text-left">
+                        <p class="text-sm font-bold text-white">${isES ? 'Conectar Telegram' : 'Connect Telegram'}</p>
+                        <p class="text-xs text-slate-400">${isES ? 'Recibe alertas gratis en tu celular' : 'Get free alerts on your phone'}</p>
+                    </div>
+                </div>
+                <svg class="w-4 h-4 text-slate-500 group-hover:text-[#2481cc] transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
+            </button>`;
+    }
+}
+
+window.connectTelegram = async () => {
+    const sb = window.supabaseClient;
+    const user = window.currentUser;
+    if (!sb || !user) {
+        showGlobalFeedback(currentRegion === 'US' ? 'Sign in to connect Telegram.' : 'Inicia sesión para conectar Telegram.', 'info');
+        return;
+    }
+    const btn = document.querySelector('#telegram-connect-banner button');
+    if (btn) { btn.disabled = true; btn.style.opacity = '0.6'; }
+    try {
+        const { data: session } = await sb.auth.getSession();
+        const token = session?.session?.access_token;
+        const res = await fetch('/api/telegram/connect', { method: 'POST', headers: { 'Authorization': `Bearer ${token}` } });
+        const json = await res.json();
+        if (!res.ok || !json.url) throw new Error(json.error || 'Error generating link');
+        // Open Telegram deep link in new tab
+        window.open(json.url, '_blank', 'noopener,noreferrer');
+        // Poll for connection after user returns (check every 3s for 60s)
+        let attempts = 0;
+        const poll = setInterval(async () => {
+            attempts++;
+            await checkTelegramStatus();
+            if (_telegramConnected || attempts >= 20) {
+                clearInterval(poll);
+                renderTelegramBanner();
+                if (_telegramConnected) {
+                    showGlobalFeedback(currentRegion === 'US' ? '✅ Telegram connected!' : '✅ ¡Telegram conectado!', 'success');
+                }
+            }
+        }, 3000);
+    } catch (err) {
+        console.error('[Telegram] Connect failed:', err);
+        showGlobalFeedback(currentRegion === 'US' ? 'Error connecting Telegram. Try again.' : 'Error al conectar Telegram. Intenta de nuevo.', 'error');
+        if (btn) { btn.disabled = false; btn.style.opacity = ''; }
+    }
+};
+
+window.disconnectTelegram = async () => {
+    const sb = window.supabaseClient;
+    const user = window.currentUser;
+    if (!sb || !user) return;
+    try {
+        const { data: session } = await sb.auth.getSession();
+        const token = session?.session?.access_token;
+        const res = await fetch('/api/telegram/disconnect', { method: 'DELETE', headers: { 'Authorization': `Bearer ${token}` } });
+        if (res.ok) {
+            _telegramConnected = false;
+            renderTelegramBanner();
+            showGlobalFeedback(currentRegion === 'US' ? 'Telegram disconnected.' : 'Telegram desconectado.', 'info');
+        }
+    } catch (err) {
+        console.error('[Telegram] Disconnect failed:', err);
+    }
+};
+
+// Inject Telegram banner when alert modal opens
+const _origOpenPriceAlertModal = openPriceAlertModal;
+function openPriceAlertModal() {
+    _origOpenPriceAlertModal();
+    renderTelegramBanner();
+}
+
+// ============================================
 // DROPSHIPPING MARGIN CALCULATOR
 // ============================================
 window.openMarginCalculator = (costPrice, productName) => {
