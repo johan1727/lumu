@@ -984,7 +984,8 @@ function maybeShowDeepResearchUpdateBanner() {
 
     const banner = document.createElement('div');
     banner.id = 'deep-research-update-banner';
-    banner.className = 'mx-2 mb-3 rounded-[1.6rem] border px-4 py-4 md:px-5 md:py-4';
+    // hidden md:block — en móvil entierra el botón Enviar bajo el fold
+    banner.className = 'hidden md:block mx-2 mb-3 rounded-[1.6rem] border px-4 py-4 md:px-5 md:py-4';
     banner.innerHTML = `
         <div class="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
             <div class="min-w-0">

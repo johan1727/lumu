@@ -798,6 +798,30 @@
     .dark .shadow-xl,
     .dark .shadow-2xl { box-shadow: var(--shadow-card) !important; }
 
+    /* --- Móvil: hero strip y store chips en una línea scrolleable (CTA visible sin scroll) --- */
+    @media (max-width: 767px) {
+        #hero-store-strip {
+            flex-wrap: nowrap;
+            overflow-x: auto;
+            justify-content: flex-start;
+            -webkit-overflow-scrolling: touch;
+            scrollbar-width: none;
+            padding-bottom: 4px;
+        }
+        #hero-store-strip::-webkit-scrollbar { display: none; }
+        #hero-store-strip > span { flex-shrink: 0; white-space: nowrap; }
+
+        #store-focus-chip-bar {
+            flex-wrap: nowrap;
+            overflow-x: auto;
+            -webkit-overflow-scrolling: touch;
+            scrollbar-width: none;
+            padding-bottom: 4px;
+        }
+        #store-focus-chip-bar::-webkit-scrollbar { display: none; }
+        #store-focus-chip-bar > * { flex-shrink: 0; white-space: nowrap; }
+    }
+
     /* --- Above the fold: un solo material (vidrio oscuro + hairline emerald) --- */
     .dark #hero-badge-pill {
         background-color: rgba(16, 185, 129, 0.12) !important;
