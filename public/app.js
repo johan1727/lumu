@@ -1454,7 +1454,8 @@ function getRegionUICopy() {
 // y con la tabla PRICING de precios.html. El "$39" estático solo aplica a MX.
 function getVipPriceLabels(regionCode = currentRegion) {
     const monthly = { MX: '$39 MXN', US: '$3.99 USD', CL: '$3.900 CLP', CO: '$15.900 COP', AR: '$4.900 ARS', PE: 'S/ 14.90' };
-    const annual = { MX: '$390 MXN', US: '$39.99 USD', CL: '$39.000 CLP', CO: '$159.000 COP', AR: '$49.000 ARS', PE: 'S/ 149' };
+    // MX anual = $399 (precio real cobrado por Stripe, verificado 2026-06-10)
+    const annual = { MX: '$399 MXN', US: '$39.99 USD', CL: '$39.000 CLP', CO: '$159.000 COP', AR: '$49.000 ARS', PE: 'S/ 149' };
     return {
         monthly: monthly[regionCode] || monthly.MX,
         annual: annual[regionCode] || annual.MX
@@ -2296,8 +2297,8 @@ function applyRegionalCopy() {
         ? `VIP for <span class="text-emerald-600">${vipLabels.monthly}/month</span> — 4× more searches, ad-free`
         : `VIP por <span class="text-emerald-600">${vipLabels.monthly}/mes</span> — 4× más búsquedas, sin anuncios`);
     setHTMLById('pricing-copy', isEnglishPricing
-        ? `Price alerts · Exclusive coupons · Cancel anytime · Or save 2 months with annual (${vipLabels.annual}/yr)`
-        : `Alertas de precio · Cupones exclusivos · Cancela cuando quieras · O ahorra 2 meses con el anual (${vipLabels.annual}/año)`);
+        ? `Price alerts · Exclusive coupons · Cancel anytime · Or save with annual (${vipLabels.annual}/yr)`
+        : `Alertas de precio · Cupones exclusivos · Cancela cuando quieras · O ahorra pagando anual (${vipLabels.annual}/año)`);
 
     setTextById('footer-brand-tagline', config.footer.tagline);
     setTextById('footer-brand-supporting', ui.footer.supporting);
@@ -8158,6 +8159,29 @@ window.createQuickAlert = async (productName, currentPrice, productUrl, storeNam
 // Antes se ocultaba sin alertas y la función era indescubrible.
 if (btnPriceAlert) btnPriceAlert.classList.remove('hidden');
 fetchServerAlerts();
+
+// --- Social proof con datos reales ---
+// Sustituye el "1,200" estático por el conteo vivo de price_history (/api/stats,
+// cacheado 5 min en server). Solo actualiza si supera el piso estático.
+setTimeout(async () => {
+    try {
+        const res = await fetch('/api/stats');
+        if (!res.ok) return;
+        const stats = await res.json();
+        const tracked = Number(stats.prices_tracked || 0);
+        if (tracked <= 1200) return;
+        const rounded = Math.floor(tracked / 100) * 100;
+        const label = rounded.toLocaleString(isEnglishRegion() ? 'en-US' : 'es-MX');
+        const proofEl = document.getElementById('pricing-social-proof');
+        if (proofEl) {
+            proofEl.textContent = isEnglishRegion()
+                ? `⭐ Over ${label} prices tracked · 🔒 Secure checkout with Stripe`
+                : `⭐ Más de ${label} precios rastreados · 🔒 Pago seguro con Stripe`;
+        }
+    } catch (err) {
+        console.warn('[Stats] Social proof fetch failed:', err.message);
+    }
+}, 2500);
 
 // ============================================
 // TELEGRAM CONNECT (price alert notifications)

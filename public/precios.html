@@ -317,7 +317,7 @@
             <!-- Social proof -->
             <div class="flex flex-wrap items-center justify-center gap-4 mt-4 mb-2">
                 <span class="text-xs font-bold text-slate-400">⭐⭐⭐⭐⭐</span>
-                <span id="pricing-hero-proof" class="text-xs font-bold text-slate-500">+1,200 compradores inteligentes ya usan VIP</span>
+                <span id="pricing-hero-proof" class="text-xs font-bold text-slate-500">Más de 1,300 precios rastreados en tiempo real</span>
                 <span class="hidden sm:inline text-slate-300">·</span>
                 <span class="text-xs font-bold text-emerald-600">🔒 Pago seguro con Stripe</span>
             </div>
@@ -730,7 +730,7 @@
         }
 
         const PLAN_PRICING = {
-            MX: { locale: 'es-MX', currency: 'MXN', vip: 39, b2b: 199, vipAnnual: 390, b2bAnnual: 1990, periodLabel: 'MXN/mes', annualPeriodLabel: 'MXN/año', vipCaption: 'Aproximadamente un café al mes', b2bCaption: 'Facturación disponible', vipAnnualCaption: 'Facturado anual en $390 MXN', b2bAnnualCaption: 'Facturado anual en $1,990 MXN', vipAnnualSavings: 'Ahorra 2 meses', b2bAnnualSavings: 'Ahorra 2 meses' },
+            MX: { locale: 'es-MX', currency: 'MXN', vip: 39, b2b: 199, vipAnnual: 399, b2bAnnual: 1999, periodLabel: 'MXN/mes', annualPeriodLabel: 'MXN/año', vipCaption: 'Aproximadamente un café al mes', b2bCaption: 'Facturación disponible', vipAnnualCaption: 'Facturado anual en $399 MXN', b2bAnnualCaption: 'Facturado anual en $1,999 MXN', vipAnnualSavings: 'Ahorra 15% vs mensual', b2bAnnualSavings: 'Ahorra 16% vs mensual' },
             US: { locale: 'en-US', currency: 'USD', vip: 3.99, b2b: 19.99, vipAnnual: 39.99, b2bAnnual: 199.99, periodLabel: 'USD/month', annualPeriodLabel: 'USD/year', vipCaption: 'About one coffee a month', b2bCaption: 'Invoicing available', vipAnnualCaption: 'Billed annually at $39.99 USD', b2bAnnualCaption: 'Billed annually at $199.99 USD', vipAnnualSavings: 'Save 2 months', b2bAnnualSavings: 'Save 2 months' },
             CL: { locale: 'es-CL', currency: 'CLP', vip: 3900, b2b: 19900, vipAnnual: 39000, b2bAnnual: 199000, periodLabel: 'CLP/mes', annualPeriodLabel: 'CLP/año', vipCaption: 'Menos que un café al mes', b2bCaption: 'Facturación disponible', vipAnnualCaption: 'Facturado anual en $39.000 CLP', b2bAnnualCaption: 'Facturado anual en $199.000 CLP', vipAnnualSavings: 'Ahorra 2 meses', b2bAnnualSavings: 'Ahorra 2 meses' },
             CO: { locale: 'es-CO', currency: 'COP', vip: 15900, b2b: 79900, vipAnnual: 159000, b2bAnnual: 799000, periodLabel: 'COP/mes', annualPeriodLabel: 'COP/año', vipCaption: 'Menos que un café al mes', b2bCaption: 'Facturación disponible', vipAnnualCaption: 'Facturado anual en $159.000 COP', b2bAnnualCaption: 'Facturado anual en $799.000 COP', vipAnnualSavings: 'Ahorra 2 meses', b2bAnnualSavings: 'Ahorra 2 meses' },
@@ -906,7 +906,7 @@
             }
             const link = isAnnualBilling ? (stripeVipAnnualLink || stripeVipLink) : stripeVipLink;
             const planLabel = isAnnualBilling ? 'vip_annual' : 'vip';
-            const price = isAnnualBilling ? 390 : 39;
+            const price = isAnnualBilling ? 399 : 39;
             if (link) {
                 trackMetaPricingEvent('PlanSelected', {
                     plan_name: planLabel,
@@ -937,7 +937,7 @@
             }
             const link = isAnnualBilling ? (stripeB2bAnnualLink || stripeB2bLink) : stripeB2bLink;
             const planLabel = isAnnualBilling ? 'b2b_annual' : 'b2b';
-            const price = isAnnualBilling ? 1990 : 199;
+            const price = isAnnualBilling ? 1999 : 199;
             if (link) {
                 trackMetaPricingEvent('PlanSelected', {
                     plan_name: planLabel,
