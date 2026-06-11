@@ -4,7 +4,7 @@
 
 [![Version](https://img.shields.io/badge/version-1.0.0-blue)](#)
 [![Status](https://img.shields.io/badge/status-active-brightgreen)](#)
-[![License](https://img.shields.io/badge/license-MIT-green)](#)
+[![License](https://img.shields.io/badge/license-Proprietary-red)](#-license)
 [![Website](https://img.shields.io/badge/website-lumu.dev-blue)](https://www.lumu.dev)
 
 ---
@@ -314,9 +314,9 @@ Track real-time data via:
 
 ## 📝 License
 
-MIT License - See [LICENSE](LICENSE) for details.
+**Proprietary — All rights reserved.** © 2026 Jhonatan Villagomez / Lumu.dev
 
-Free to use, modify, and distribute for commercial or non-commercial purposes.
+The source code is visible for transparency and educational reference, but reproduction, modification, redistribution, or commercial use is not permitted without express written authorization. See [Términos de Servicio](https://www.lumu.dev/terminos.html).
 
 ---
 
