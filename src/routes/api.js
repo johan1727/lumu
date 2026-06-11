@@ -148,19 +148,24 @@ router.post('/buy-timing/batch', burstRateLimiter, authMiddleware, authMiddlewar
 
 // Fallback: caídas de precio reales detectadas por Lumu en price_history.
 // Cubre cuando MELI no devuelve ofertas (su API de búsqueda ya exige OAuth).
+// Las ofertas del home son merchandising: solo productos principales, nunca
+// accesorios (fundas/micas/cables), aunque existan en price_history.
+const DEALS_ACCESSORY_PATTERN = /\b(funda|fundas|case|cases|cover|carcasa|protector|protectores|mica|micas|templado|holder|correa|strap|cable|cargador|charger|adaptador|repuesto|sleeve|sleeves)\b/i;
+
 async function getPriceDropDeals(limit = 8) {
     const supabase = require('../config/supabase');
     if (!supabase) return [];
     const { data, error } = await supabase.rpc('get_price_drop_deals', {
         p_days: 30,
         p_min_drop: 0.10,
-        p_limit: limit
+        // Pedimos extra porque el filtro de accesorios puede descartar filas
+        p_limit: limit * 2
     });
     if (error || !Array.isArray(data)) {
         if (error) console.warn('[Deals API] price-drop fallback error:', error.message);
         return [];
     }
-    return data.map((row, i) => ({
+    return data.filter(row => !DEALS_ACCESSORY_PATTERN.test(String(row.product_title || ''))).slice(0, limit).map((row, i) => ({
         id: `lumu-drop-${i}`,
         title: String(row.product_title || '').slice(0, 140),
         price: Number(row.current_price),
