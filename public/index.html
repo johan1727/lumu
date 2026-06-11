@@ -179,9 +179,8 @@
 
         crossorigin="anonymous"></script>
 
-    <!-- Google IMA SDK (Rewarded Ads) -->
-
-    <script type="text/javascript" src="//imasdk.googleapis.com/js/sdkloader/ima3.js" defer></script>
+    <!-- Google IMA SDK (Rewarded Ads): se carga bajo demanda en app.js (loadImaSdk)
+         para no costar 148KB en cada visita -->
 
 
 
@@ -3095,7 +3094,7 @@
 
                 <!-- Hamburger Button (Mobile Only) -->
 
-                <button id="btn-mobile-menu"
+                <button id="btn-mobile-menu" aria-label="Abrir menú"
 
                     class="md:hidden p-2 text-slate-600 hover:bg-slate-100 rounded-xl transition-colors">
 
@@ -3931,10 +3930,10 @@
             </div>
             <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
                 <button type="button" onclick="quickSearch('Freidora de Aire Ninja')" class="demo-preview-card text-left rounded-2xl border-2 border-emerald-400 bg-white p-4 shadow-md relative cursor-pointer hover:shadow-xl hover:-translate-y-0.5 transition-all">
-                    <div class="absolute -top-2.5 left-4 bg-emerald-500 text-white text-[9px] font-black uppercase tracking-widest px-2.5 py-0.5 rounded-full">Mejor precio</div>
+                    <div class="absolute -top-2.5 left-4 bg-emerald-700 text-white text-[9px] font-black uppercase tracking-widest px-2.5 py-0.5 rounded-full">Mejor precio</div>
                     <p class="text-[10px] font-black uppercase tracking-widest text-emerald-600 mb-1">Amazon México</p>
                     <p class="text-sm font-bold text-slate-800 mb-2 leading-tight">Ninja AF101 Freidora de Aire 3.8L</p>
-                    <p class="text-xl font-black text-emerald-600 mb-1">$1,299 <span class="text-sm font-medium text-slate-400 line-through">$1,799</span></p>
+                    <p class="text-xl font-black text-emerald-600 mb-1">$1,299 <span class="text-sm font-medium text-slate-500 line-through">$1,799</span></p>
                     <p class="text-xs text-emerald-600 font-bold">−27% · Envío gratis</p>
                 </button>
                 <button type="button" onclick="quickSearch('Freidora de Aire Ninja')" class="demo-preview-card text-left rounded-2xl border border-slate-200 bg-white p-4 shadow-sm cursor-pointer hover:shadow-lg hover:-translate-y-0.5 hover:border-emerald-300 transition-all">
@@ -3951,7 +3950,7 @@
                 </button>
             </div>
             <div class="text-center mt-4">
-                <button type="button" onclick="quickSearch('Freidora de Aire Ninja')" id="demo-preview-cta" class="inline-flex items-center gap-2 bg-emerald-500 hover:bg-emerald-600 text-white text-sm font-black px-5 py-2.5 rounded-xl shadow-lg shadow-emerald-500/20 transition-all hover:-translate-y-0.5">
+                <button type="button" onclick="quickSearch('Freidora de Aire Ninja')" id="demo-preview-cta" class="inline-flex items-center gap-2 bg-emerald-700 hover:bg-emerald-600 text-white text-sm font-black px-5 py-2.5 rounded-xl shadow-lg shadow-emerald-500/20 transition-all hover:-translate-y-0.5">
                     ▶ Ver esta comparación en vivo — gratis
                 </button>
                 <p id="demo-preview-footer" class="text-xs text-slate-400 mt-2 font-medium">Precios de ejemplo · La búsqueda en vivo trae precios reales de hoy</p>
@@ -6100,7 +6099,7 @@
 
     <!-- Lógica de la APP (JS Principal) -->
 
-    <script src="app.js?v=telegram_easy_v1"></script>
+    <script src="app.js?v=perf_a11y_v1"></script>
 
     <!-- Ocultar demo preview cuando hay resultados activos -->
     <script>

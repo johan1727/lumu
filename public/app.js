@@ -3987,14 +3987,8 @@ async function initApp() {
 
 
         adContainer = document.getElementById('ad-video-container');
-
-        if (adContainer) {
-            if (typeof initIMA === 'function') {
-                initIMA();
-            } else {
-                console.warn('initIMA no definido, saltando inicialización de anuncios.');
-            }
-        }
+        // IMA SDK (148KB) ya no se carga al inicio: se inyecta bajo demanda en
+        // openAdGateway via loadImaSdk(). Aquí solo guardamos el contenedor.
 
         btnFeedback = document.getElementById('btn-feedback-floating');
         feedbackModal = document.getElementById('feedback-modal');
@@ -8538,16 +8532,43 @@ window.openAdGateway = async function (targetUrlOriginal, isReward = false) {
         }, 3000);
     }
 
-    // Intentar cargar Video Ads via IMA
-    if (typeof adsLoader !== 'undefined' && adsLoader && typeof google !== 'undefined' && google && google.ima) {
-        btnSkipAd.innerHTML = `<span class="animate-pulse">${currentRegion === 'US' ? 'Loading Ad...' : 'Cargando Anuncio...'}</span>`;
-        requestAd();
-        btnSkipAd.onclick = null; 
-    } else {
-        // Fallback inmediato si no hay IMA
-        startFallbackCountdown();
-    }
+    // Intentar cargar Video Ads via IMA (SDK se inyecta bajo demanda: 148KB
+    // que antes cargaban en cada visita aunque nadie viera un rewarded ad)
+    btnSkipAd.innerHTML = `<span class="animate-pulse">${currentRegion === 'US' ? 'Loading Ad...' : 'Cargando Anuncio...'}</span>`;
+    loadImaSdk().then((ready) => {
+        if (ready && adsLoader) {
+            requestAd();
+            btnSkipAd.onclick = null;
+        } else {
+            startFallbackCountdown();
+        }
+    });
 };
+
+// Carga perezosa del IMA SDK: solo cuando el usuario entra al flujo de anuncio
+let _imaSdkPromise = null;
+function loadImaSdk() {
+    if (typeof google !== 'undefined' && google.ima) {
+        if (!adsLoader) initIMA();
+        return Promise.resolve(true);
+    }
+    if (_imaSdkPromise) return _imaSdkPromise;
+    _imaSdkPromise = new Promise((resolve) => {
+        const script = document.createElement('script');
+        script.src = 'https://imasdk.googleapis.com/js/sdkloader/ima3.js';
+        script.onload = () => {
+            try { initIMA(); resolve(true); }
+            catch (err) { console.warn('[IMA] init falló tras carga:', err.message); resolve(false); }
+        };
+        script.onerror = () => {
+            console.warn('[IMA] No se pudo cargar el SDK — usando fallback.');
+            _imaSdkPromise = null; // permitir reintento en el siguiente gateway
+            resolve(false);
+        };
+        document.head.appendChild(script);
+    });
+    return _imaSdkPromise;
+}
 
 function initIMA() {
     if (typeof google === 'undefined' || !google.ima) return;
