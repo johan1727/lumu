@@ -7942,6 +7942,7 @@ function openPriceAlertModal() {
     const panel = priceAlertModal.querySelector('.glass-panel');
     if (panel) { panel.classList.remove('scale-95'); panel.classList.add('scale-100'); }
     fetchServerAlerts().then(() => renderAlerts());
+    renderTelegramBanner(); // defined below; hoisted function declaration
 };
 function closePriceAlertModal() {
     if (!priceAlertModal) return;
@@ -8204,13 +8205,16 @@ window.connectTelegram = async () => {
         if (!res.ok || !json.url) throw new Error(json.error || 'Error generating link');
         // Open Telegram deep link in new tab
         window.open(json.url, '_blank', 'noopener,noreferrer');
-        // Poll for connection after user returns (check every 3s for 60s)
+        // Poll for connection after user returns (check every 3s for 60s).
+        // Clear any previous poll so repeated clicks don't stack intervals.
+        if (window._telegramPollId) clearInterval(window._telegramPollId);
         let attempts = 0;
-        const poll = setInterval(async () => {
+        window._telegramPollId = setInterval(async () => {
             attempts++;
             await checkTelegramStatus();
             if (_telegramConnected || attempts >= 20) {
-                clearInterval(poll);
+                clearInterval(window._telegramPollId);
+                window._telegramPollId = null;
                 renderTelegramBanner();
                 if (_telegramConnected) {
                     showGlobalFeedback(currentRegion === 'US' ? '✅ Telegram connected!' : '✅ ¡Telegram conectado!', 'success');
@@ -8241,13 +8245,6 @@ window.disconnectTelegram = async () => {
         console.error('[Telegram] Disconnect failed:', err);
     }
 };
-
-// Inject Telegram banner when alert modal opens
-const _origOpenPriceAlertModal = openPriceAlertModal;
-function openPriceAlertModal() {
-    _origOpenPriceAlertModal();
-    renderTelegramBanner();
-}
 
 // ============================================
 // DROPSHIPPING MARGIN CALCULATOR

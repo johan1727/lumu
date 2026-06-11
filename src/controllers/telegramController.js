@@ -6,6 +6,11 @@ const WEBHOOK_SECRET = process.env.TELEGRAM_WEBHOOK_SECRET;
 const BOT_USERNAME = 'LumuAlertasBot';
 const TOKEN_TTL_MS = 10 * 60 * 1000; // 10 minutes
 
+// Telegram parse_mode HTML breaks if user-supplied strings contain < > &
+function escapeHtml(str) {
+    return String(str || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+
 async function sendMessage(chatId, text) {
     if (!BOT_TOKEN) {
         console.warn('[Telegram] TELEGRAM_BOT_TOKEN not set');
@@ -36,15 +41,23 @@ exports.handleWebhook = async (req, res) => {
         }
     }
 
-    // Always ACK immediately — Telegram retries if we don't respond within 5s
+    // Process BEFORE responding: on Vercel the lambda may freeze right after
+    // the response is sent, killing any pending async work. Processing is fast
+    // (2 DB queries + 1 sendMessage) and always ends in 200 to avoid retry storms.
+    try {
+        await processUpdate(req.body);
+    } catch (err) {
+        console.error('[Telegram] Webhook processing error:', err.message);
+    }
     res.json({ ok: true });
+};
 
-    const update = req.body;
+async function processUpdate(update) {
     if (!update?.message) return;
 
     const { chat, from, text: rawText } = update.message;
     const chatId = chat?.id;
-    const firstName = from?.first_name || 'Usuario';
+    const firstName = escapeHtml(from?.first_name || 'Usuario').slice(0, 64);
     const text = (rawText || '').trim();
 
     if (!chatId) return;
@@ -88,6 +101,13 @@ exports.handleWebhook = async (req, res) => {
             );
             return;
         }
+
+        // If this chat is linked to another Lumu account, unlink it first
+        // (unique index on telegram_chat_id would reject the update otherwise)
+        await supabase
+            .from('profiles')
+            .update({ telegram_chat_id: null })
+            .eq('telegram_chat_id', String(chatId));
 
         const { error: updateErr } = await supabase
             .from('profiles')
@@ -137,7 +157,7 @@ exports.handleWebhook = async (req, res) => {
         `Soy el bot de notificaciones de Lumu — solo envío alertas cuando un precio baja.\n\n` +
         `Gestiona tus alertas en <a href="https://www.lumu.dev">lumu.dev</a>.`
     );
-};
+}
 
 // POST /api/telegram/connect — Generate magic deep link token (requires auth)
 exports.generateLinkToken = async (req, res) => {
@@ -217,7 +237,7 @@ exports.sendPriceAlert = async (chatId, { product_name, target_price, current_pr
 
     let text =
         `🔔 <b>¡Alerta de precio Lumu!</b>\n\n` +
-        `📦 <b>${product_name}</b>\n` +
+        `📦 <b>${escapeHtml(product_name)}</b>\n` +
         `💰 Precio actual: <b>${currency_symbol}${Number(current_price).toLocaleString('es-MX')} ${currency_code}</b>\n` +
         `🎯 Tu meta: ${currency_symbol}${Number(target_price).toLocaleString('es-MX')} ${currency_code}\n`;
 
@@ -225,8 +245,11 @@ exports.sendPriceAlert = async (chatId, { product_name, target_price, current_pr
         text += `✅ ¡Ahorras <b>${currency_symbol}${savings} (${savingsPct}%)</b>!\n`;
     }
 
-    if (store_name) text += `🏪 En: ${store_name}\n`;
-    if (product_url && product_url !== '#') text += `\n<a href="${product_url}">👉 Ver oferta</a>`;
+    if (store_name) text += `🏪 En: ${escapeHtml(store_name)}\n`;
+    const safeUrl = String(product_url || '');
+    if (safeUrl && safeUrl !== '#' && /^https?:\/\//i.test(safeUrl)) {
+        text += `\n<a href="${escapeHtml(safeUrl)}">👉 Ver oferta</a>`;
+    }
 
     return sendMessage(chatId, text);
 };
