@@ -506,6 +506,10 @@ router.get('/health', async (req, res) => {
 // Telegram Bot Integration
 // ============================================================
 const telegramController = require('../controllers/telegramController');
+const alertCheckController = require('../controllers/alertCheckController');
+
+// Daily Vercel Cron (see vercel.json "crons") — auth via CRON_SECRET header
+router.get('/cron/check-alerts', alertCheckController.checkAlerts);
 
 // Webhook called by Telegram — no auth, validated by TELEGRAM_WEBHOOK_SECRET header
 router.post('/telegram/webhook', telegramController.handleWebhook);
