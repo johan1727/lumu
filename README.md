@@ -1,6 +1,6 @@
 # 🛒 Lumu - AI Price Comparison for Latin America
 
-> **Smart price comparison powered by AI.** Find the best deals across 10+ stores. Available in Mexico, expanding to USA.
+> **Smart price comparison powered by AI.** Find the best deals across 19 stores. Available in Mexico, expanding to USA.
 
 [![Version](https://img.shields.io/badge/version-1.0.0-blue)](#)
 [![Status](https://img.shields.io/badge/status-active-brightgreen)](#)
@@ -18,10 +18,10 @@ Lumu is an **AI-powered price comparison engine** that helps millions of shopper
 - 🔍 **Multi-Store Search** — Compare prices across Amazon, Mercado Libre, Falabella, Walmart, Liverpool, Coppel, Best Buy, Sam's Club
 - 🤖 **AI Analysis** — Google Gemini evaluates products to find genuine best value (not just lowest price)
 - 📊 **Price History** — Track price trends over 1 year to spot seasonal deals
-- 🔔 **Smart Alerts** — Get notified when prices drop (VIP only)
+- 🔔 **Smart Alerts** — Price drop notifications via Telegram bot ([@LumuAlertasBot](https://t.me/LumuAlertasBot))
 - 📱 **Offline Mode** — Progressive Web App with Service Worker caching
 - 🌍 **Region-Aware** — Detects your country, shows local prices & retailers
-- 💳 **Free + Premium** — 10 free searches/month, VIP ($39/mo) for unlimited access
+- 💳 **Free + Premium** — 10 free searches/month, VIP ($39 MXN/mo) for 4× more searches
 - 👥 **Referral Program** — Earn bonus searches by referring friends
 
 ---
@@ -32,7 +32,7 @@ Lumu is an **AI-powered price comparison engine** that helps millions of shopper
 |--------|-------|
 | **Live Traffic** | 98 visitors/month (in revitalization phase) |
 | **Historical Peak** | 1,500 daily users (May 2026) |
-| **Stores Integrated** | 8+ major retailers |
+| **Stores Integrated** | 19 retailers (MX) |
 | **Real Transactions** | ✅ Processing VIP subscriptions via Stripe |
 | **Revenue Model** | Affiliate commissions + subscription fees |
 
@@ -63,24 +63,25 @@ cd lumu
 npm install
 
 # 3. Set up environment variables
-cp .env.example .env.local
+cp .env.example .env
 
-# 4. Add your API keys to .env.local
-# VITE_SUPABASE_URL=your_supabase_url
-# VITE_SUPABASE_KEY=your_anon_key
-# GOOGLE_GEMINI_API_KEY=your_gemini_key
+# 4. Add your API keys to .env
+# SUPABASE_URL=your_supabase_url
+# SUPABASE_ANON_KEY=your_anon_key
+# SUPABASE_SERVICE_ROLE_KEY=your_service_role_key
+# GEMINI_API_KEY=your_gemini_key
 # SERPER_API_KEY=your_serper_key
-# STRIPE_PUBLIC_KEY=your_stripe_public_key
-# STRIPE_SECRET_KEY=your_stripe_secret_key
+# STRIPE_WEBHOOK_SECRET=your_stripe_webhook_secret
 
-# 5. Set up Supabase database
-supabase migration up
+# 5. Apply Supabase migrations (via Supabase CLI or dashboard SQL editor)
+supabase db push
 
-# 6. Start development server
+# 6. Build CSS and start development server
+npm run build:css
 npm run dev
 ```
 
-Visit **[http://localhost:5173](http://localhost:5173)**
+Visit **[http://localhost:3000](http://localhost:3000)**
 
 ---
 
@@ -88,25 +89,29 @@ Visit **[http://localhost:5173](http://localhost:5173)**
 
 ```
 lumu/
+├── api/
+│   └── index.js              # Express app entry (Vercel serverless)
+│
 ├── public/                    # Frontend files (Vanilla JS + HTML/CSS)
-│   ├── app.js                # Main application logic (~9000 lines)
+│   ├── app.js                # Main application logic (~9700 lines)
 │   ├── index.html            # Landing page
 │   ├── sw.js                 # Service Worker (PWA)
-│   ├── styles.css            # Tailwind CSS
+│   ├── styles.css            # Tailwind CSS (built from src/styles/input.css)
 │   └── [40+ article pages]   # SEO blog content
 │
 ├── src/
-│   ├── api/                  # Vercel serverless functions
-│   │   ├── search.js         # Search endpoint
-│   │   └── webhook.js        # Stripe webhooks
+│   ├── routes/
+│   │   └── api.js            # All API route definitions
 │   │
 │   ├── controllers/          # Business logic
 │   │   ├── searchController.js
 │   │   ├── stripeController.js
+│   │   ├── telegramController.js  # Telegram bot (price alerts)
 │   │   └── analyticsController.js
 │   │
 │   └── services/
 │       ├── shoppingService.js    # Store API integrations
+│       ├── meliService.js        # MercadoLibre OAuth + deals
 │       └── llmService.js         # Gemini AI calls
 │
 ├── supabase/
@@ -151,8 +156,8 @@ Earn when users buy through Lumu's affiliate links:
 | **Falabella** (CL/CO) | ~5% | All products |
 
 #### 2. **VIP Subscription**
-- **Price:** $39/month
-- **Features:** Unlimited searches, price alerts, 1-year history, priority support
+- **Price:** $39 MXN/month (~$2 USD)
+- **Features:** 40 searches/month (4× free plan), price alerts, 1-year history, priority support
 - **Target:** Power users, resellers, businesses
 
 #### 3. **B2B/API Access**
@@ -200,13 +205,17 @@ npm run build && vercel --prod
 Set these in Vercel Settings → Environment Variables:
 
 ```
-VITE_SUPABASE_URL=prod_url
-VITE_SUPABASE_KEY=prod_anon_key
-GOOGLE_GEMINI_API_KEY=key
+SUPABASE_URL=prod_url
+SUPABASE_ANON_KEY=prod_anon_key
+SUPABASE_SERVICE_ROLE_KEY=service_role_key
+GEMINI_API_KEY=key
 SERPER_API_KEY=key
-STRIPE_PUBLIC_KEY=key
 STRIPE_SECRET_KEY=key
 STRIPE_WEBHOOK_SECRET=secret
+TELEGRAM_BOT_TOKEN=token            # price alert notifications
+TELEGRAM_WEBHOOK_SECRET=secret      # validates Telegram webhook calls
+MERCADOLIBRE_APP_ID=app_id          # flash deals (OAuth)
+MERCADOLIBRE_SECRET=secret
 ```
 
 ---
@@ -278,10 +287,11 @@ Track real-time data via:
 - [x] PWA + offline mode
 
 ### 🔄 Phase 2 (In Progress)
+- [x] Telegram price alerts ([@LumuAlertasBot](https://t.me/LumuAlertasBot))
 - [ ] USA marketplace expansion
-- [ ] Email price alerts
+- [ ] Buy/Wait verdict per product (price history powered)
+- [ ] Programmatic SEO pages (/precio-hoy/{producto})
 - [ ] Advanced filters & sorting
-- [ ] Mobile app (React Native)
 - [ ] B2B merchant dashboard
 
 ### 📅 Phase 3 (Planned)
