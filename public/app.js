@@ -7961,7 +7961,6 @@ window.deleteAlert = async (idOrIndex) => {
     }
     await fetchServerAlerts();
     renderAlerts();
-    if (_alertsCache.length === 0 && btnPriceAlert) btnPriceAlert.classList.add('hidden');
 };
 
 function openPriceAlertModal() {
@@ -8094,9 +8093,11 @@ window.createQuickAlert = async (productName, currentPrice, productUrl, storeNam
             <button id="qa-btn-save" class="w-full bg-emerald-500 hover:bg-emerald-600 text-white font-bold py-3.5 rounded-xl shadow-[0_4px_12px_rgba(16,185,129,0.2)] transition-all">
                 ${currentRegion === 'US' ? 'Activate Alert' : 'Activar Alerta'}
             </button>
+            <div data-telegram-slot class="mt-4"></div>
         </div>
     `;
     document.body.appendChild(modal);
+    renderTelegramBanner();
 
     document.getElementById('qa-btn-save').addEventListener('click', async () => {
         // Pedir permisos de notificaciones nativas
@@ -8153,10 +8154,10 @@ window.createQuickAlert = async (productName, currentPrice, productUrl, storeNam
     }
 };
 
-// Initialize alert count on load
-fetchServerAlerts().then(() => {
-    if (_alertsCache.length > 0 && btnPriceAlert) btnPriceAlert.classList.remove('hidden');
-});
+// La campana siempre visible: es la única puerta a alertas + conexión Telegram.
+// Antes se ocultaba sin alertas y la función era indescubrible.
+if (btnPriceAlert) btnPriceAlert.classList.remove('hidden');
+fetchServerAlerts();
 
 // ============================================
 // TELEGRAM CONNECT (price alert notifications)
@@ -8184,16 +8185,20 @@ async function checkTelegramStatus() {
 }
 
 async function renderTelegramBanner() {
-    const container = document.getElementById('telegram-connect-banner');
-    if (!container) return;
+    // Renders into every slot: the alerts modal + the quick-alert modal
+    const containers = document.querySelectorAll('[data-telegram-slot]');
+    if (containers.length === 0) return;
     const user = window.currentUser;
-    if (!user) { container.innerHTML = ''; return; }
 
-    const isConnected = _telegramConnected !== null ? _telegramConnected : await checkTelegramStatus();
+    // Anonymous users see the CTA too — connectTelegram() prompts sign-in on click
+    const isConnected = user
+        ? (_telegramConnected !== null ? _telegramConnected : await checkTelegramStatus())
+        : false;
     const isES = currentRegion !== 'US';
 
+    let html;
     if (isConnected) {
-        container.innerHTML = `
+        html = `
             <div class="flex items-center justify-between bg-emerald-900/30 border border-emerald-600/30 rounded-xl px-4 py-2.5 mb-4">
                 <div class="flex items-center gap-2">
                     <svg class="w-4 h-4 text-emerald-400 flex-shrink-0" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 14.5v-9l6 4.5-6 4.5z"/></svg>
@@ -8202,7 +8207,7 @@ async function renderTelegramBanner() {
                 <button onclick="disconnectTelegram()" class="text-xs text-slate-500 hover:text-red-400 transition-colors ml-2">${isES ? 'Desconectar' : 'Disconnect'}</button>
             </div>`;
     } else {
-        container.innerHTML = `
+        html = `
             <button onclick="connectTelegram()" class="w-full flex items-center justify-between bg-[#1a2740] hover:bg-[#213050] border border-[#2481cc]/40 hover:border-[#2481cc]/70 rounded-xl px-4 py-3 mb-4 transition-all group">
                 <div class="flex items-center gap-3">
                     <svg class="w-6 h-6 text-[#2481cc] flex-shrink-0" viewBox="0 0 24 24" fill="currentColor"><path d="M11.944 0A12 12 0 0 0 0 12a12 12 0 0 0 12 12 12 12 0 0 0 12-12A12 12 0 0 0 12 0a12 12 0 0 0-.056 0zm4.962 7.224c.1-.002.321.023.465.14a.506.506 0 0 1 .171.325c.016.093.036.306.02.472-.18 1.898-.962 6.502-1.36 8.627-.168.9-.499 1.201-.82 1.23-.696.065-1.225-.46-1.9-.902-1.056-.693-1.653-1.124-2.678-1.8-1.185-.78-.417-1.21.258-1.91.177-.184 3.247-2.977 3.307-3.23.007-.032.014-.15-.056-.212s-.174-.041-.249-.024c-.106.024-1.793 1.14-5.061 3.345-.48.33-.913.49-1.302.48-.428-.008-1.252-.241-1.865-.44-.752-.245-1.349-.374-1.297-.789.027-.216.325-.437.893-.663 3.498-1.524 5.83-2.529 6.998-3.014 3.332-1.386 4.025-1.627 4.476-1.635z"/></svg>
@@ -8214,6 +8219,7 @@ async function renderTelegramBanner() {
                 <svg class="w-4 h-4 text-slate-500 group-hover:text-[#2481cc] transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
             </button>`;
     }
+    containers.forEach(c => { c.innerHTML = html; });
 }
 
 window.connectTelegram = async () => {
@@ -8223,8 +8229,8 @@ window.connectTelegram = async () => {
         showGlobalFeedback(currentRegion === 'US' ? 'Sign in to connect Telegram.' : 'Inicia sesión para conectar Telegram.', 'info');
         return;
     }
-    const btn = document.querySelector('#telegram-connect-banner button');
-    if (btn) { btn.disabled = true; btn.style.opacity = '0.6'; }
+    const btns = document.querySelectorAll('[data-telegram-slot] button');
+    btns.forEach(b => { b.disabled = true; b.style.opacity = '0.6'; });
     try {
         const { data: session } = await sb.auth.getSession();
         const token = session?.session?.access_token;
@@ -8252,7 +8258,7 @@ window.connectTelegram = async () => {
     } catch (err) {
         console.error('[Telegram] Connect failed:', err);
         showGlobalFeedback(currentRegion === 'US' ? 'Error connecting Telegram. Try again.' : 'Error al conectar Telegram. Intenta de nuevo.', 'error');
-        if (btn) { btn.disabled = false; btn.style.opacity = ''; }
+        btns.forEach(b => { b.disabled = false; b.style.opacity = ''; });
     }
 };
 
