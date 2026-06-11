@@ -1,5 +1,5 @@
 // Service Worker — Lumu PWA
-const CACHE_VERSION = 'v2026-06-10-8';
+const CACHE_VERSION = 'v2026-06-10-9';
 const CACHE_NAME = `lumu-${CACHE_VERSION}`;
 const STATIC_ASSETS = [
     '/',
