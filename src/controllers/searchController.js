@@ -2175,6 +2175,22 @@ exports.searchProduct = async (req, res) => {
                 return true;
             }), searchPolicy);
 
+            // Coherence filter also on cached results: entries saved by older code
+            // versions can contain accessories/wrong models that the live path
+            // would reject (e.g. a phone case ranked #1 for "iphone 15").
+            filteredCachedResults = filteredCachedResults
+                .map(product => {
+                    const coherence = evaluateResultCoherence(product, searchQuery, llmAnalysis);
+                    return {
+                        ...product,
+                        aiCoherenceStatus: coherence.status,
+                        aiCoherencePenalty: coherence.penalty,
+                        isPotentiallyUnavailable: product.isPotentiallyUnavailable || coherence.unavailableSignal,
+                        hasStockSignal: coherence.unavailableSignal ? false : product.hasStockSignal
+                    };
+                })
+                .filter(product => product.aiCoherenceStatus !== 'accessory' && product.aiCoherenceStatus !== 'wrong_model' && product.aiCoherenceStatus !== 'uncertain');
+
             // FIX: Solo usar cache si quedan resultados después de filtros
             if (filteredCachedResults.length > 0) {
                 cacheStatus = 'hit';

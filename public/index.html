@@ -3923,34 +3923,39 @@
 
 
 
-        <!-- Demo Preview — muestra un resultado de ejemplo antes de que el usuario busque -->
+        <!-- Demo Preview — ejemplo clickeable: cualquier tarjeta dispara la búsqueda real -->
         <div id="demo-preview-section" class="w-full max-w-4xl mx-auto mb-10 px-4">
             <div class="flex items-center justify-between mb-4">
-                <p class="text-xs font-black uppercase tracking-[0.2em] text-slate-400">Así se ve una comparación real</p>
+                <p id="demo-preview-title" class="text-xs font-black uppercase tracking-[0.2em] text-slate-400">Así se ve una comparación (ejemplo)</p>
                 <span class="text-[10px] font-bold text-emerald-600 bg-emerald-50 border border-emerald-100 px-2.5 py-1 rounded-full">Freidora de Aire Ninja</span>
             </div>
-            <div class="grid grid-cols-1 sm:grid-cols-3 gap-3 pointer-events-none select-none">
-                <div class="rounded-2xl border-2 border-emerald-400 bg-white p-4 shadow-md relative">
+            <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                <button type="button" onclick="quickSearch('Freidora de Aire Ninja')" class="demo-preview-card text-left rounded-2xl border-2 border-emerald-400 bg-white p-4 shadow-md relative cursor-pointer hover:shadow-xl hover:-translate-y-0.5 transition-all">
                     <div class="absolute -top-2.5 left-4 bg-emerald-500 text-white text-[9px] font-black uppercase tracking-widest px-2.5 py-0.5 rounded-full">Mejor precio</div>
                     <p class="text-[10px] font-black uppercase tracking-widest text-emerald-600 mb-1">Amazon México</p>
                     <p class="text-sm font-bold text-slate-800 mb-2 leading-tight">Ninja AF101 Freidora de Aire 3.8L</p>
                     <p class="text-xl font-black text-emerald-600 mb-1">$1,299 <span class="text-sm font-medium text-slate-400 line-through">$1,799</span></p>
                     <p class="text-xs text-emerald-600 font-bold">−27% · Envío gratis</p>
-                </div>
-                <div class="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+                </button>
+                <button type="button" onclick="quickSearch('Freidora de Aire Ninja')" class="demo-preview-card text-left rounded-2xl border border-slate-200 bg-white p-4 shadow-sm cursor-pointer hover:shadow-lg hover:-translate-y-0.5 hover:border-emerald-300 transition-all">
                     <p class="text-[10px] font-black uppercase tracking-widest text-slate-500 mb-1">Mercado Libre</p>
                     <p class="text-sm font-bold text-slate-800 mb-2 leading-tight">Ninja AF101 Freidora de Aire 3.8L</p>
                     <p class="text-xl font-black text-slate-700 mb-1">$1,450</p>
                     <p class="text-xs text-slate-500 font-medium">Envío $89 · Vendedor oficial</p>
-                </div>
-                <div class="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm opacity-70">
+                </button>
+                <button type="button" onclick="quickSearch('Freidora de Aire Ninja')" class="demo-preview-card text-left rounded-2xl border border-slate-200 bg-white p-4 shadow-sm opacity-80 cursor-pointer hover:opacity-100 hover:shadow-lg hover:-translate-y-0.5 hover:border-emerald-300 transition-all">
                     <p class="text-[10px] font-black uppercase tracking-widest text-slate-500 mb-1">Walmart</p>
                     <p class="text-sm font-bold text-slate-800 mb-2 leading-tight">Ninja AF101 Freidora de Aire 3.8L</p>
                     <p class="text-xl font-black text-slate-700 mb-1">$1,599</p>
                     <p class="text-xs text-slate-500 font-medium">Envío gratis · En tienda</p>
-                </div>
+                </button>
             </div>
-            <p class="text-center text-xs text-slate-400 mt-3 font-medium">Escribe cualquier producto arriba → Lumu compara en 10+ tiendas en segundos</p>
+            <div class="text-center mt-4">
+                <button type="button" onclick="quickSearch('Freidora de Aire Ninja')" id="demo-preview-cta" class="inline-flex items-center gap-2 bg-emerald-500 hover:bg-emerald-600 text-white text-sm font-black px-5 py-2.5 rounded-xl shadow-lg shadow-emerald-500/20 transition-all hover:-translate-y-0.5">
+                    ▶ Ver esta comparación en vivo — gratis
+                </button>
+                <p id="demo-preview-footer" class="text-xs text-slate-400 mt-2 font-medium">Precios de ejemplo · La búsqueda en vivo trae precios reales de hoy</p>
+            </div>
         </div>
 
 
@@ -6095,7 +6100,7 @@
 
     <!-- Lógica de la APP (JS Principal) -->
 
-    <script src="app.js?v=telegram_alerts_v1"></script>
+    <script src="app.js?v=design_quality_v1"></script>
 
     <!-- Ocultar demo preview cuando hay resultados activos -->
     <script>

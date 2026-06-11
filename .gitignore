@@ -44,3 +44,4 @@ e2e/*.mp4
 
 # Husky internal files
 .husky/_
+tmp-screenshots/

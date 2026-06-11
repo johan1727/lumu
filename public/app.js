@@ -1450,6 +1450,17 @@ function getRegionUICopy() {
     return REGION_UI_COPY[currentRegion] || REGION_UI_COPY.MX;
 }
 
+// Precios VIP reales por región — deben coincidir con plan_prices (Supabase)
+// y con la tabla PRICING de precios.html. El "$39" estático solo aplica a MX.
+function getVipPriceLabels(regionCode = currentRegion) {
+    const monthly = { MX: '$39 MXN', US: '$3.99 USD', CL: '$3.900 CLP', CO: '$15.900 COP', AR: '$4.900 ARS', PE: 'S/ 14.90' };
+    const annual = { MX: '$390 MXN', US: '$39.99 USD', CL: '$39.000 CLP', CO: '$159.000 COP', AR: '$49.000 ARS', PE: 'S/ 149' };
+    return {
+        monthly: monthly[regionCode] || monthly.MX,
+        annual: annual[regionCode] || annual.MX
+    };
+}
+
 function setTextById(id, value) {
     const element = document.getElementById(id);
     if (element && typeof value === 'string') element.textContent = value;
@@ -2027,6 +2038,13 @@ function applyRegionalCopy() {
     const quickTryLabel = document.getElementById('quick-try-label');
     if (quickTryLabel) quickTryLabel.textContent = isEnglish ? 'Try' : 'Prueba con';
 
+    const demoPreviewTitle = document.getElementById('demo-preview-title');
+    if (demoPreviewTitle) demoPreviewTitle.textContent = isEnglish ? 'What a comparison looks like (sample)' : 'Así se ve una comparación (ejemplo)';
+    const demoPreviewCta = document.getElementById('demo-preview-cta');
+    if (demoPreviewCta) demoPreviewCta.textContent = isEnglish ? '▶ Run this comparison live — free' : '▶ Ver esta comparación en vivo — gratis';
+    const demoPreviewFooter = document.getElementById('demo-preview-footer');
+    if (demoPreviewFooter) demoPreviewFooter.textContent = isEnglish ? 'Sample prices · The live search brings today\'s real prices' : 'Precios de ejemplo · La búsqueda en vivo trae precios reales de hoy';
+
     const helperCopy = document.getElementById('location-helper-copy');
     if (helperCopy) {
         const helperTextNode = Array.from(helperCopy.childNodes).find(node => node.nodeType === Node.TEXT_NODE && node.textContent.trim());
@@ -2072,9 +2090,10 @@ function applyRegionalCopy() {
         advancedFiltersTitle.textContent = isEnglish ? 'Advanced filters' : 'Filtros avanzados';
     }
     if (pricingCopy) {
+        const vipMonthly = getVipPriceLabels().monthly;
         pricingCopy.innerHTML = isEnglish
-            ? 'From <strong class="text-emerald-600">$39 USD/month</strong> — no ads, price alerts, and tools to find the best deals faster.'
-            : `Desde <strong class="text-emerald-600">$39 ${config.currency}/mes</strong> — sin anuncios, con alertas de precio y herramientas para encontrar más rápido las mejores ofertas.`;
+            ? `From <strong class="text-emerald-600">${vipMonthly}/month</strong> — no ads, price alerts, and tools to find the best deals faster.`
+            : `Desde <strong class="text-emerald-600">${vipMonthly}/mes</strong> — sin anuncios, con alertas de precio y herramientas para encontrar más rápido las mejores ofertas.`;
     }
 
     const flashDealsSection = document.getElementById('flash-deals-section');
@@ -2264,12 +2283,21 @@ function applyRegionalCopy() {
     setTextById('logout-label', ui.profile.logout);
 
     setTextById('pricing-badge', ui.pricing.badge);
-    setTextById('pricing-title', ui.pricing.title);
-    setHTMLById('pricing-copy', ui.pricing.copyHtml);
     setTextById('pricing-chip-ads', ui.pricing.chipAds);
     setTextById('pricing-chip-alerts', ui.pricing.chipAlerts);
     setTextById('pricing-chip-coupons', ui.pricing.chipCoupons);
     setTextById('pricing-button-label', ui.pricing.button);
+
+    // Título y copy con precio regional real (el estático $39 solo es válido en MX)
+    // + mención del plan anual (2 meses gratis), que ya existe en precios.html y Stripe.
+    const vipLabels = getVipPriceLabels();
+    const isEnglishPricing = isEnglishRegion();
+    setHTMLById('pricing-title', isEnglishPricing
+        ? `VIP for <span class="text-emerald-600">${vipLabels.monthly}/month</span> — 4× more searches, ad-free`
+        : `VIP por <span class="text-emerald-600">${vipLabels.monthly}/mes</span> — 4× más búsquedas, sin anuncios`);
+    setHTMLById('pricing-copy', isEnglishPricing
+        ? `Price alerts · Exclusive coupons · Cancel anytime · Or save 2 months with annual (${vipLabels.annual}/yr)`
+        : `Alertas de precio · Cupones exclusivos · Cancela cuando quieras · O ahorra 2 meses con el anual (${vipLabels.annual}/año)`);
 
     setTextById('footer-brand-tagline', config.footer.tagline);
     setTextById('footer-brand-supporting', ui.footer.supporting);
