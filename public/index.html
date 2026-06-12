@@ -171,13 +171,25 @@
 
 
 
-    <!-- Google AdSense (Cuenta Aprobada) -->
-
+    <!-- Google AdSense (Cuenta Aprobada) — carga diferida a primera interacción -->
     <meta name="google-adsense-account" content="ca-pub-7394172038398161">
-
-    <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-7394172038398161"
-
-        crossorigin="anonymous"></script>
+    <script>
+    (function(){
+        var loaded = false;
+        function loadAds(){
+            if(loaded) return; loaded = true;
+            var s = document.createElement('script');
+            s.async = true;
+            s.src = 'https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-7394172038398161';
+            s.crossOrigin = 'anonymous';
+            document.head.appendChild(s);
+        }
+        ['scroll','click','touchstart','keydown'].forEach(function(e){
+            window.addEventListener(e, loadAds, {once:true, passive:true});
+        });
+        setTimeout(loadAds, 5000);
+    })();
+    </script>
 
     <!-- Google IMA SDK (Rewarded Ads): se carga bajo demanda en app.js (loadImaSdk)
          para no costar 148KB en cada visita -->
@@ -3967,9 +3979,9 @@
 
                 <div class="flex items-center gap-3">
 
-                    <h3 id="flash-deals-title" class="text-2xl font-display font-black text-slate-900">Ofertas Relámpago</h3>
+                    <h2 id="flash-deals-title" class="text-2xl font-display font-black text-slate-900">Ofertas Relámpago</h2>
 
-                    <span id="flash-deals-live-pill" class="inline-flex items-center rounded-full bg-rose-50 px-3 py-1 text-[10px] font-black uppercase tracking-[0.18em] text-rose-600">🔴 En vivo · Hoy</span>
+                    <span id="flash-deals-live-pill" class="inline-flex items-center rounded-full bg-rose-50 px-3 py-1 text-[10px] font-black uppercase tracking-[0.18em] text-rose-700">🔴 En vivo · Hoy</span>
 
                 </div>
 
@@ -6099,7 +6111,7 @@
 
     <!-- Lógica de la APP (JS Principal) -->
 
-    <script src="app.js?v=perf_a11y_v1"></script>
+    <script src="app.js?v=perf_a11y_v2"></script>
 
     <!-- Ocultar demo preview cuando hay resultados activos -->
     <script>

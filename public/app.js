@@ -1569,16 +1569,16 @@ function renderFlashDeals(deals = []) {
         return `
             <article class="w-64 flex-shrink-0 snap-start sm:w-auto bg-white rounded-2xl p-4 border border-slate-200 shadow-sm hover:shadow-xl hover:-translate-y-1 transition-all duration-300 group">
                 <div class="relative w-full aspect-[4/3] bg-slate-50/80 rounded-xl mb-4 flex items-center justify-center overflow-hidden p-4 cursor-pointer" data-flash-deal-query="${safeTitle}">
-                    <div class="absolute top-2 left-2 bg-rose-500 text-white text-[10px] font-black px-2.5 py-1 rounded-full z-10 shadow-sm tracking-[0.14em] uppercase">-${Math.max(1, Number(deal.discountPct || 0))}%</div>
+                    <div class="absolute top-2 left-2 bg-rose-600 text-white text-[10px] font-black px-2.5 py-1 rounded-full z-10 shadow-sm tracking-[0.14em] uppercase">-${Math.max(1, Number(deal.discountPct || 0))}%</div>
                     <img src="${safeImage}" alt="${safeTitle}" referrerpolicy="no-referrer" loading="lazy"
                         class="w-full h-full object-contain group-hover:scale-110 transition-transform duration-500 drop-shadow-md"
                         onerror="this.onerror=null; this.src='/logo.png';">
                 </div>
-                <div class="text-[10px] uppercase font-bold text-slate-400 mb-1 tracking-widest">${safeSource}</div>
+                <div class="text-[10px] uppercase font-bold text-slate-500 mb-1 tracking-widest">${safeSource}</div>
                 <h4 class="font-bold text-slate-800 text-sm mb-3 line-clamp-2 leading-tight group-hover:text-emerald-700 transition-colors min-h-[2.5rem] cursor-pointer" data-flash-deal-query="${safeTitle}">${safeTitle}</h4>
                 <div class="flex items-end gap-2 mb-1 flex-wrap">
                     <span class="text-2xl font-black text-slate-900">${currentPrice}</span>
-                    ${originalPrice ? `<span class="text-xs font-bold text-slate-400 line-through mb-1">${originalPrice}</span>` : ''}
+                    ${originalPrice ? `<span class="text-xs font-bold text-slate-500 line-through mb-1">${originalPrice}</span>` : ''}
                 </div>
                 <div class="text-[11px] ${deal.shipping ? 'text-emerald-600 bg-emerald-50' : 'text-blue-600 bg-blue-50'} font-bold w-fit px-2 py-0.5 rounded-md mt-2 tracking-wide">${sanitize(metaLabel)}</div>
                 <button type="button" class="mt-4 w-full rounded-full bg-slate-900 text-white font-black text-[11px] uppercase tracking-[0.16em] px-4 py-3 hover:bg-emerald-600 transition-colors" data-flash-deal-query="${safeTitle}">⚡ ${currentRegion === 'US' ? 'Find cheaper price' : 'Buscar precio más barato'}</button>
@@ -7916,23 +7916,41 @@ async function fetchServerAlerts() {
     return _alertsCache;
 }
 
+// Los títulos de alertas vienen de scraping ("Comprar Apple iPhone 15 Pro –
+// Certificado y Envío Gratis en 2 Días..."). Limpiar para mostrar.
+function cleanAlertTitle(raw) {
+    let title = String(raw || '').replace(/\s+/g, ' ').trim();
+    title = title.replace(/^(comprar|buy)\s+/i, '');
+    title = title.split(/\s[–—|]\s/)[0];
+    if (title.length > 55) title = title.slice(0, 55).replace(/\s+\S*$/, '') + '…';
+    return title || 'Producto';
+}
+
 function renderAlerts() {
     if (!alertsList) return;
     const alerts = _alertsCache;
+    const isUS = currentRegion === 'US';
     if (alerts.length === 0) {
-        alertsList.innerHTML = `<p class="text-sm text-slate-400 text-center py-4">${getRegionUICopy().priceAlerts.empty}</p>`;
+        alertsList.innerHTML = `
+            <div class="text-center py-6">
+                <div class="text-3xl mb-2">🔕</div>
+                <p class="text-sm text-slate-400 font-medium">${getRegionUICopy().priceAlerts.empty}</p>
+                <p class="text-xs text-slate-400 mt-1">${isUS ? 'Create one above or tap "Alert me" on any product.' : 'Crea una arriba o toca "Avisarme" en cualquier producto.'}</p>
+            </div>`;
         return;
     }
     alertsList.innerHTML = alerts.map((a, i) => `
-        <div class="flex items-center justify-between p-3 ${a.triggered ? 'bg-emerald-100 border-emerald-300' : 'bg-emerald-50 border-emerald-100'} border rounded-xl">
-            <div>
-                <p class="text-sm font-bold text-slate-800">${sanitize(a.product)}</p>
-                <p class="text-xs text-emerald-600 font-semibold">${currentRegion === 'US' ? 'Target' : 'Meta'}: ${formatCurrencyByRegion(a.price)}</p>
-                ${a.last_price ? `<p class="text-xs text-slate-500">${currentRegion === 'US' ? 'Last price seen' : 'Último precio visto'}: ${formatCurrencyByRegion(a.last_price)}</p>` : ''}
-                ${a.triggered ? `<p class="text-xs text-emerald-700 font-black">🎉 ${currentRegion === 'US' ? 'Target reached!' : '¡Meta alcanzada!'}</p>` : ''}
+        <div class="flex items-center gap-3 p-3 ${a.triggered ? 'bg-emerald-50 border-emerald-300' : 'bg-white border-slate-200'} border rounded-xl">
+            <div class="w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0 text-base ${a.triggered ? 'bg-emerald-100' : 'bg-slate-100'}">${a.triggered ? '🎉' : '🔔'}</div>
+            <div class="min-w-0 flex-grow">
+                <p class="text-sm font-bold text-slate-800 truncate" title="${sanitize(a.product)}">${sanitize(cleanAlertTitle(a.product))}</p>
+                <p class="text-xs text-slate-500 truncate">
+                    <span class="text-emerald-600 font-bold">${isUS ? 'Target' : 'Meta'} ${formatCurrencyByRegion(a.price)}</span>${a.last_price ? ` · ${isUS ? 'last seen' : 'visto'} ${formatCurrencyByRegion(a.last_price)}` : ''}
+                </p>
+                ${a.triggered ? `<p class="text-[11px] text-emerald-700 font-black">${isUS ? 'Target reached!' : '¡Meta alcanzada!'}</p>` : ''}
             </div>
-            <button class="text-slate-400 hover:text-red-500 transition-colors p-1 rounded-full" onclick="deleteAlert('${a.id || i}')">
-                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+            <button aria-label="${isUS ? 'Delete alert' : 'Eliminar alerta'}" class="flex-shrink-0 w-9 h-9 flex items-center justify-center rounded-full text-slate-400 hover:text-red-500 hover:bg-red-50 transition-colors" onclick="deleteAlert('${a.id || i}')">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>
             </button>
         </div>
     `).join('');
