@@ -19,6 +19,9 @@ Thumbs.db
 .vscode/
 .idea/
 
+# Claude local tooling (skills, plugins con .git anidado) — no pertenece al repo del producto
+.claude/skills/
+
 # Build artifacts
 dist/
 *.tgz

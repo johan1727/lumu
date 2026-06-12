@@ -2,19 +2,26 @@ const supabase = require('../config/supabase');
 
 const stripe = process.env.STRIPE_SECRET_KEY ? require('stripe')(process.env.STRIPE_SECRET_KEY) : null;
 
-const STRIPE_PRICE_PLAN_MAP = {
-    price_1TLnG1E8s9f9Vj9DnhnKCbEr: 'b2b_annual',
-    price_1TLnDlE8s9f9Vj9D5aLb8ZoV: 'b2b',
-    price_1TLnF5E8s9f9Vj9DvSWnEARF: 'personal_vip_annual',
-    price_1TLnDGE8s9f9Vj9DxFjYHI5r: 'personal_vip'
+// Live price IDs verificados contra la cuenta Stripe "Consiguemelo AILumu" (2026-06-12).
+// Los hardcodeados anteriores (..E8s9f9Vj9D..) eran de OTRA cuenta y no existían aquí:
+// si faltaba la env var, el checkout fallaba con "No such price". Las env vars
+// STRIPE_*_PRICE_ID siguen teniendo prioridad si están definidas.
+//   personal_vip         $39 MXN/mes    → "Consíguemelo VIP"
+//   personal_vip_annual  $399 MXN/año   → "Consíguemelo VIP ANUAL"
+//   b2b                  $199 MXN/mes   → "Consíguemelo Mayorista VIP"
+//   b2b_annual           $1,999 MXN/año → "Consíguemelo Mayorista VIP ANUAL"
+const PLAN_PRICE_ID_MAP = {
+    b2b_annual: process.env.STRIPE_B2B_ANNUAL_PRICE_ID || 'price_1TEGeh1H4K5iuzsCVDKHlDXc',
+    b2b: process.env.STRIPE_B2B_PRICE_ID || 'price_1T6PsM1H4K5iuzsCyYtywDPG',
+    personal_vip_annual: process.env.STRIPE_VIP_ANNUAL_PRICE_ID || 'price_1TEGf71H4K5iuzsCFMZMnkmR',
+    personal_vip: process.env.STRIPE_VIP_PRICE_ID || 'price_1T6HHr1H4K5iuzsCFhQKxf7R'
 };
 
-const PLAN_PRICE_ID_MAP = {
-    b2b_annual: process.env.STRIPE_B2B_ANNUAL_PRICE_ID || 'price_1TLnG1E8s9f9Vj9DnhnKCbEr',
-    b2b: process.env.STRIPE_B2B_PRICE_ID || 'price_1TLnDlE8s9f9Vj9D5aLb8ZoV',
-    personal_vip_annual: process.env.STRIPE_VIP_ANNUAL_PRICE_ID || 'price_1TLnF5E8s9f9Vj9DvSWnEARF',
-    personal_vip: process.env.STRIPE_VIP_PRICE_ID || 'price_1TLnDGE8s9f9Vj9DxFjYHI5r'
-};
+// Mapa inverso (priceId → plan) derivado del directo para que el webhook y el
+// checkout nunca se desincronicen aunque se sobreescriban las env vars.
+const STRIPE_PRICE_PLAN_MAP = Object.fromEntries(
+    Object.entries(PLAN_PRICE_ID_MAP).map(([plan, priceId]) => [priceId, plan])
+);
 
 // FIX #1: Helper que lanza si Supabase devuelve error en operaciones críticas
 function assertNoSupabaseError(error, context) {

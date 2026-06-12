@@ -1561,7 +1561,13 @@ function renderFlashDeals(deals = []) {
         const safeSource = sanitize(deal.source || 'Mercado Libre');
         const safeImage = sanitize(deal.image || '/logo.png');
         const currentPrice = formatProductPriceLabel(deal.price || 0, deal);
-        const originalPrice = deal.originalPrice ? formatProductPriceLabel(deal.originalPrice, deal) : '';
+        // Guard contra precios "antes" basura de price_history (ej. un dato de $589k):
+        // solo mostramos tachado + descuento si el ahorro es real y plausible (<=80% off).
+        const curPriceNum = Number(deal.price) || 0;
+        const origPriceNum = Number(deal.originalPrice) || 0;
+        const hasPlausibleOriginal = curPriceNum > 0 && origPriceNum > curPriceNum && origPriceNum <= curPriceNum * 5;
+        const originalPrice = hasPlausibleOriginal ? formatProductPriceLabel(deal.originalPrice, deal) : '';
+        const discountPct = hasPlausibleOriginal ? Math.min(80, Math.max(1, Math.round(Number(deal.discountPct) || 0))) : 0;
         const metaLabel = deal.shipping
             ? (currentRegion === 'US' ? 'Free shipping' : deal.shipping)
             : (currentRegion === 'US' ? 'Verified deal today' : 'Oferta verificada hoy');
@@ -1569,7 +1575,7 @@ function renderFlashDeals(deals = []) {
         return `
             <article class="w-64 flex-shrink-0 snap-start sm:w-auto bg-white rounded-2xl p-4 border border-slate-200 shadow-sm hover:shadow-xl hover:-translate-y-1 transition-all duration-300 group">
                 <div class="relative w-full aspect-[4/3] bg-slate-50/80 rounded-xl mb-4 flex items-center justify-center overflow-hidden p-4 cursor-pointer" data-flash-deal-query="${safeTitle}">
-                    <div class="absolute top-2 left-2 bg-rose-600 text-white text-[10px] font-black px-2.5 py-1 rounded-full z-10 shadow-sm tracking-[0.14em] uppercase">-${Math.max(1, Number(deal.discountPct || 0))}%</div>
+                    ${discountPct > 0 ? `<div class="absolute top-2 left-2 bg-rose-600 text-white text-[10px] font-black px-2.5 py-1 rounded-full z-10 shadow-sm tracking-[0.14em] uppercase">-${discountPct}%</div>` : ''}
                     <img src="${safeImage}" alt="${safeTitle}" referrerpolicy="no-referrer" loading="lazy"
                         class="w-full h-full object-contain group-hover:scale-110 transition-transform duration-500 drop-shadow-md"
                         onerror="this.onerror=null; this.src='/logo.png';">
@@ -2104,7 +2110,11 @@ function applyRegionalCopy() {
         flashDealsSection.classList.toggle('hidden', !['MX', 'US', 'CL', 'CO', 'AR', 'PE', 'BR'].includes(currentRegion));
     }
     if (flashDealsLivePill) {
-        flashDealsLivePill.textContent = isEnglish ? '🔴 Live · Today' : '🔴 En vivo · Hoy';
+        // Reconstruir con el span del countdown (no usar textContent: borraría el span)
+        flashDealsLivePill.innerHTML = isEnglish
+            ? '🔴 Live · Ends in <span id="deals-countdown">…</span>'
+            : '🔴 En vivo · Termina en <span id="deals-countdown">…</span>';
+        if (typeof updateDealsCountdown === 'function') updateDealsCountdown();
     }
     if (flashDealsRefreshButton) {
         flashDealsRefreshButton.textContent = isEnglish ? 'Refresh' : 'Actualizar';
@@ -8207,8 +8217,8 @@ setTimeout(async () => {
         const proofEl = document.getElementById('pricing-social-proof');
         if (proofEl) {
             proofEl.textContent = isEnglishRegion()
-                ? `⭐ Over ${label} prices tracked · 🔒 Secure checkout with Stripe`
-                : `⭐ Más de ${label} precios rastreados · 🔒 Pago seguro con Stripe`;
+                ? `⭐ Over ${label} prices tracked · 🔒 Secure checkout with Stripe · One search that saves you $20 already paid for the month`
+                : `⭐ Más de ${label} precios rastreados · 🔒 Pago seguro con Stripe · Una búsqueda que te ahorra $400 ya pagó el mes entero`;
         }
     } catch (err) {
         console.warn('[Stats] Social proof fetch failed:', err.message);
@@ -9931,7 +9941,9 @@ document.addEventListener('keydown', (e) => {
 
 // --- Social Proof Ticker (Availability Heuristic + Mimetic Desire) ---
 (function initSocialProofTicker() {
-    const messages = [
+    const el = document.getElementById('ticker-msg');
+    if (!el) return;
+    const messagesES = [
         '✓ Usuario en CDMX encontró su iPhone $830 más barato en Amazon',
         '✓ Freidora Ninja: $649 en Walmart vs $899 en Liverpool — mismo día',
         '✓ Ahorra comparando antes de comprar: el precio varía hasta 40%',
@@ -9941,35 +9953,51 @@ document.addEventListener('keydown', (e) => {
         '✓ Licuadora Vitamix: $2,100 MXN de diferencia entre tiendas',
         '✓ MacBook Air M2: hasta $3,500 más barato en línea vs retail',
     ];
-    const el = document.getElementById('ticker-msg');
-    if (!el) return;
+    const messagesEN = [
+        '✓ A shopper just found their iPhone $40 cheaper on Amazon',
+        '✓ Ninja Air Fryer: $59 at Walmart vs $89 at Target — same day',
+        '✓ Compare before you buy: prices vary up to 40% between stores',
+        '✓ 55" Smart TV: a $120 gap between stores this week',
+        '✓ AirPods Pro: $35 cheaper on Amazon than in-store',
+        '✓ Before you pay, compare — Lumu does it in 8 seconds',
+        '✓ Vitamix blender: a $90 price gap between retailers',
+        '✓ MacBook Air M2: up to $180 cheaper online vs retail',
+    ];
+    // Re-evaluar el idioma en cada rotación: la región puede resolverse async
+    // (geo del servidor) DESPUÉS de que arranca el ticker.
+    const pickMessages = () => (typeof isEnglishRegion === 'function' && isEnglishRegion(currentRegion))
+        ? messagesEN
+        : messagesES;
+    el.textContent = pickMessages()[0];
     let idx = 0;
     setInterval(() => {
         el.style.opacity = '0';
         setTimeout(() => {
+            const messages = pickMessages();
             idx = (idx + 1) % messages.length;
-            el.innerHTML = messages[idx];
+            el.textContent = messages[idx];
             el.style.opacity = '1';
         }, 500);
     }, 4000);
 })();
 
 // --- Flash Deals Countdown (Scarcity + Urgency) ---
-(function initDealsCountdown() {
+// Busca el elemento en cada tick (no lo cachea) porque applyRegionalCopy()
+// reconstruye el pill y reemplaza el <span id="deals-countdown">. Así el
+// countdown se auto-repara cuando el span vuelve a crearse.
+function updateDealsCountdown() {
     const el = document.getElementById('deals-countdown');
     if (!el) return;
-    function tick() {
-        const now = new Date();
-        // midnight Mexico City (UTC-6, no DST adjustment for simplicity)
-        const midnight = new Date(now);
-        midnight.setHours(24, 0, 0, 0);
-        const diffMs = midnight - now;
-        const h = Math.floor(diffMs / 3600000);
-        const m = Math.floor((diffMs % 3600000) / 60000);
-        el.textContent = `${h}h ${m}m`;
-    }
-    tick();
-    setInterval(tick, 60000);
-})();
+    const now = new Date();
+    // próxima medianoche en la hora local del usuario
+    const midnight = new Date(now);
+    midnight.setHours(24, 0, 0, 0);
+    const diffMs = midnight - now;
+    const h = Math.floor(diffMs / 3600000);
+    const m = Math.floor((diffMs % 3600000) / 60000);
+    el.textContent = `${h}h ${m}m`;
+}
+updateDealsCountdown();
+setInterval(updateDealsCountdown, 30000);
 
 
