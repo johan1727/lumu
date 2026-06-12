@@ -3341,6 +3341,13 @@
 
 
 
+            <!-- Social Proof Ticker — rotates every 4s (Availability Heuristic + Mimetic Desire) -->
+            <div id="social-proof-ticker" class="text-center mb-4 h-6 flex items-center justify-center" aria-live="polite" aria-atomic="true">
+                <p id="ticker-msg" class="text-xs font-semibold text-slate-500 transition-opacity duration-500 opacity-100">
+                    <span class="text-emerald-600">✓</span> Usuario en CDMX encontró su iPhone $830 más barato en Amazon
+                </p>
+            </div>
+
             <!-- Search Form -->
 
             <form id="search-form" class="relative fade-in mx-auto w-full max-w-[72rem] mb-6 md:mb-8 md:sticky md:top-auto z-40">
@@ -3981,7 +3988,7 @@
 
                     <h2 id="flash-deals-title" class="text-2xl font-display font-black text-slate-900">Ofertas Relámpago</h2>
 
-                    <span id="flash-deals-live-pill" class="inline-flex items-center rounded-full bg-rose-50 px-3 py-1 text-[10px] font-black uppercase tracking-[0.18em] text-rose-700">🔴 En vivo · Hoy</span>
+                    <span id="flash-deals-live-pill" class="inline-flex items-center rounded-full bg-rose-50 px-3 py-1 text-[10px] font-black uppercase tracking-[0.18em] text-rose-700">🔴 En vivo · Termina en <span id="deals-countdown">…</span></span>
 
                 </div>
 
@@ -4766,7 +4773,7 @@
                 <div class="h-10 w-10 flex-shrink-0 flex items-center justify-center rounded-2xl bg-gradient-to-br from-emerald-500 to-teal-400 text-white shadow-md text-lg">⚡</div>
                 <div>
                     <p id="pricing-title" class="text-sm font-black text-slate-800">VIP por <span class="text-emerald-600">$39/mes</span> — 4× más búsquedas, sin anuncios</p>
-                    <p id="pricing-copy" class="text-xs text-slate-500 font-medium mt-0.5">Alertas de precio · Cupones exclusivos · Cancela cuando quieras</p>
+                    <p id="pricing-copy" class="text-xs text-slate-500 font-medium mt-0.5">Alertas de precio · Cupones exclusivos · Cancela cuando quieras · O ahorra pagando anual ($399 MXN/año)</p>
                 </div>
             </div>
             <div class="flex items-center gap-3 shrink-0">
@@ -4776,7 +4783,7 @@
                 </a>
             </div>
         </div>
-        <p id="pricing-social-proof" class="text-center text-[11px] text-slate-400 font-medium mt-2">⭐ Más de 1,200 precios rastreados · 🔒 Pago seguro con Stripe</p>
+        <p id="pricing-social-proof" class="text-center text-[11px] text-slate-400 font-medium mt-2">⭐ Más de 1,200 precios rastreados · 🔒 Pago seguro con Stripe · Una búsqueda que te ahorra $400 ya pagó el mes entero</p>
     </section>
 
 
@@ -6111,7 +6118,7 @@
 
     <!-- Lógica de la APP (JS Principal) -->
 
-    <script src="app.js?v=perf_a11y_v2"></script>
+    <script src="app.js?v=mktg_v1"></script>
 
     <!-- Ocultar demo preview cuando hay resultados activos -->
     <script>

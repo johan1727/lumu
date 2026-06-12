@@ -9929,6 +9929,47 @@ document.addEventListener('keydown', (e) => {
     }
 });
 
+// --- Social Proof Ticker (Availability Heuristic + Mimetic Desire) ---
+(function initSocialProofTicker() {
+    const messages = [
+        '✓ Usuario en CDMX encontró su iPhone $830 más barato en Amazon',
+        '✓ Freidora Ninja: $649 en Walmart vs $899 en Liverpool — mismo día',
+        '✓ Ahorra comparando antes de comprar: el precio varía hasta 40%',
+        '✓ Smart TV 55": diferencia de $1,200 entre tiendas esta semana',
+        '✓ Airpods Pro: $350 más baratos en Amazon que en tienda física',
+        '✓ Antes de pagar, compara — Lumu lo hace en 8 segundos',
+        '✓ Licuadora Vitamix: $2,100 MXN de diferencia entre tiendas',
+        '✓ MacBook Air M2: hasta $3,500 más barato en línea vs retail',
+    ];
+    const el = document.getElementById('ticker-msg');
+    if (!el) return;
+    let idx = 0;
+    setInterval(() => {
+        el.style.opacity = '0';
+        setTimeout(() => {
+            idx = (idx + 1) % messages.length;
+            el.innerHTML = messages[idx];
+            el.style.opacity = '1';
+        }, 500);
+    }, 4000);
+})();
 
+// --- Flash Deals Countdown (Scarcity + Urgency) ---
+(function initDealsCountdown() {
+    const el = document.getElementById('deals-countdown');
+    if (!el) return;
+    function tick() {
+        const now = new Date();
+        // midnight Mexico City (UTC-6, no DST adjustment for simplicity)
+        const midnight = new Date(now);
+        midnight.setHours(24, 0, 0, 0);
+        const diffMs = midnight - now;
+        const h = Math.floor(diffMs / 3600000);
+        const m = Math.floor((diffMs % 3600000) / 60000);
+        el.textContent = `${h}h ${m}m`;
+    }
+    tick();
+    setInterval(tick, 60000);
+})();
 
 
