@@ -1453,13 +1453,9 @@ function getRegionUICopy() {
 // Precios VIP reales por región — deben coincidir con plan_prices (Supabase)
 // y con la tabla PRICING de precios.html. El "$39" estático solo aplica a MX.
 function getVipPriceLabels(regionCode = currentRegion) {
-    const monthly = { MX: '$39 MXN', US: '$3.99 USD', CL: '$3.900 CLP', CO: '$15.900 COP', AR: '$4.900 ARS', PE: 'S/ 14.90' };
-    // MX anual = $399 (precio real cobrado por Stripe, verificado 2026-06-10)
-    const annual = { MX: '$399 MXN', US: '$39.99 USD', CL: '$39.000 CLP', CO: '$159.000 COP', AR: '$49.000 ARS', PE: 'S/ 149' };
-    return {
-        monthly: monthly[regionCode] || monthly.MX,
-        annual: annual[regionCode] || annual.MX
-    };
+    // Stripe solo cobra en MXN — todos los planes muestran precio real
+    void regionCode;
+    return { monthly: '$39 MXN', annual: '$399 MXN' };
 }
 
 function setTextById(id, value) {
