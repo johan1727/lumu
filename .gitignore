@@ -34,6 +34,9 @@ p_output.*
 diff.*
 syntax_error.txt
 
+# Graphify generated output
+graph.json
+
 # Local scratch and test scripts
 scratch/
 scripts/test-*.js

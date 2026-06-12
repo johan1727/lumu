@@ -14,7 +14,9 @@
         "build:ui": "npx esbuild src/ui/index.ts --bundle --minify --platform=browser --format=iife --global-name=LumuUI --outfile=public/ui-bundle.js",
         "build": "npm run build:css && npm run build:ui",
         "lint": "node --check api/index.js && node --check src/controllers/searchController.js && node --check src/services/shoppingService.js && node --check src/services/cacheService.js",
-        "prepare": "husky install"
+        "prepare": "husky install",
+        "graphify:build": "npx ts-node scripts/graphify.ts build",
+        "graphify:info": "npx ts-node scripts/graphify.ts info"
     },
     "engines": {
         "node": ">=18"
