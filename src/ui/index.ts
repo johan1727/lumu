@@ -1,4 +1,4 @@
-import { mountDottedSurface } from './dottedSurface';
+
 
 declare global {
     interface Window {
@@ -44,7 +44,7 @@ function mountHomeScrollReveal() {
 
 function safeMount() {
     try {
-        const container = document.getElementById('bg-dotted-surface');
+
 
         if (window.__LUMU_UI_CLEANUP__) {
             try {
@@ -54,9 +54,7 @@ function safeMount() {
 
         const cleanups: Array<() => void> = [];
 
-        if (container) {
-            cleanups.push(mountDottedSurface({ container }));
-        }
+
 
         cleanups.push(mountHomeScrollReveal());
 

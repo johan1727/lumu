@@ -149,11 +149,13 @@ lumu/
 #### 1. **Affiliate Commissions**
 Earn when users buy through Lumu's affiliate links:
 
-| Partner | Commission Rate | Category |
-|---------|-----------------|----------|
-| **Amazon** (US/MX) | 1-4.5% | All products |
-| **Mercado Libre** (MX) | 5-16% | Varies by category |
-| **Falabella** (CL/CO) | ~5% | All products |
+| Partner | Integration status |
+|---------|--------------------|
+| Amazon (US/MX) | Country-specific tags supported; account approval and attribution must be verified. |
+| Mercado Libre | Provider-issued affiliate links only; campaign eligibility must be verified. |
+| Falabella | Planned; no verified affiliate integration. |
+
+Commission rates and credited purchases depend on the approved program and are not guaranteed by this code.
 
 #### 2. **VIP Subscription**
 - **Price:** $39 MXN/month (~$2 USD)

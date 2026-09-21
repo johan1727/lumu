@@ -51,3 +51,6 @@ e2e/*.mp4
 # Husky internal files
 .husky/_
 tmp-screenshots/
+
+# Supabase CLI local metadata
+supabase/.temp/

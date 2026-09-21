@@ -206,7 +206,7 @@ const REGION_LABELS = {
         locale: 'es-MX',
         currency: 'MXN',
         searchPlaceholder: 'Dime qué estás buscando... Ej: iPhone 15 Pro Max',
-        submitLabel: 'Enviar',
+        submitLabel: 'Comparar precios',
         helperCopy: 'Lumu usa tu ubicación segura para encontrar ofertas físicas.',
         filters: {
             global: '🌎 Todas partes',
@@ -455,8 +455,8 @@ const REGION_UI_COPY = {
             login: 'Ingresar'
         },
         hero: {
-            titleHtml: 'Compara precios con IA,<br/><span class="text-transparent bg-clip-text bg-gradient-to-r from-emerald-500 to-teal-400">encuentra dónde conviene.</span>',
-            subtitle: 'Busca cualquier producto y Lumu compara precios en Amazon, Mercado Libre y tiendas locales.',
+            titleHtml: 'Compra mejor.<br/><span class="premium-title-accent">Sin buscar de más.</span>',
+            subtitle: 'Dinos qué buscas. Lumu compara tiendas y precios para ayudarte a elegir con confianza.',
             assistant: 'Escribe producto, presupuesto, uso o si quieres que compare por ti.',
             attachImageTitle: 'Adjuntar Imagen',
             voiceInputTitle: 'Dictado por Voz'
@@ -692,8 +692,8 @@ const REGION_UI_COPY = {
             login: 'Sign In'
         },
         hero: {
-            titleHtml: 'Compare prices with AI,<br/><span class="text-transparent bg-clip-text bg-gradient-to-r from-emerald-500 to-teal-400">find where it makes sense.</span>',
-            subtitle: 'Search any product and Lumu compares prices across Amazon, Mercado Libre, and local stores.',
+            titleHtml: 'Shop smarter.<br/><span class="premium-title-accent">Skip the endless search.</span>',
+            subtitle: 'Tell us what you need. Lumu compares stores and prices to help you choose with confidence.',
             assistant: 'Type the product, budget, use case, or ask Lumu to compare for you.',
             attachImageTitle: 'Attach Image',
             voiceInputTitle: 'Voice Dictation'
@@ -2031,7 +2031,13 @@ function applyRegionalCopy() {
 
     const searchInputEl = document.getElementById('search-input');
     if (searchInputEl) searchInputEl.placeholder = config.searchPlaceholder;
+    setTextById('search-input-label', isEnglish ? 'What product are you looking for?' : '¿Qué producto buscas?');
+    const skipLink = document.querySelector('.skip-link');
+    if (skipLink) skipLink.textContent = isEnglish ? 'Skip to content' : 'Saltar al contenido';
 
+    setTextById('hero-gift-badge', isEnglish ? 'Your next purchase, thoughtfully chosen' : 'Tu próxima compra, mejor elegida');
+    const storeOptionsLabel = document.getElementById('store-options-label');
+    if (storeOptionsLabel) storeOptionsLabel.firstChild.textContent = isEnglish ? 'Choose stores ' : 'Elegir tiendas ';
     const searchButtonEl = document.getElementById('search-button');
     if (searchButtonEl) {
         const labelNode = Array.from(searchButtonEl.childNodes).find(node => node.nodeType === Node.TEXT_NODE && node.textContent.trim());
@@ -3224,7 +3230,7 @@ function openProductHistoryModal(product = {}) {
 
 function getBestOptionProduct(products = []) {
     if (!Array.isArray(products) || products.length === 0) return null;
-    return [...products].sort((a, b) => Number(b.bestBuyScore || 0) - Number(a.bestBuyScore || 0))[0] || null;
+    return products.find(product => !product.isMerchantReference) || null;
 }
 
 function renderBestOptionSummary(product = null) {
@@ -3241,8 +3247,8 @@ function renderBestOptionSummary(product = null) {
     const isUS = currentRegion === 'US';
     const preferredTarget = String(product.urlOriginal || product.urlMonetizada || '');
     const formattedPrice = Number(product.precio) > 0 ? formatProductPriceLabel(product.precio, product) : (isUS ? 'Price unavailable' : 'Precio no disponible');
-    const badgeLabel = sanitize(product.bestBuyLabel || (isUS ? 'Best option' : 'Mejor opción'));
-    const shippingCopy = product.shippingText ? sanitize(localizeDynamicResultText(product.shippingText, isUS)) : (isUS ? 'Trusted store and strong match.' : 'Tienda confiable y buena coincidencia.');
+    const badgeLabel = sanitize(product.bestBuyLabel || (isUS ? 'First comparison result' : 'Primer resultado de comparación'));
+    const shippingCopy = product.shippingText ? sanitize(localizeDynamicResultText(product.shippingText, isUS)) : (isUS ? 'Confirm shipping, stock and terms at the store.' : 'Confirma envío, stock y condiciones en la tienda.');
 
     summaryEl.classList.remove('hidden');
     summaryEl.innerHTML = `
@@ -3250,7 +3256,7 @@ function renderBestOptionSummary(product = null) {
             <div class="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
                 <div class="min-w-0">
                     <div class="flex flex-wrap items-center gap-2 mb-2">
-                        <span class="inline-flex items-center gap-2 rounded-full bg-emerald-600 px-3 py-1 text-[11px] font-black uppercase tracking-[0.16em] text-white">✨ ${isUS ? 'Best Option Found' : 'Mejor Opción Encontrada'}</span>
+                        <span class="inline-flex items-center gap-2 rounded-full bg-emerald-600 px-3 py-1 text-[11px] font-black uppercase tracking-[0.16em] text-white">✨ ${isUS ? 'Comparison result' : 'Resultado de comparación'}</span>
                         <span class="inline-flex items-center rounded-full bg-white px-3 py-1 text-[11px] font-black uppercase tracking-[0.16em] text-emerald-700 ring-1 ring-emerald-200">${badgeLabel}</span>
                     </div>
                     <h4 class="text-base md:text-lg font-black text-slate-900 line-clamp-2">${sanitize(product.titulo || '')}</h4>
@@ -5103,7 +5109,7 @@ async function initApp() {
         btnSearchModeNormal = document.getElementById('btn-search-mode-normal');
         if (btnDeepResearch && btnSearchModeNormal) {
             setDeepResearchState(false);
-            maybeShowDeepResearchUpdateBanner();
+            // Search modes explain themselves on selection; no promotional banner in the form.
             initSearchFlowReveal();
             
             // Tooltip hover for desktop
@@ -6177,7 +6183,7 @@ async function initApp() {
                     ? 'USADO'
                     : product.conditionLabel === 'refurbished'
                         ? 'REACOND.'
-                        : 'NUEVO';
+                        : product.conditionLabel === 'new' ? 'NUEVO' : 'CONDICIÓN SIN CONFIRMAR';
 
                 let trendBadge = '';
                 if (product.priceTrend?.direction === 'down') {
@@ -6189,7 +6195,7 @@ async function initApp() {
                 return `
                 <div class="chat-product-item flex items-center gap-3 p-3 rounded-xl hover:bg-emerald-50/80 cursor-pointer group/item transition-all duration-200 ${isCheapest ? 'bg-emerald-50/50 border border-emerald-200/50' : 'border border-slate-100 hover:border-emerald-200'}"
                      data-target-url="${targetUrl}" style="animation: slideInUp 0.3s ease-out ${idx * 80}ms both">
-                    ${isCheapest ? `<div class="absolute -top-1.5 -left-1 bg-emerald-500 text-white text-[8px] font-black px-2 py-0.5 rounded-md shadow-sm z-10">💰 ${currentRegion === 'US' ? 'BEST PRICE' : 'MEJOR PRECIO'}</div>` : ''}
+                    ${isCheapest ? `<div class="absolute -top-1.5 -left-1 bg-emerald-500 text-white text-[8px] font-black px-2 py-0.5 rounded-md shadow-sm z-10">💰 ${currentRegion === 'US' ? 'LOWEST LISTED PRICE' : 'MENOR PRECIO LISTADO'}</div>` : ''}
                     <div class="relative flex-shrink-0">
                         <img src="${imgUrl}" alt="" class="w-14 h-14 object-contain rounded-xl bg-white shadow-sm mix-blend-multiply"
                              onerror="this.onerror=null; this.src='data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 width=%2780%27 height=%2780%27 viewBox=%270 0 80 80%27%3E%3Crect width=%2780%27 height=%2780%27 fill=%27%23f1f5f9%27 rx=%2712%27/%3E%3Ctext x=%2740%27 y=%2748%27 text-anchor=%27middle%27 font-size=%2724%27 fill=%2794a3b8%27%3E📦%3C/text%3E%3C/svg%3E'">
@@ -6691,7 +6697,7 @@ async function initApp() {
                 }
                 // Hide online products with no price — they would show 'Ver precio en tienda'
                 // which provides poor UX. Local store results are exempt since price-in-store is expected.
-                if (!product.isLocalStore) {
+                if (!product.isLocalStore && !product.isMerchantReference) {
                     const rawP = product.precio;
                     if (rawP == null || rawP === '' || rawP === 'null' || rawP === 0 || rawP === '0') {
                         return false;
@@ -7139,7 +7145,7 @@ async function initApp() {
                     ? (isUS ? 'USED' : 'USADO')
                     : product.conditionLabel === 'refurbished'
                         ? (isUS ? 'REFURB.' : 'REACOND.')
-                        : (isUS ? 'NEW' : 'NUEVO');
+                        : product.conditionLabel === 'new' ? (isUS ? 'NEW' : 'NUEVO') : (isUS ? 'CONDITION UNKNOWN' : 'CONDICIÓN SIN CONFIRMAR');
                 const trustBadgeMap = {
                     1: 'bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200',
                     2: 'bg-blue-50 text-blue-700 ring-1 ring-blue-200',
@@ -7232,11 +7238,11 @@ async function initApp() {
                     <div class="flex flex-col sm:flex-row sm:items-start sm:justify-between mb-2 gap-2">
                         <div class="flex items-center gap-1.5 min-w-0">
                             <span class="text-[10px] font-black text-slate-500 uppercase tracking-widest bg-slate-100 px-2 py-1 rounded-full max-w-full sm:max-w-[70%] truncate">${sanitize(product.tienda)}</span>
-                            ${(tiendaLower.includes('amazon') || tiendaLower.includes('walmart') || tiendaLower.includes('liverpool') || tiendaLower.includes('mercado') || tiendaLower.includes('bodega aurrera') || tiendaLower.includes('linio') || tiendaLower.includes('claro shop') || tiendaLower.includes('sanborns') || tiendaLower.includes('costco') || tiendaLower.includes('best buy')) ? `<span class="text-emerald-600" title="${isUS ? 'Verified store' : 'Tienda verificada'}">✓</span>` : ''}
+                            ${(tiendaLower.includes('amazon') || tiendaLower.includes('walmart') || tiendaLower.includes('liverpool') || tiendaLower.includes('mercado') || tiendaLower.includes('bodega aurrera') || tiendaLower.includes('linio') || tiendaLower.includes('claro shop') || tiendaLower.includes('sanborns') || tiendaLower.includes('costco') || tiendaLower.includes('best buy')) ? `<span class="text-emerald-600" title="${isUS ? 'Recognized store name' : 'Nombre de tienda reconocido'}">✓</span>` : ''}
                         </div>
                         <div class="flex flex-wrap items-center gap-1">
                             ${rankingBadgeHtml}
-                            ${isBestPrice ? `<span class="text-[9px] font-bold text-white bg-gradient-to-r from-emerald-500 to-teal-500 px-2 py-0.5 rounded-full ring-2 ring-emerald-200 shadow-sm animate-pulse">💰 ${isUS ? 'BEST PRICE' : 'MEJOR PRECIO'}</span>` : ''}
+                            ${isBestPrice ? `<span class="text-[9px] font-bold text-white bg-gradient-to-r from-emerald-500 to-teal-500 px-2 py-0.5 rounded-full ring-2 ring-emerald-200 shadow-sm animate-pulse">💰 ${isUS ? 'LOWEST LISTED PRICE' : 'MENOR PRECIO LISTADO'}</span>` : ''}
                             ${product.isLocalStore ? `<span class="text-[9px] font-bold text-emerald-700 bg-emerald-100 px-2 py-0.5 rounded-full ring-1 ring-emerald-200">📍 ${isUS ? 'LOCAL' : 'LOCAL'}</span>` : ''}
                             ${freshnessBadgeHtml}
                             ${priceWarningHtml}
@@ -7252,8 +7258,13 @@ async function initApp() {
                     <h3 class="text-sm md:text-[15px] font-extrabold text-slate-900 dark:text-slate-100 leading-snug line-clamp-3 min-h-[3.1rem] md:min-h-[3.5rem] mb-2 group-hover:text-emerald-700 dark:group-hover:text-emerald-400 transition-colors" title="${sanitize(normalizedTitle)}">
                         ${sanitize(normalizedTitle)}
                     </h3>
-                    ${shippingBadgeHtml}
+                    ${product.isMerchantReference ? `<p class="text-sm font-bold text-slate-600">${isUS ? 'Product page — confirm price at the store' : 'Página del producto — confirma el precio en la tienda'}</p>` : shippingBadgeHtml}
                     ${localDetailHtml}
+                    <p class="text-xs text-slate-500 mt-2">${sanitize(product.availabilityEvidence?.state === 'in_stock' ? (isUS ? 'Provider reports stock; confirm at checkout.' : 'La fuente reporta stock; confirma en la tienda.') : (isUS ? 'Availability not confirmed.' : 'Disponibilidad sin confirmar.'))}</p>
+                    ${product.availabilityEvidence?.source || product.availabilityEvidence?.observedAt ? `<p class="text-xs text-slate-500">${sanitize([product.availabilityEvidence.source, product.availabilityEvidence.observedAt].filter(Boolean).join(' · '))}</p>` : ''}
+                    ${product.comparisonExplanation ? `<p class="text-xs text-slate-500">${sanitize(product.comparisonExplanation)}</p>` : ''}
+                    <p class="text-xs text-slate-500">${product.totalCost != null ? sanitize((isUS ? 'Reported total: ' : 'Total informado: ') + product.totalCost + ' ' + product.totalCostCurrency) : (isUS ? 'Shipping and fees: total not confirmed.' : 'Envío y cargos: total sin confirmar.')}</p>
+                    <p class="text-xs text-slate-500">${sanitize(product.affiliateDisclosure || (isUS ? 'Some links may earn Lumu a commission.' : 'Algunos enlaces pueden generar una comisión para Lumu.'))}</p>
 
                     <div class="mt-auto flex flex-col w-full">
                         <div class="flex items-baseline gap-0.5 mb-1 flex-wrap">
@@ -7317,8 +7328,6 @@ async function initApp() {
                             "url": product.urlMonetizada || product.urlOriginal,
                             "priceCurrency": getRegionConfig().currency,
                             "price": precioNumerico.toString(),
-                            "availability": "https://schema.org/InStock",
-                            "priceValidUntil": new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
                             "seller": {
                                 "@type": "Organization",
                                 "name": product.tienda || (isUS ? "Online Store" : "Tienda Online")
@@ -7362,7 +7371,7 @@ async function initApp() {
                     });
 
                     if (typeof trackProductClick === 'function') {
-                        trackProductClick(product.titulo, product.tienda, precioNumerico);
+                        trackProductClick(product.titulo, product.tienda, precioNumerico, getRegionConfig().currency);
                     }
 
                     // NUEVO: Tracking para personalización predictiva
@@ -7650,8 +7659,9 @@ async function initApp() {
                 if (targetId === '#') return;
                 const target = document.querySelector(targetId);
                 if (target) {
+                    if (this.classList.contains('skip-link')) target.focus({ preventScroll: true });
                     target.scrollIntoView({
-                        behavior: 'smooth',
+                        behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth',
                         block: 'start'
                     });
                 }
@@ -9935,46 +9945,18 @@ document.addEventListener('keydown', (e) => {
     }
 });
 
-// --- Social Proof Ticker (Availability Heuristic + Mimetic Desire) ---
-(function initSocialProofTicker() {
+// --- Shopping guidance (no fabricated savings or customer activity) ---
+(function initShoppingGuidance() {
     const el = document.getElementById('ticker-msg');
     if (!el) return;
-    const messagesES = [
-        '✓ Usuario en CDMX encontró su iPhone $830 más barato en Amazon',
-        '✓ Freidora Ninja: $649 en Walmart vs $899 en Liverpool — mismo día',
-        '✓ Ahorra comparando antes de comprar: el precio varía hasta 40%',
-        '✓ Smart TV 55": diferencia de $1,200 entre tiendas esta semana',
-        '✓ Airpods Pro: $350 más baratos en Amazon que en tienda física',
-        '✓ Antes de pagar, compara — Lumu lo hace en 8 segundos',
-        '✓ Licuadora Vitamix: $2,100 MXN de diferencia entre tiendas',
-        '✓ MacBook Air M2: hasta $3,500 más barato en línea vs retail',
-    ];
-    const messagesEN = [
-        '✓ A shopper just found their iPhone $40 cheaper on Amazon',
-        '✓ Ninja Air Fryer: $59 at Walmart vs $89 at Target — same day',
-        '✓ Compare before you buy: prices vary up to 40% between stores',
-        '✓ 55" Smart TV: a $120 gap between stores this week',
-        '✓ AirPods Pro: $35 cheaper on Amazon than in-store',
-        '✓ Before you pay, compare — Lumu does it in 8 seconds',
-        '✓ Vitamix blender: a $90 price gap between retailers',
-        '✓ MacBook Air M2: up to $180 cheaper online vs retail',
-    ];
-    // Re-evaluar el idioma en cada rotación: la región puede resolverse async
-    // (geo del servidor) DESPUÉS de que arranca el ticker.
-    const pickMessages = () => (typeof isEnglishRegion === 'function' && isEnglishRegion(currentRegion))
-        ? messagesEN
-        : messagesES;
-    el.textContent = pickMessages()[0];
-    let idx = 0;
-    setInterval(() => {
-        el.style.opacity = '0';
-        setTimeout(() => {
-            const messages = pickMessages();
-            idx = (idx + 1) % messages.length;
-            el.textContent = messages[idx];
-            el.style.opacity = '1';
-        }, 500);
-    }, 4000);
+    const update = () => {
+        el.textContent = typeof isEnglishRegion === 'function' && isEnglishRegion(currentRegion)
+            ? '✓ Compare the final price, shipping and terms before buying'
+            : '✓ Compara el precio final, envío y condiciones antes de comprar';
+    };
+    update();
+    // Region can resolve after startup; keep the message stable for screen readers.
+    setInterval(update, 4000);
 })();
 
 // --- Flash Deals Countdown (Scarcity + Urgency) ---

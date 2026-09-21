@@ -189,12 +189,12 @@ function ramCacheCleanup() {
  * Busca resultados en caché: primero RAM, luego Supabase (24 horas TTL)
  */
 function getMaxCacheHours(queryKey = '', priceVolatility = 'medium', queryType = 'generic') {
-    if (priceVolatility === 'high') return 6;
-    if (priceVolatility === 'low') return 24;
+    if (priceVolatility === 'high') return 0.5;
+    if (priceVolatility === 'low') return 2;
     // Specific products need fresher data
-    if (queryType === 'brand_model' || queryType === 'comparison') return 4;
+    if (queryType === 'brand_model' || queryType === 'comparison') return 0.5;
     const isGenericQuery = String(queryKey || '').split(' ').length <= 3;
-    return isGenericQuery ? 12 : 8;
+    return isGenericQuery ? 2 : 1;
 }
 
 async function getCachedResultsByKey(queryKey, priceVolatility = 'medium', queryType = 'generic') {
@@ -208,7 +208,7 @@ async function getCachedResultsByKey(queryKey, priceVolatility = 'medium', query
 
     if (redisClient) {
         try {
-            const redisHitText = await redisClient.get(`lumu:search:${queryKey}`);
+            const redisHitText = await redisClient.get(`lumu:search:v2:${queryKey}`);
             if (redisHitText) {
                 console.log(`[Cache Redis Hit] Resultados ultrarrápidos para: ${queryKey}`);
                 const redisData = JSON.parse(redisHitText);
@@ -270,7 +270,7 @@ async function persistCacheKey(queryKey, results, priceVolatility = 'medium') {
 
     if (redisClient) {
         try {
-            await redisClient.set(`lumu:search:${queryKey}`, JSON.stringify(results), 'EX', 43200);
+            await redisClient.set(`lumu:search:v2:${queryKey}`, JSON.stringify(results), 'EX', 1800);
         } catch(e) {
             console.error('[Redis Set Error]:', e.message);
         }

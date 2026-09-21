@@ -191,7 +191,9 @@ const MAX_RAM_RATE_LIMIT_IPS = 10000;
 const requestLog = {};
 
 const rateLimiter = async (req, res, next) => {
-    const ip = (req.headers['x-vercel-forwarded-for']?.split(',')[0]?.trim() || req.headers['x-real-ip'] || req.headers['x-forwarded-for']?.split(',').pop()?.trim() || req.ip || 'unknown').trim();
+    const candidateIp = (req.headers['x-vercel-forwarded-for']?.split(',')[0]?.trim() || req.headers['x-real-ip'] || req.headers['x-forwarded-for']?.split(',').pop()?.trim() || req.ip || 'unknown').trim();
+    // Do not let a forwarded value collide with persistent reward ledger keys.
+    const ip = require('node:net').isIP(candidateIp) ? candidateIp : 'unknown';
     const now = Date.now();
     const windowStart = new Date(now - RATE_WINDOW_MS).toISOString();
 
@@ -217,7 +219,7 @@ const rateLimiter = async (req, res, next) => {
                     .then(() => {
                         // Clean old entries asynchronously
                         const oneHourAgo = new Date(now - 60 * 60 * 1000).toISOString();
-                        supabaseRateLimit.from('rate_limits').delete().lt('created_at', oneHourAgo).then(() => { }).catch(() => { });
+                        require('../src/utils/rateLimitCleanup').cleanupRequestCounters(supabaseRateLimit, ip, oneHourAgo).catch(() => { });
                     })
                     .catch(() => { });
                 return next();

@@ -34,6 +34,9 @@ async function sendMessage(chatId, text) {
 // POST /api/telegram/webhook — Called by Telegram servers
 exports.handleWebhook = async (req, res) => {
     // Verify the request comes from Telegram via shared secret
+    if (!WEBHOOK_SECRET) {
+        return res.status(503).json({ error: 'Webhook no configurado' });
+    }
     if (WEBHOOK_SECRET) {
         const incoming = req.headers['x-telegram-bot-api-secret-token'];
         if (!incoming || incoming !== WEBHOOK_SECRET) {

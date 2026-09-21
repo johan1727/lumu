@@ -1,3 +1,6 @@
+const {merchantReference} = require('./merchantReference');
+const {fetchPrimarySearchRoutes} = require('./primarySearchRoutes');
+const { assessResult } = require('./resultQuality');
 const axios = require('axios');
 const directScraper = require('./directScraper');
 const monitor = require('./scraperMonitor');
@@ -415,29 +418,8 @@ function normalizeIncomingImage(value = '') {
     return '';
 }
 
-// Helper para retry con backoff
-async function fetchWithRetry(config, retries = SERPER_MAX_RETRIES) {
-    let lastError;
-    for (let i = 0; i <= retries; i++) {
-        try {
-            return await axios(config);
-        } catch (err) {
-            lastError = err;
-            const isTimeout = err.code === 'ECONNABORTED' || err.code === 'ETIMEDOUT';
-            const is5xx = err.response?.status >= 500;
-            const is429 = err.response?.status === 429;
-            
-            if ((isTimeout || is5xx || is429) && i < retries) {
-                const delay = Math.pow(2, i) * 1000 + Math.random() * 500;
-                console.warn(`[Serper Retry] Intento ${i + 1}/${retries + 1} falló, reintentando en ${Math.round(delay)}ms...`);
-                await new Promise(r => setTimeout(r, delay));
-            } else {
-                throw err;
-            }
-        }
-    }
-    throw lastError;
-}
+// Bounded per-instance cache/coalescing; 429 uses provider cooldown, never key rotation.
+const fetchWithRetry = require('./providerRequest').createProviderRequest(axios);
 
 function getStorePriorityForCategory(category = '', countryCode = 'MX') {
     const normalizedCategory = String(category || '').toLowerCase();
@@ -609,7 +591,7 @@ function isResultSellable(result = {}) {
     const url = String(result.url || '').toLowerCase();
     const combined = `${title} ${snippet}`;
     if (!url || !/^https?:\/\//i.test(url)) return false;
-    if (/agotado|out of stock|currently unavailable|unavailable|sin stock|not available|no disponible|sin existencia|temporalmente agotado|back ?order|pre-?order|pr[oó]ximamente|coming soon|sold out/.test(combined)) return false;
+    if (result.qualityRejected) return false;
     if (/\/s\?|\/search\?|[?&](k|q|query|search|searchterm|searchterms|ntt)=/i.test(url) && !result.isDirectProductPage) return false;
     const isKnownMarketplace = /amazon\.|mercadolibre\.|walmart\.|liverpool\.|costco\.|bestbuy\.|target\./i.test(url);
     const hasResolvedPrice = Number.isFinite(Number(result.price)) && Number(result.price) > 0;
@@ -1017,35 +999,13 @@ exports.searchGoogleShopping = async (query, radius, lat, lng, intentType, abort
         const mainWebAlreadyTargetsMercadoLibre = /site:mercadolibre\./i.test(normalizedWebSearchQ);
         const shouldQueryMlAmazon = (!restrictToPreferredStore && !isSpecificProduct && !(mainWebAlreadyTargetsAmazon && mainWebAlreadyTargetsMercadoLibre)) || (restrictToPreferredStore && (preferredIncludesMeli || preferredIncludesAmazon));
         const amazonSpecificDomain = countryCode === 'US' ? 'amazon.com' : 'amazon.com.mx';
-        const amazonSpecificShoppingPromise = (!isSpecificProduct && !preferredIncludesAmazon)
-            ? Promise.resolve(null)
-            : fetchWithRetry({
-                method: 'post',
-                url: 'https://google.serper.dev/shopping',
-                headers: { 'X-API-KEY': apiKey, 'Content-Type': 'application/json' },
-                data: JSON.stringify({
-                    q: `${shoppingQuery} site:${amazonSpecificDomain}`,
-                    gl: regionCfg.gl,
-                    hl: regionCfg.hl,
-                    num: amazonSpecificShoppingNum
-                }),
-                timeout: serperTimeout,
-                signal: abortSignal
-            }, serperRetries).catch(err => { console.error('Error Amazon Specific Shopping:', err.message); return null; });
-
-        const webPromise = isSpecificProduct
-            ? Promise.resolve(null)
-            : fetchWithRetry({
-                method: 'post',
-                url: 'https://google.serper.dev/search',
-                headers: { 'X-API-KEY': apiKey, 'Content-Type': 'application/json' },
-                data: JSON.stringify({
-                    q: webSearchQ,
-                    gl: regionCfg.gl, hl: regionCfg.hl, num: webNum
-                }),
-                timeout: serperTimeout,
-                signal: abortSignal
-            }, serperRetries).catch(err => { console.error('Error Serper Web:', err.message); return null; });
+        const {webPromise, amazonSpecificShoppingPromise} = fetchPrimarySearchRoutes({
+            request: fetchWithRetry, apiKey, isSpecificProduct, preferredIncludesAmazon,
+            shoppingQuery, webSearchQ, amazonDomain: amazonSpecificDomain,
+            gl: regionCfg.gl, hl: regionCfg.hl, webNum,
+            amazonNum: amazonSpecificShoppingNum, timeout: serperTimeout,
+            signal: abortSignal, retries: serperRetries
+        });
 
         const broadWebPromise = !isSpecificProduct
             ? fetchWithRetry({
@@ -1172,10 +1132,8 @@ exports.searchGoogleShopping = async (query, radius, lat, lng, intentType, abort
         // Procesar Shopping
         if (shoppingRes?.data?.shopping) {
             const rawShopping = shoppingRes.data.shopping;
-            // Accept ALL shopping results including Google redirect URLs.
-            // Google redirect URLs (google.com/search?ibp=oshop) are functional —
-            // they redirect the user to the actual store product page.
-            // Discarding them loses 100% of Shopping results, images, and store diversity.
+            // Keep raw provider evidence here; final quality filtering rejects
+            // opaque Google destinations. Organic results supply independent links.
             serperResults = rawShopping.map(item => {
                 // Robust price parsing: handle "$1,299.00 MXN", "1299", "$1,299", etc.
                 let parsedPrice = null;
@@ -1291,7 +1249,7 @@ exports.searchGoogleShopping = async (query, radius, lat, lng, intentType, abort
                 /\/ofertas/,       // offers landing pages
                 /\/search\?/,      // search result pages
                 /\/s\?/,           // amazon search pages
-                /\/dp\/(?![A-Z0-9]{10})/, // broken amazon dp links
+                /\/dp\/(?![a-z0-9]{10}(?:[/?#]|$))/i, // broken amazon dp links
                 /\/collections?\//,
                 /\/department\//,
                 /[?&](k|q|query|search|searchterm|searchterms|ntt)=/i
@@ -1300,11 +1258,9 @@ exports.searchGoogleShopping = async (query, radius, lat, lng, intentType, abort
                 if (!r.link || r.link.includes('google.com')) return false;
                 // Exclude category-type URLs
                 const path = r.link.toLowerCase();
-                const knownStore = isKnownStoreUrl(r.link, countryCode);
-                const snippetHasPrice = Number.isFinite(extractSnippetPrice(r.snippet || '') ?? extractSnippetPrice(r.title || ''));
                 if (!isRegionCompatibleUrl(r.link, countryCode)) return false;
-                if (categoryPatterns.some(pattern => pattern.test(path)) && !knownStore) return false;
-                return knownStore || looksLikeProductPage(r.link, countryCode) || snippetHasPrice;
+                if (categoryPatterns.some(pattern => pattern.test(path))) return false;
+                return looksLikeProductPage(r.link, countryCode);
             });
             const webMapped = webResults.map(r => {
                 const storeName = regionConfigService.resolveStoreName(r.link, countryCode);
@@ -1326,7 +1282,8 @@ exports.searchGoogleShopping = async (query, radius, lat, lng, intentType, abort
                     isDirectProductPage: directProductPage,
                     isKnownStoreDomain: knownStore,
                     ...priceMeta,
-                    resultSource: 'web_search'
+                    resultSource: 'web_search',
+                    ...merchantReference(r, query)
                 };
             });
             serperResults = [...serperResults, ...webMapped];
@@ -1693,7 +1650,7 @@ exports.searchGoogleShopping = async (query, radius, lat, lng, intentType, abort
     );
     const mlByKey = new Map(rerankedMergedMeli.map(result => [String(result?._meliItemId || result?.url || '').toLowerCase(), result]));
     const mergedResults = dedupedByUrl
-        .map(result => mlByKey.get(String(result?._meliItemId || result?.url || '').toLowerCase()) || result);
+        .map(result => assessResult(mlByKey.get(String(result?._meliItemId || result?.url || '').toLowerCase()) || result, query));
     const sellableResults = mergedResults.filter(isResultSellable);
     const nonRejectedResults = sellableResults.filter(result => !(result._meliHardRejected && result.resultSource === 'meli_api'));
     const validResultShape = nonRejectedResults.filter(result => {
@@ -1708,7 +1665,7 @@ exports.searchGoogleShopping = async (query, radius, lat, lng, intentType, abort
                 return false;
             }
             // For non-local results, require valid price
-            if (!result.isLocalStore) {
+            if (!result.isLocalStore && !result.isMerchantReference) {
                 const price = Number(result?.price);
                 if (!Number.isFinite(price) || price <= 0) {
                     return false;
@@ -1720,6 +1677,9 @@ exports.searchGoogleShopping = async (query, radius, lat, lng, intentType, abort
     console.log(`[ShoppingService][Counts] query="${String(query || '').slice(0, 80)}" serper=${serperResults.length} direct=${directResults.length} dedup=${dedupedByUrl.length} merged=${mergedResults.length} sellable=${sellableResults.length} nonRejected=${nonRejectedResults.length} valid=${validResultShape.length} policy=${policyFilteredResults.length}`);
     const sortedResults = policyFilteredResults
         .sort((a, b) => {
+            const relevanceDelta = (b.relevanceScore || 0) - (a.relevanceScore || 0);
+            if (Math.abs(relevanceDelta) > 0.2) return relevanceDelta;
+
             // FIX: Priorizar tiendas preferidas primero
             const preferredStoreDelta = getStoreFocusSignal(b, searchPolicy) - getStoreFocusSignal(a, searchPolicy);
             if (preferredStoreDelta !== 0) return preferredStoreDelta;
@@ -1778,8 +1738,7 @@ exports.searchGoogleShopping = async (query, radius, lat, lng, intentType, abort
             const bMeliScore = Number(b._meliScore || 0);
             if (Math.abs(aMeliScore - bMeliScore) >= 0.04) return bMeliScore - aMeliScore;
 
-            const affiliateDelta = getAffiliateStoreRank(a) - getAffiliateStoreRank(b);
-            if (affiliateDelta !== 0) return affiliateDelta;
+
 
             return String(a.title || '').localeCompare(String(b.title || ''));
         });

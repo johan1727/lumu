@@ -1,81 +1,48 @@
 const axios = require('axios');
-const dns = require('dns').promises;
+const { pipeline } = require('node:stream/promises');
+const { Transform } = require('node:stream');
+const { resolvePublicImageUrl } = require('../utils/publicImageUrl');
 
-function isBlockedHostname(hostname = '') {
-    const normalized = String(hostname || '').trim().toLowerCase();
-    if (!normalized) return true;
-    if (normalized === 'localhost' || normalized.endsWith('.localhost')) return true;
-    if (normalized === '0.0.0.0' || normalized === '::1' || normalized === '[::1]') return true;
-    if (/^127\./.test(normalized)) return true;
-    if (/^10\./.test(normalized)) return true;
-    if (/^192\.168\./.test(normalized)) return true;
-    if (/^169\.254\./.test(normalized)) return true;
-    if (/^172\.(1[6-9]|2\d|3[0-1])\./.test(normalized)) return true;
-    return false;
-}
-
-// FIX #6: Resolve DNS and verify the resolved IP is not private (blocks DNS rebinding)
-async function isBlockedAfterDnsResolve(hostname) {
-    try {
-        const result = await dns.lookup(hostname, { all: true });
-        for (const entry of result) {
-            if (isBlockedHostname(entry.address)) return true;
-        }
-        return false;
-    } catch {
-        return true;
-    }
-}
+const RASTER_TYPES = new Set(['image/jpeg', 'image/png', 'image/gif', 'image/webp', 'image/avif', 'image/x-icon', 'image/vnd.microsoft.icon']);
+const MAX_IMAGE_BYTES = 10 * 1024 * 1024;
 
 exports.proxyImage = async (req, res) => {
+    let target;
     try {
-        const { url } = req.query;
-        if (!url) {
-            return res.status(400).send('Falta el parámetro url');
-        }
-
-        // Validate basic URL structure
-        const parsedUrl = new URL(url);
-        if (parsedUrl.protocol !== 'http:' && parsedUrl.protocol !== 'https:') {
-            return res.status(400).send('URL inválida');
-        }
-        if (parsedUrl.username || parsedUrl.password || isBlockedHostname(parsedUrl.hostname)) {
-            return res.status(400).send('URL inválida');
-        }
-
-        // FIX #6: DNS resolution check to prevent SSRF via DNS rebinding
-        const dnsBlocked = await isBlockedAfterDnsResolve(parsedUrl.hostname);
-        if (dnsBlocked) {
-            return res.status(400).send('URL inválida');
-        }
-
+        target = await resolvePublicImageUrl(req.query.url);
+    } catch {
+        return res.status(400).send('URL inválida');
+    }
+    let source;
+    try {
         const response = await axios({
-            method: 'get',
-            url: url,
-            responseType: 'stream',
-            timeout: 5000,
-            headers: {
-                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-                'Accept': 'image/webp,image/apng,image/*,*/*;q=0.8'
-            }
+            method: 'get', url: target.url, lookup: target.lookup,
+            // A proxy or automatic redirect could bypass the validated destination.
+            proxy: false, maxRedirects: 0, responseType: 'stream', timeout: 5000,
+            headers: { 'User-Agent': 'Lumu-ImageProxy/1.0', Accept: 'image/avif,image/webp,image/png,image/jpeg,image/gif' }
         });
-
-        // Copy content type from source image
-        const contentType = response.headers['content-type'];
-        if (!contentType || !String(contentType).toLowerCase().startsWith('image/')) {
+        source = response.data;
+        const contentType = String(response.headers['content-type'] || '').split(';')[0].trim().toLowerCase();
+        if (!RASTER_TYPES.has(contentType) || Number(response.headers['content-length']) > MAX_IMAGE_BYTES) {
+            source.destroy();
             return res.status(400).send('Recurso inválido');
         }
         res.setHeader('Content-Type', contentType);
-
-        // Add caching headers so the browser doesn't refetch the same image constantly
-        res.setHeader('Cache-Control', 'public, max-age=86400'); // Cache for 24 hours
-
-        // Pipe the image stream directly to the response
-        response.data.pipe(res);
-
+        res.setHeader('X-Content-Type-Options', 'nosniff');
+        res.setHeader('Content-Security-Policy', "sandbox; default-src 'none'");
+        res.setHeader('Cache-Control', 'public, max-age=86400');
+        let received = 0;
+        const limit = new Transform({
+            transform(chunk, encoding, callback) {
+                received += chunk.length;
+                callback(received > MAX_IMAGE_BYTES ? new Error('Image too large') : null, chunk);
+            }
+        });
+        await pipeline(source, limit, res);
     } catch (error) {
-        console.error('[ImageProxy] Error fetching image:', error.message);
-        // Silently fail and return a 404 so the frontend's onerror handler can kick in
-        res.status(404).end();
+        source?.destroy();
+        error.response?.data?.destroy?.();
+        console.warn('[ImageProxy] Image unavailable');
+        if (!res.headersSent && !res.destroyed) res.status(404).end();
     }
 };

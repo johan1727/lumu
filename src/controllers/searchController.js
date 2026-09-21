@@ -1,3 +1,5 @@
+const { availabilityOf, assessResult, rankOffers } = require('../services/resultQuality');
+const { claimBonus } = require('../services/bonusService');
 const llmService = require('../services/llmService');
 const shoppingService = require('../services/shoppingService');
 const affiliateManager = require('../utils/affiliateManager');
@@ -1051,8 +1053,7 @@ function detectPrimaryPhoneModel(value = '') {
 }
 
 function hasClearUnavailableSignal(product = {}) {
-    const text = `${product.titulo || product.title || ''} ${product.snippet || ''} ${product.shippingText || ''} ${product.availability || ''} ${product.stockStatus || ''}`;
-    return UNAVAILABLE_PATTERN.test(text);
+    return ['removed', 'out_of_stock', 'preorder', 'possibly_unavailable'].includes(availabilityOf(product));
 }
 
 function evaluateResultCoherence(product = {}, searchQuery = '', llmAnalysis = {}) {
@@ -1258,8 +1259,7 @@ function selectBalancedResults(sortedResults = [], broadProfile = {}, maxResults
         if (Math.abs(scoreDelta) >= 0.02) return scoreDelta;
         
         // 3. Affiliate priority
-        const affiliateRankDelta = Number(a.affiliatePriorityRank || 9) - Number(b.affiliatePriorityRank || 9);
-        if (affiliateRankDelta !== 0) return affiliateRankDelta;
+
         
         // 4. Imagen útil
         const aHasImage = Boolean(a.hasUsefulImage || a.image);
@@ -1285,7 +1285,7 @@ function selectBalancedResults(sortedResults = [], broadProfile = {}, maxResults
         const currentStore = storeCount[storeKey] || 0;
         const currentFamily = familyCount[familyKey] || 0;
         const currentBrand = brandCount[brandKey] || 0;
-        const effectiveMaxPerStore = maxPerStore + Number(item.affiliateCapBoost || 0);
+        const effectiveMaxPerStore = maxPerStore;
         if (currentStore >= effectiveMaxPerStore) continue;
         if (currentFamily >= maxPerFamilyFirstPass) continue;
         if (brandKey !== 'unknown' && currentBrand >= maxPerBrandFirstPass) continue;
@@ -2180,9 +2180,11 @@ exports.searchProduct = async (req, res) => {
             // would reject (e.g. a phone case ranked #1 for "iphone 15").
             filteredCachedResults = filteredCachedResults
                 .map(product => {
+                    const quality = assessResult(product, shoppingBaseQuery || searchQuery);
                     const coherence = evaluateResultCoherence(product, searchQuery, llmAnalysis);
+                    if (quality.qualityRejected) coherence.status = 'uncertain';
                     return {
-                        ...product,
+                        ...quality,
                         aiCoherenceStatus: coherence.status,
                         aiCoherencePenalty: coherence.penalty,
                         isPotentiallyUnavailable: product.isPotentiallyUnavailable || coherence.unavailableSignal,
@@ -2250,7 +2252,7 @@ exports.searchProduct = async (req, res) => {
                         locale: regionCfg.locale,
                         label: regionCfg.regionLabel
                     },
-                    top_5_baratos: filteredCachedResults.map(p => ({ ...p, titulo: cleanProductTitleForUI(p.titulo || p.title, llmAnalysis) })),
+                    top_5_baratos: rankOffers(filteredCachedResults, searchQuery).map(p => ({ ...p, titulo: cleanProductTitleForUI(p.titulo || p.title, llmAnalysis) })),
                     advertencia_uso: usageWarning,
                     vip_auto_alert: null
                 });
@@ -2583,9 +2585,11 @@ exports.searchProduct = async (req, res) => {
         const policyFilteredResults = applySearchPolicyFilters(shoppingResults, searchPolicy);
         const coherenceReviewedResults = policyFilteredResults
             .map(product => {
+                const quality = assessResult(product, shoppingBaseQuery || searchQuery);
                 const coherence = evaluateResultCoherence(product, searchQuery, llmAnalysis);
+                if (quality.qualityRejected) coherence.status = 'uncertain';
                 return {
-                    ...product,
+                    ...quality,
                     aiCoherenceStatus: coherence.status,
                     aiCoherencePenalty: coherence.penalty,
                     isPotentiallyUnavailable: product.isPotentiallyUnavailable || coherence.unavailableSignal,
@@ -2819,6 +2823,8 @@ exports.searchProduct = async (req, res) => {
             }
         }
 
+        personalizedProducts = rankOffers(personalizedProducts, searchQuery);
+
         return res.json({
             tipo_respuesta: 'resultados',
             intencion_detectada: {
@@ -2980,7 +2986,7 @@ exports.bulkSearch = async (req, res) => {
             return res.status(503).json({ error: 'Base de datos no disponible' });
         }
         const profile = await profileCache.getProfile(supabase, userId, 'plan, is_premium');
-        if (!profile || (!profile.is_premium && profile.plan !== 'b2b' && profile.plan !== 'b2b_annual')) {
+        if (!profile || (profile.plan !== 'b2b' && profile.plan !== 'b2b_annual')) {
             return res.status(402).json({ error: 'Esta función es exclusiva del Plan Revendedor VIP ($199 MXN/mes). Actualiza tu cuenta para acceder.', upgrade_required: true });
         }
 
@@ -3108,58 +3114,13 @@ exports.bulkSearch = async (req, res) => {
 };
 
 exports.claimReward = async (req, res) => {
+    if (!req.userId) return res.status(401).json({ error: 'Inicia sesión para reclamar este bono.' });
+    if (!String(process.env.REWARDED_AD_TAG_URL || '').trim()) return res.status(409).json({ error: 'Las búsquedas extra por anuncio no están disponibles actualmente.' });
     try {
-        const userId = req.userId || null;
-        const BONUS_SEARCHES = 3;
-        const CLAIM_COOLDOWN_MS = 60 * 60 * 1000; // 1 hour between claims
-        const rewardedAdTagUrl = process.env.REWARDED_AD_TAG_URL || '';
-
-        if (!rewardedAdTagUrl.trim()) {
-            return res.status(409).json({ error: 'Las búsquedas extra por anuncio no están disponibles actualmente.' });
-        }
-
-        if (!userId) {
-            return res.status(401).json({ error: 'Inicia sesión para reclamar búsquedas extra.' });
-        }
-
-        if (!supabase) {
-            return res.json({ success: true, bonus: BONUS_SEARCHES, msg: 'Modo local (sin Supabase)' });
-        }
-
-        // SECURITY FIX SEC-1: Rate-limit claims to 1 per hour per user/IP
-        const claimKey = `claim:user:${userId}`;
-        const oneHourAgo = new Date(Date.now() - CLAIM_COOLDOWN_MS).toISOString();
-
-        try {
-            const { count, error: claimCheckErr } = await supabase
-                .from('rate_limits')
-                .select('*', { count: 'exact', head: true })
-                .eq('ip', claimKey)
-                .gte('created_at', oneHourAgo);
-
-            if (!claimCheckErr && count > 0) {
-                return res.status(429).json({
-                    error: 'Ya reclamaste búsquedas extra recientemente. Intenta de nuevo en 1 hora.',
-                    retry_after: 3600
-                });
-            }
-        } catch (e) {
-            console.warn('[ClaimReward] Rate-limit check failed, allowing:', e.message);
-        }
-
-        // Log this claim (fire & forget)
-        supabase.from('rate_limits').insert({ ip: claimKey, created_at: new Date().toISOString() }).then(() => {}).catch(() => {});
-
-        const creditEntries = [];
-        for (let i = 0; i < BONUS_SEARCHES; i++) {
-            creditEntries.push({ ip: `bonus:user:${userId}`, created_at: new Date().toISOString() });
-        }
-        await supabase.from('rate_limits').insert(creditEntries);
-
-        return res.json({ success: true, bonus: BONUS_SEARCHES });
-    } catch (err) {
-        console.error('[Reward] Error:', err);
-        return res.status(500).json({ error: 'Error al reclamar recompensa' });
+        const result = await claimBonus(supabase, req.userId, 'reward', null);
+        return res.status(result.status).json(result.body);
+    } catch (error) {
+        return res.status(503).json({ error: 'Los bonos no están disponibles temporalmente. Intenta más tarde.' });
     }
 };
 
@@ -3196,7 +3157,7 @@ exports.getReferralCode = async (req, res) => {
             await supabase.from('profiles').update({ referral_code: code }).eq('id', userId);
         }
 
-        const appUrl = process.env.PUBLIC_APP_URL || 'https://lumu.ai';
+        const appUrl = process.env.PUBLIC_APP_URL || 'https://www.lumu.dev';
         return res.json({ code, url: `${appUrl}/?ref=${code}` });
     } catch (err) {
         console.error('[Referral] getReferralCode error:', err);
@@ -3205,137 +3166,23 @@ exports.getReferralCode = async (req, res) => {
 };
 
 exports.claimReferral = async (req, res) => {
-    const newUserId = req.userId || null;
-    const { code } = req.body || {};
-
-    if (!newUserId) return res.status(401).json({ error: 'Inicia sesión para usar un código de referido.' });
-    if (!code || typeof code !== 'string') return res.status(400).json({ error: 'Código de referido inválido.' });
-    if (!supabase) return res.status(503).json({ error: 'Base de datos no disponible.' });
-
-    const BONUS_NEW_USER = 5;
-    const BONUS_REFERRER = 5;
-
+    if (!req.userId) return res.status(401).json({ error: 'Inicia sesión para reclamar este bono.' });
+    if (typeof req.body?.code !== 'string' || !/^[A-Z0-9]{1,32}$/i.test(req.body.code.trim())) return res.status(400).json({ error: 'Código de referido inválido.' });
     try {
-        // 1. Verificar que este usuario no haya ya canjeado un código
-        const alreadyUsedKey = `referral-used:user:${newUserId}`;
-        const { count: alreadyUsed } = await supabase
-            .from('rate_limits')
-            .select('*', { count: 'exact', head: true })
-            .eq('ip', alreadyUsedKey);
-        if (alreadyUsed > 0) {
-            return res.status(409).json({ error: 'Ya canjeaste un código de referido anteriormente.' });
-        }
-
-        // 2. Buscar al referidor por código
-        const cleanCode = String(code).trim().toUpperCase();
-        const { data: referrer, error: referrerErr } = await supabase
-            .from('profiles')
-            .select('id')
-            .eq('referral_code', cleanCode)
-            .neq('id', newUserId)
-            .maybeSingle();
-
-        if (referrerErr) throw referrerErr;
-        if (!referrer) return res.status(404).json({ error: 'Código de referido no encontrado.' });
-
-        const referrerId = referrer.id;
-
-        // 3. Verificar que la cuenta del nuevo usuario sea reciente (máx 7 días)
-        const MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000;
-        const { data: newProfile } = await supabase
-            .from('profiles')
-            .select('created_at')
-            .eq('id', newUserId)
-            .maybeSingle();
-        const createdAtMs = newProfile?.created_at ? new Date(newProfile.created_at).getTime() : 0;
-        if (createdAtMs && (Date.now() - createdAtMs) > MAX_AGE_MS) {
-            return res.status(403).json({ error: 'El código de referido solo es válido para cuentas nuevas (menos de 7 días).' });
-        }
-
-        // 4. Registrar que este usuario ya canjeó (idempotencia)
-        await supabase.from('rate_limits').insert({ ip: alreadyUsedKey, created_at: new Date().toISOString() });
-
-        // 5. Dar bonus al nuevo usuario
-        const newUserBonusEntries = Array.from({ length: BONUS_NEW_USER }, () => ({
-            ip: `bonus:user:${newUserId}`,
-            created_at: new Date().toISOString()
-        }));
-        await supabase.from('rate_limits').insert(newUserBonusEntries);
-
-        // 6. Dar bonus al referidor
-        const referrerBonusEntries = Array.from({ length: BONUS_REFERRER }, () => ({
-            ip: `bonus:user:${referrerId}`,
-            created_at: new Date().toISOString()
-        }));
-        await supabase.from('rate_limits').insert(referrerBonusEntries);
-
-        // 7. Registrar en profiles quién refirió a quién (para el bonus VIP posterior)
-        await supabase.from('profiles').update({ referred_by: referrerId }).eq('id', newUserId);
-
-        console.log(`[Referral] ${newUserId} canjeó código de ${referrerId}. +${BONUS_NEW_USER} búsquedas a cada uno.`);
-        return res.json({ success: true, bonus_new_user: BONUS_NEW_USER, bonus_referrer: BONUS_REFERRER });
-
-    } catch (err) {
-        console.error('[Referral] claimReferral error:', err);
-        return res.status(500).json({ error: 'No se pudo canjear el código de referido.' });
+        const result = await claimBonus(supabase, req.userId, 'referral', req.body.code.trim().toUpperCase());
+        return res.status(result.status).json(result.body);
+    } catch (error) {
+        return res.status(503).json({ error: 'Los bonos no están disponibles temporalmente. Intenta más tarde.' });
     }
 };
 
 exports.claimSignupBonus = async (req, res) => {
+    if (!req.userId) return res.status(401).json({ error: 'Inicia sesión para reclamar este bono.' });
     try {
-        const userId = req.userId || null;
-        const BONUS_SEARCHES = 2;
-        const MAX_SIGNUP_BONUS_ACCOUNT_AGE_MS = 7 * 24 * 60 * 60 * 1000;
-
-        if (!userId) {
-            return res.status(401).json({ error: 'Inicia sesión para reclamar el bono de bienvenida.' });
-        }
-
-        if (!supabase) {
-            return res.json({ success: true, bonus: BONUS_SEARCHES, msg: 'Modo local (sin Supabase)' });
-        }
-
-        const bonusKey = `signup-bonus:user:${userId}`;
-        const { count, error: bonusCheckErr } = await supabase
-            .from('rate_limits')
-            .select('*', { count: 'exact', head: true })
-            .eq('ip', bonusKey);
-
-        if (!bonusCheckErr && count > 0) {
-            return res.json({ success: true, bonus: 0, already_claimed: true });
-        }
-
-        const { data: profile, error: profileErr } = await supabase
-            .from('profiles')
-            .select('created_at')
-            .eq('id', userId)
-            .maybeSingle();
-
-        if (profileErr) {
-            throw profileErr;
-        }
-
-        const createdAtMs = profile?.created_at ? new Date(profile.created_at).getTime() : 0;
-        if (!createdAtMs || Number.isNaN(createdAtMs)) {
-            return res.status(403).json({ error: 'No se pudo validar la antigüedad de tu cuenta para este bono.' });
-        }
-
-        if ((Date.now() - createdAtMs) > MAX_SIGNUP_BONUS_ACCOUNT_AGE_MS) {
-            return res.status(403).json({ error: 'El bono de bienvenida solo está disponible para cuentas recientes.' });
-        }
-
-        await supabase.from('rate_limits').insert({ ip: bonusKey, created_at: new Date().toISOString() });
-
-        const creditEntries = [];
-        for (let i = 0; i < BONUS_SEARCHES; i++) {
-            creditEntries.push({ ip: `bonus:user:${userId}`, created_at: new Date().toISOString() });
-        }
-        await supabase.from('rate_limits').insert(creditEntries);
-
-        return res.json({ success: true, bonus: BONUS_SEARCHES });
-    } catch (err) {
-        console.error('[SignupBonus] Error:', err);
-        return res.status(500).json({ error: 'Error al reclamar bono de bienvenida' });
+        const result = await claimBonus(supabase, req.userId, 'signup', null);
+        return res.status(result.status).json(result.body);
+    } catch (error) {
+        return res.status(503).json({ error: 'Los bonos no están disponibles temporalmente. Intenta más tarde.' });
     }
 };
 
