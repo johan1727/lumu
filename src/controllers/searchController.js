@@ -2180,7 +2180,7 @@ exports.searchProduct = async (req, res) => {
             // would reject (e.g. a phone case ranked #1 for "iphone 15").
             filteredCachedResults = filteredCachedResults
                 .map(product => {
-                    const quality = assessResult(product, shoppingBaseQuery || searchQuery);
+                    const quality = assessResult(product, shoppingBaseQuery || searchQuery, {conditionMode});
                     const coherence = evaluateResultCoherence(product, searchQuery, llmAnalysis);
                     if (quality.qualityRejected) coherence.status = 'uncertain';
                     return {
@@ -2252,7 +2252,7 @@ exports.searchProduct = async (req, res) => {
                         locale: regionCfg.locale,
                         label: regionCfg.regionLabel
                     },
-                    top_5_baratos: rankOffers(filteredCachedResults, shoppingBaseQuery || query).map(p => ({ ...p, titulo: cleanProductTitleForUI(p.titulo || p.title, llmAnalysis) })),
+                    top_5_baratos: rankOffers(filteredCachedResults, shoppingBaseQuery || query, {conditionMode}).map(p => ({ ...p, titulo: cleanProductTitleForUI(p.titulo || p.title, llmAnalysis) })),
                     advertencia_uso: usageWarning,
                     vip_auto_alert: null
                 });
@@ -2585,7 +2585,7 @@ exports.searchProduct = async (req, res) => {
         const policyFilteredResults = applySearchPolicyFilters(shoppingResults, searchPolicy);
         const coherenceReviewedResults = policyFilteredResults
             .map(product => {
-                const quality = assessResult(product, shoppingBaseQuery || searchQuery);
+                const quality = assessResult(product, shoppingBaseQuery || searchQuery, {conditionMode});
                 const coherence = evaluateResultCoherence(product, searchQuery, llmAnalysis);
                 if (quality.qualityRejected) coherence.status = 'uncertain';
                 return {
@@ -2823,7 +2823,7 @@ exports.searchProduct = async (req, res) => {
             }
         }
 
-        personalizedProducts = rankOffers(personalizedProducts, shoppingBaseQuery || query);
+        personalizedProducts = rankOffers(personalizedProducts, shoppingBaseQuery || query, {conditionMode});
 
         return res.json({
             tipo_respuesta: 'resultados',

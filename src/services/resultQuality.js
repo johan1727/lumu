@@ -13,7 +13,7 @@ function availabilityOf(result) {
     if (/\b(agotado|sin stock|out of stock|sold out|publicacion finalizada)\b/.test(normalize(result.snippet))) return 'possibly_unavailable';
     return 'unknown';
 }
-function relevanceOf(result, query) {
+function relevanceOf(result, query, conditionMode = 'all') {
     const q=normalize(query).replace(/(?:^|\s)-(?:"[^"]*"|\S+)/g, ' ').trim(), title=normalize(result.title || result.titulo);
     const accessories=/\b(funda|case|mica|protector|refaccion|repuesto|cargador|charger|cable|carcasa|adaptador|adapter)\b/;
     const device=/\b(iphone|galaxy|pixel|macbook|playstation|ps5|ps4|xbox|nintendo|laptop|celular|smartphone)\b/;
@@ -31,7 +31,8 @@ function relevanceOf(result, query) {
     const variant = text => (text.match(/\b(?:pro max|pro|plus|ultra|mini|lite|fe)\b/) || [null])[0];
     if (models.length && variant(q) !== variant(title) && (variant(q) || variant(title))) return {score:0,reject:true,reason:'different_variant'};
     const condition = text => /\b(reacondicionado|refurbished|renewed)\b/.test(text) ? 'refurbished' : /\b(usado|used|segunda mano)\b/.test(text) ? 'used' : /\b(nuevo|new)\b/.test(text) ? 'new' : null;
-    const wantedCondition = condition(q), offeredCondition = condition(normalize(result.condition || result.condicion)) || condition(title);
+    const wantedCondition = condition(q) || (conditionMode === 'new' ? 'new' : null), offeredCondition = condition(title) || condition(normalize(result.condition || result.condicion || result.conditionLabel));
+    if (conditionMode === 'used' && offeredCondition === 'new') return {score:0,reject:true,reason:'different_condition'};
     if (wantedCondition && offeredCondition && wantedCondition !== offeredCondition) return {score:0,reject:true,reason:'different_condition'};
     const ignored=new Set(['para','con','sin','por','los','las','una','uno','que','busco','quiero','comprar','precio','barato','mejor','menos','pesos','hasta','the','for','with','under','buy','best']);
     const words=q.match(/[a-z0-9]+/g)||[];
@@ -40,8 +41,8 @@ function relevanceOf(result, query) {
     const score=terms.length ? terms.filter(t=>titleWords.has(t)).length/terms.length : .5;
     return {score,reject:false,reason:null};
 }
-function assessResult(result, query) {
-    const availability=availabilityOf(result), relevance=relevanceOf(result,query);
+function assessResult(result, query, {conditionMode = 'all'} = {}) {
+    const availability=availabilityOf(result), relevance=relevanceOf(result,query,conditionMode);
     const originalUrl=result.urlOriginal || result.url;
     const resolvedUrl=originalUrl ? resolveDirectProductUrl(originalUrl) : '';
     const unresolved=Boolean(originalUrl && !resolvedUrl);
@@ -77,7 +78,7 @@ function compareOffers(a, b) {
     if (a.totalCost !== null && b.totalCost !== null && Number.isFinite(a.totalCost) && Number.isFinite(b.totalCost) && a.totalCostCurrency === b.totalCostCurrency) return a.totalCost - b.totalCost || String(a.title || a.titulo || '').localeCompare(String(b.title || b.titulo || ''));
     return String(a.title || a.titulo || '').localeCompare(String(b.title || b.titulo || ''));
 }
-function rankOffers(results, query) {
-    return results.map(item => assessResult(item, query)).filter(item => !item.qualityRejected).sort(compareOffers);
+function rankOffers(results, query, options = {}) {
+    return results.map(item => assessResult(item, query, options)).filter(item => !item.qualityRejected).sort(compareOffers);
 }
 module.exports={availabilityOf,relevanceOf,assessResult,offerEvidence,compareOffers,rankOffers};

@@ -63,3 +63,10 @@ test('provider negative operators are exclusions, not requested condition or acc
  assert.equal(assessResult({title:'Funda iPhone 15 128GB'},q).qualityReason,'accessory_for_device');
  assert.equal(assessResult({title:'iPhone 15 128GB',condition:'refurbished'},'iPhone 15 128GB nuevo').qualityReason,'different_condition');
 });
+test('explicit new condition filters refurbished references even after UI title normalization',()=>{
+ const {rankOffers}=require('../src/services/resultQuality');
+ const rows=rankOffers([{title:'Apple iPhone 15 128GB (Reacondicionado)',titulo:'iPhone 15 128GB',isMerchantReference:true},{title:'Apple iPhone 15 128GB',isMerchantReference:true}],'iPhone 15 128GB',{conditionMode:'new'});
+ assert.equal(rows.length,1);assert.equal(rows[0].title,'Apple iPhone 15 128GB');
+ assert.equal(assessResult({title:'iPhone 15 128GB nuevo'},'iPhone 15',{conditionMode:'used'}).qualityRejected,true);
+ assert.equal(assessResult({title:'iPhone 15 128GB reacondicionado'},'iPhone 15',{conditionMode:'used'}).qualityRejected,false);
+});

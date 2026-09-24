@@ -1650,7 +1650,7 @@ exports.searchGoogleShopping = async (query, radius, lat, lng, intentType, abort
     );
     const mlByKey = new Map(rerankedMergedMeli.map(result => [String(result?._meliItemId || result?.url || '').toLowerCase(), result]));
     const mergedResults = dedupedByUrl
-        .map(result => assessResult(mlByKey.get(String(result?._meliItemId || result?.url || '').toLowerCase()) || result, query));
+        .map(result => assessResult(mlByKey.get(String(result?._meliItemId || result?.url || '').toLowerCase()) || result, query, {conditionMode}));
     const sellableResults = mergedResults.filter(isResultSellable);
     const nonRejectedResults = sellableResults.filter(result => !(result._meliHardRejected && result.resultSource === 'meli_api'));
     const validResultShape = nonRejectedResults.filter(result => {
