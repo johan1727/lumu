@@ -70,3 +70,13 @@ test('explicit new condition filters refurbished references even after UI title 
  assert.equal(assessResult({title:'iPhone 15 128GB nuevo'},'iPhone 15',{conditionMode:'used'}).qualityRejected,true);
  assert.equal(assessResult({title:'iPhone 15 128GB reacondicionado'},'iPhone 15',{conditionMode:'used'}).qualityRejected,false);
 });
+
+test('exact model requires evidence in original title, not a normalized UI label',()=>{
+ const {rankOffers}=require('../src/services/resultQuality');
+ const rows=rankOffers([
+  {title:'Samsung Galaxy A23 5G Dual SIM 128 GB azul asombroso',titulo:'iPhone 15 128GB (5G)',isMerchantReference:true},
+  {title:'Apple iPhone 15 (128 GB) - Negro : Amazon.com.mx',isMerchantReference:true},
+  {title:'Apple smartphone 128 GB',titulo:'iPhone 15 128GB',isMerchantReference:true}
+ ],'iPhone 15 128GB',{conditionMode:'new'});
+ assert.equal(rows.length,1);assert.match(rows[0].title,/Apple iPhone 15/);
+});

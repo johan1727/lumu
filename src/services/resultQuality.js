@@ -23,7 +23,7 @@ function relevanceOf(result, query, conditionMode = 'all') {
     for(const [,brand,model] of models){
         const prefix=brand.replace(/\s+/g,'\\s*');
         const match=title.match(new RegExp('\\b'+prefix+'\\s*(\\d{1,4})\\b'));
-        if(match && match[1]!==model)return {score:0,reject:true,reason:'different_model'};
+        if(!match || match[1]!==model)return {score:0,reject:true,reason:'different_model'};
     }
     const capacity = text => [...text.matchAll(/\b(\d+)\s*(gb|tb)\b/g)].map(m => Number(m[1]) * (m[2] === 'tb' ? 1024 : 1));
     const wantedCapacity = capacity(q), offeredCapacity = capacity(title);
