@@ -1565,8 +1565,8 @@ function renderFlashDeals(deals = []) {
         const originalPrice = hasPlausibleOriginal ? formatProductPriceLabel(deal.originalPrice, deal) : '';
         const discountPct = hasPlausibleOriginal ? Math.min(80, Math.max(1, Math.round(Number(deal.discountPct) || 0))) : 0;
         const metaLabel = deal.shipping
-            ? (currentRegion === 'US' ? 'Free shipping' : deal.shipping)
-            : (currentRegion === 'US' ? 'Verified deal today' : 'Oferta verificada hoy');
+            ? String(deal.shipping)
+            : (currentRegion === 'US' ? 'Confirm price and stock at the store' : 'Confirma precio y stock en la tienda');
 
         return `
             <article class="w-64 flex-shrink-0 snap-start sm:w-auto bg-white rounded-2xl p-4 border border-slate-200 shadow-sm hover:shadow-xl hover:-translate-y-1 transition-all duration-300 group">

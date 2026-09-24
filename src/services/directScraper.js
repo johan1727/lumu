@@ -1,3 +1,4 @@
+const providerCircuit = require('../utils/providerCircuit');
 const axios = require('axios');
 const cheerio = require('cheerio');
 const crypto = require('crypto');
@@ -338,6 +339,7 @@ function throwIfAborted(signal) {
 }
 
 async function fetchMercadoLibreApi(url, apiOpts, signal, label = 'query', maxRetries = 2) {
+    if(providerCircuit.isBlocked('api.mercadolibre.com')) return null;
     let lastError = null;
     for (let attempt = 0; attempt <= maxRetries; attempt++) {
         try {
@@ -349,7 +351,8 @@ async function fetchMercadoLibreApi(url, apiOpts, signal, label = 'query', maxRe
                 throw error;
             }
             const status = error?.response?.status;
-            const retryable = error.code === 'ECONNABORTED' || error.code === 'ETIMEDOUT' || [403, 429, 500, 502, 503, 504].includes(status);
+            providerCircuit.observe('api.mercadolibre.com',status);
+            const retryable = error.code === 'ECONNABORTED' || error.code === 'ETIMEDOUT' || [500, 502, 503, 504].includes(status);
             if (attempt < maxRetries && retryable) {
                 const delay = status === 403
                     ? (1500 + (attempt * 1200) + Math.round(Math.random() * 400))
@@ -427,7 +430,7 @@ const scrapeWithRetry = async (url, maxRetries = 2, countryCode = 'MX', signal) 
             if (error?.name === 'AbortError' || error?.code === 'ERR_CANCELED') {
                 throw error;
             }
-            const isRetryable = error.code === 'ECONNABORTED' || (error.response && [503, 429, 403].includes(error.response.status));
+            const isRetryable = error.code === 'ECONNABORTED' || (error.response && [503].includes(error.response.status));
 
             if (i < maxRetries && isRetryable) {
                 const delay = Math.pow(2, i) * 1000 + Math.random() * 1000;
@@ -553,6 +556,7 @@ exports.scrapeMercadoLibreDirect = async (query, signal) => {
 };
 
 exports.scrapeMercadoLibreAPI = async (query, countryCode = 'MX', signal, conditionMode = '') => {
+    if(!['MX','AR','CO','CL','BR','PE'].includes(String(countryCode).toUpperCase())) return [];
     try {
         throwIfAborted(signal);
         const normalizedCountry = String(countryCode || 'MX').toUpperCase();
@@ -606,7 +610,7 @@ exports.scrapeMercadoLibreAPI = async (query, countryCode = 'MX', signal, condit
             }
         }
 
-        if (combined.length === 0) {
+        if (combined.length === 0 && !providerCircuit.isBlocked('api.mercadolibre.com')) {
             console.warn(`[ML API] 0 resultados para "${query}". Intentando fallback simple...`);
             await sleep(1500);
             const fallbackUrl = `https://api.mercadolibre.com/sites/${siteId}/search?q=${encodedQuery}${conditionParam}&limit=30`;
@@ -621,7 +625,7 @@ exports.scrapeMercadoLibreAPI = async (query, countryCode = 'MX', signal, condit
         }
 
         // If zero results, retry with simplified query (strip specs like "256gb", model numbers)
-        if (combined.length === 0 && query.split(/\s+/).length > 2) {
+        if (combined.length === 0 && !providerCircuit.isBlocked('api.mercadolibre.com') && query.split(/\s+/).length > 2) {
             const simplified = simplifyMarketplaceQuery(query);
             if (simplified !== query && simplified.length > 2) {
                 console.log(`[ML API] Retry con query simplificada: "${simplified}"`);

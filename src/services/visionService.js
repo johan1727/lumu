@@ -43,8 +43,7 @@ exports.identifyProduct = async (imageBase64) => {
         }, 25000);
 
         if (!response.ok) {
-            const errBody = await response.text();
-            throw new Error(`Fallo en Gemini Vision: ${response.status} - ${errBody}`);
+            throw new Error(`Gemini Vision HTTP ${response.status}`);
         }
 
         const data = await response.json();

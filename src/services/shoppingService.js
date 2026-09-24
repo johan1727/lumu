@@ -1092,7 +1092,7 @@ exports.searchGoogleShopping = async (query, radius, lat, lng, intentType, abort
             shouldQueryMlPriority ? 1 : 0,
             plannedAltShoppingCalls
         ].reduce((sum, value) => sum + value, 0);
-        console.log(`[ShoppingService] Serper call plan: ${expectedSerperCallCount} (tier=${searchTier}, shopping=1, web=${isSpecificProduct ? 0 : 1}, amazonSpecific=${isSpecificProduct ? 1 : 0}, broad=${!isSpecificProduct ? 1 : 0}, official=${shouldQueryOfficialWeb ? 1 : 0}, mlAmazon=${shouldQueryMlAmazon ? 1 : 0}, mlPriority=${shouldQueryMlPriority ? 1 : 0}, alt=${plannedAltShoppingCalls})`);
+        console.log(`[ShoppingService] Serper call plan: ${expectedSerperCallCount} (tier=${searchTier}, shopping=1, web=1, amazonSpecific=${!isSpecificProduct && preferredIncludesAmazon ? 1 : 0}, broad=${!isSpecificProduct ? 1 : 0}, official=${shouldQueryOfficialWeb ? 1 : 0}, mlAmazon=${shouldQueryMlAmazon ? 1 : 0}, mlPriority=${shouldQueryMlPriority ? 1 : 0}, alt=${plannedAltShoppingCalls})`);
         const altShoppingPromises = (alternativeQueries || [])
             .filter(Boolean)
             .slice(0, serperAltQueryCount)

@@ -2252,7 +2252,7 @@ exports.searchProduct = async (req, res) => {
                         locale: regionCfg.locale,
                         label: regionCfg.regionLabel
                     },
-                    top_5_baratos: rankOffers(filteredCachedResults, searchQuery).map(p => ({ ...p, titulo: cleanProductTitleForUI(p.titulo || p.title, llmAnalysis) })),
+                    top_5_baratos: rankOffers(filteredCachedResults, shoppingBaseQuery || query).map(p => ({ ...p, titulo: cleanProductTitleForUI(p.titulo || p.title, llmAnalysis) })),
                     advertencia_uso: usageWarning,
                     vip_auto_alert: null
                 });
@@ -2341,7 +2341,7 @@ exports.searchProduct = async (req, res) => {
 
             const rescueSeenKeys = new Set(shoppingResults.map(item => String(item?.url || '').split('?')[0].toLowerCase()).filter(Boolean));
             const rescuedQueries = [];
-            const simplifiedQuery = simplifySearchQuery(searchQuery);
+            const simplifiedQuery = simplifySearchQuery(shoppingBaseQuery || query);
             if (!isLocalFastMode && simplifiedQuery.length < searchQuery.length) {
                 rescuedQueries.push({
                     label: 'simplified',
@@ -2406,7 +2406,7 @@ exports.searchProduct = async (req, res) => {
                         : 'mercadolibre.com';
                     rescuedQueries.push({
                         label: 'deep_meli_site',
-                        query: `site:${meliDomain} "${searchQuery}" nuevo`,
+                        query: `site:${meliDomain} ${shoppingBaseQuery.replace(/"/g, '')} nuevo`,
                         alternativeQueries: [],
                         preferredStoreKeys: effectivePreferredStoreKeys,
                         brandOfficialQuery: null
@@ -2419,7 +2419,7 @@ exports.searchProduct = async (req, res) => {
                         : 'amazon.com';
                     rescuedQueries.push({
                         label: 'deep_amazon_site',
-                        query: `site:${amazonDomain} "${searchQuery}" nuevo`,
+                        query: `site:${amazonDomain} ${shoppingBaseQuery.replace(/"/g, '')} nuevo`,
                         alternativeQueries: [],
                         preferredStoreKeys: effectivePreferredStoreKeys,
                         brandOfficialQuery: null
@@ -2435,7 +2435,7 @@ exports.searchProduct = async (req, res) => {
                     const meliDomain = countryCode === 'MX' ? 'mercadolibre.com.mx' : 'mercadolibre.com';
                     rescuedQueries.unshift({
                         label: 'rescue_meli_missing',
-                        query: `site:${meliDomain} "${searchQuery}"`,
+                        query: `site:${meliDomain} ${shoppingBaseQuery.replace(/"/g, '')}`,
                         alternativeQueries: [],
                         preferredStoreKeys: effectivePreferredStoreKeys,
                         brandOfficialQuery: null,
@@ -2447,7 +2447,7 @@ exports.searchProduct = async (req, res) => {
                     const amazonDomain = countryCode === 'MX' ? 'amazon.com.mx' : 'amazon.com';
                     rescuedQueries.unshift({
                         label: 'rescue_amazon_missing',
-                        query: `site:${amazonDomain} "${searchQuery}"`,
+                        query: `site:${amazonDomain} ${shoppingBaseQuery.replace(/"/g, '')}`,
                         alternativeQueries: [],
                         preferredStoreKeys: effectivePreferredStoreKeys,
                         brandOfficialQuery: null,
@@ -2474,7 +2474,7 @@ exports.searchProduct = async (req, res) => {
                     if (preferredDomains.length > 0) {
                         rescuedQueries.unshift({
                             label: 'rescue_preferred_missing',
-                            query: `(${preferredDomains.map(d => `site:${d}`).join(' OR ')}) "${searchQuery}"`,
+                            query: `(${preferredDomains.map(d => `site:${d}`).join(' OR ')}) ${shoppingBaseQuery.replace(/"/g, '')}`,
                             alternativeQueries: [],
                             preferredStoreKeys: effectivePreferredStoreKeys,
                             brandOfficialQuery: null,
@@ -2823,7 +2823,7 @@ exports.searchProduct = async (req, res) => {
             }
         }
 
-        personalizedProducts = rankOffers(personalizedProducts, searchQuery);
+        personalizedProducts = rankOffers(personalizedProducts, shoppingBaseQuery || query);
 
         return res.json({
             tipo_respuesta: 'resultados',

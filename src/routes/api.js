@@ -185,8 +185,9 @@ router.get('/deals', async (req, res) => {
         let deals = await meliService.getFlashDeals(country, 8);
         let source = 'meli';
         if (!Array.isArray(deals) || deals.length === 0) {
-            deals = await getPriceDropDeals(8);
-            source = 'price_history';
+            // Historical rows do not establish country, currency or current stock.
+            deals = [];
+            source = 'unavailable';
         }
         res.set('Cache-Control', 'public, max-age=1800');
         res.json({

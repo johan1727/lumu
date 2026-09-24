@@ -1,3 +1,4 @@
+const providerCircuit = require('../utils/providerCircuit');
 const fetchWithTimeout = require('../utils/fetchWithTimeout');
 const supabase = require('../config/supabase');
 const { z } = require('zod');
@@ -734,8 +735,8 @@ function buildFallbackResponse(fallbackQuery, context = {}) {
 
 exports.analyzeMessage = async (userText, chatHistory = [], context = {}) => {
     const apiKey = process.env.GEMINI_API_KEY;
-    if (!apiKey) {
-        console.warn('[LLM] GEMINI_API_KEY no configurado, usando fallback determinístico.');
+    if (!apiKey || providerCircuit.isBlocked('generativelanguage.googleapis.com')) {
+        console.warn('[LLM] Gemini no disponible o en pausa local; usando fallback determinístico.');
         return buildFallbackResponse(sanitizeUserInput(userText), context);
     }
 
@@ -1010,24 +1011,17 @@ ${extraContext}`;
                 body: JSON.stringify(payload)
             }, 15000);
 
-            if (response.status === 429 && retries < maxRetries) {
-                retries++;
-                const delay = retries * 1500 + Math.random() * 500;
-                console.warn(`[LLM] Error 429 Rate Limit. Reintentando en ${Math.round(delay)}ms...`);
-                await new Promise(resolve => setTimeout(resolve, delay));
-                continue;
-            }
-
             if (!response.ok) {
-                const errorBody = await response.text().catch(() => '');
-                throw new Error(`Fallo en la API de Gemini: HTTP ${response.status} - ${errorBody.slice(0, 200)}`);
+                console.warn(`[LLM] Provider unavailable: HTTP ${response.status}`);
+                if (response.status < 500) return buildFallbackResponse(sanitizedText || userText, context);
+                throw new Error(`Gemini HTTP ${response.status}`);
             }
 
             const data = await response.json();
 
             // Defensive: check candidates exist and have content
             if (!data.candidates || data.candidates.length === 0 || !data.candidates[0].content) {
-                console.warn('[LLM] Gemini returned empty/blocked candidates:', JSON.stringify(data).slice(0, 500));
+                console.warn('[LLM] Gemini returned empty/blocked candidates');
                 throw new Error('Gemini returned no candidates (possibly blocked by safety filter)');
             }
 
@@ -1061,8 +1055,9 @@ ${extraContext}`;
             return repaired;
 
         } catch (error) {
+            if (providerCircuit.isBlocked('generativelanguage.googleapis.com')) return buildFallbackResponse(sanitizedText || userText, context);
             if (retries >= maxRetries) {
-                console.error('Error en LLM Assistant tras reintentos:', error.message);
+                console.error('[LLM] Provider response unavailable after bounded retries');
                 return buildFallbackResponse(sanitizedText || userText, context);
             }
             retries++;

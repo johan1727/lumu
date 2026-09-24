@@ -14,7 +14,7 @@ function availabilityOf(result) {
     return 'unknown';
 }
 function relevanceOf(result, query) {
-    const q=normalize(query), title=normalize(result.title || result.titulo);
+    const q=normalize(query).replace(/(?:^|\s)-(?:"[^"]*"|\S+)/g, ' ').trim(), title=normalize(result.title || result.titulo);
     const accessories=/\b(funda|case|mica|protector|refaccion|repuesto|cargador|charger|cable|carcasa|adaptador|adapter)\b/;
     const device=/\b(iphone|galaxy|pixel|macbook|playstation|ps5|ps4|xbox|nintendo|laptop|celular|smartphone)\b/;
     if(device.test(q) && !accessories.test(q) && accessories.test(title.split(/\b(?:incluye|incluido|incluida|with|includes)\b/)[0])) return {score:0,reject:true,reason:'accessory_for_device'};

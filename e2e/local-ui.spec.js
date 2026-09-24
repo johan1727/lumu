@@ -75,3 +75,11 @@ test('direct merchant reference survives missing price without inventing a barga
  await expect(page.locator('#best-option-summary')).toBeHidden();
  expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
 });
+test('featured offers do not fabricate verification or translate paid shipping to free',async({page})=>{
+ await page.route('**/api/deals**',route=>route.fulfill({json:{deals:[{title:'Producto observado',source:'Tienda',price:100,currencyCode:'MXN',shipping:'Envío calculado en tienda'}]}}));
+ await page.goto('/');
+ await expect(page.locator('#flash-deals-grid')).toContainText('Envío calculado en tienda');
+ await expect(page.locator('#flash-deals-grid')).not.toContainText('Oferta verificada');
+ await page.evaluate(()=>renderFlashDeals([{title:'Producto observado',source:'Tienda',price:100,currencyCode:'MXN'}]));
+ await expect(page.locator('#flash-deals-grid')).toContainText('Confirma precio y stock en la tienda');
+});

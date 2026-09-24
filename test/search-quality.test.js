@@ -57,3 +57,9 @@ test('totals require complete explicit costs, and commission cannot affect order
  assert.deepEqual(rankOffers([a,b],'Phone').map(x=>x.title),['Phone B','Phone A']);
  assert.deepEqual(rankOffers([{...a,commission:999,affiliatePriorityRank:0,affiliateCapBoost:99},{...b,commission:0}],'Phone').map(x=>x.title),['Phone B','Phone A']);
 });
+test('provider negative operators are exclusions, not requested condition or accessories',()=>{
+ const q='iPhone 15 128GB -funda -case -usado -reacondicionado -refurbished -"open box"';
+ assert.equal(assessResult({title:'iPhone 15 128GB',condition:'new'},q).qualityRejected,false);
+ assert.equal(assessResult({title:'Funda iPhone 15 128GB'},q).qualityReason,'accessory_for_device');
+ assert.equal(assessResult({title:'iPhone 15 128GB',condition:'refurbished'},'iPhone 15 128GB nuevo').qualityReason,'different_condition');
+});

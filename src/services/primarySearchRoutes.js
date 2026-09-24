@@ -2,9 +2,9 @@
 // opaque Google offer pages. Replace the redundant Amazon Shopping call with
 // organic search; do not join its price to a different page by title similarity.
 function fetchPrimarySearchRoutes({request,apiKey,isSpecificProduct,preferredIncludesAmazon,shoppingQuery,webSearchQ,amazonDomain,gl,hl,webNum,amazonNum,timeout,signal,retries}) {
- const call=(endpoint,data)=>request({method:'post',url:`https://google.serper.dev/${endpoint}`,headers:{'X-API-KEY':apiKey,'Content-Type':'application/json'},data:JSON.stringify(data),timeout,signal},retries).catch(()=>null);
+ const call=(endpoint,data)=>request({method:'post',url:`https://google.serper.dev/${endpoint}`,headers:{'X-API-KEY':apiKey,'Content-Type':'application/json'},data:JSON.stringify(data),timeout,signal},retries).catch(error=>{console.warn(`[Serper ${endpoint}] Request failed: ${Number(error?.response?.status)||'network'}`);return null;});
  return {
-  webPromise:call('search',{q:webSearchQ,gl,hl,num:webNum}),
+  webPromise:call('search',{q:webSearchQ,gl,hl,num:10}),
   amazonSpecificShoppingPromise:!isSpecificProduct&&preferredIncludesAmazon
    ?call('shopping',{q:`${shoppingQuery} site:${amazonDomain}`,gl,hl,num:amazonNum})
    :Promise.resolve(null)

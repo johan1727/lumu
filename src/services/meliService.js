@@ -28,7 +28,7 @@ const COUNTRY_TO_SITE_ID = {
     EC: 'MEC',
     PY: 'MPY',
     VE: 'MLV',
-    US: 'MLC' // fallback to Chile for US; MELI doesn't have a US site
+    // No US site: never relabel Chilean or Mexican prices as US offers.
 };
 
 const MELI_BASE = 'https://api.mercadolibre.com';
@@ -179,6 +179,7 @@ function normaliseMeliItem(item, siteId, currency, query) {
  * @returns {Promise<Array>} Normalised product results
  */
 async function searchMeli(query, countryCode = 'MX', options = {}) {
+    if(!['MX','AR','CO','CL','BR','PE'].includes(String(countryCode).toUpperCase())) return [];
     const siteId = COUNTRY_TO_SITE_ID[String(countryCode).toUpperCase()] || 'MLM';
     const limit = Math.min(Number(options.limit) || 50, 50); // API cap is 50 per call
     const offset = Math.max(0, Number(options.offset) || 0);
@@ -355,10 +356,11 @@ function mapFlashDealItem(item, siteId, currency, countryCode) {
 
 async function getFlashDeals(countryCode = 'MX', limit = 8, signal) {
     const normalizedCountry = String(countryCode || 'MX').toUpperCase();
+    if(!['MX','AR','CO','CL','BR','PE'].includes(normalizedCountry)) return [];
     const siteId = COUNTRY_TO_SITE_ID[normalizedCountry] || 'MLM';
     const currency = getCurrencyByCountry(normalizedCountry);
     const normalizedLimit = Math.max(1, Math.min(Number(limit) || 8, 12));
-    const cacheKey = `deals:${siteId}`;
+    const cacheKey = `deals:${normalizedCountry}:${siteId}:${currency}`;
     const cached = flashDealsCache.get(cacheKey);
 
     if (cached && (Date.now() - cached.createdAt) < (30 * 60 * 1000)) {

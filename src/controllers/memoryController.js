@@ -44,7 +44,8 @@ exports.saveMemory = async (req, res) => {
                 break;
             }
 
-            lastEmbeddingError = embedData;
+            lastEmbeddingError = {status: embedResponse.status};
+            if ([401,403,429].includes(embedResponse.status)) break;
         }
 
         if (!vector) {
