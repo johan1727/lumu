@@ -2,7 +2,7 @@
 
 /**
  * meliService.js — Direct Mercado Libre API integration
- * Uses the public Items Search API (no OAuth needed for read-only searches)
+ * Uses the Items Search API with MELI_ACCESS_TOKEN when configured; access remains provider-controlled.
  * Docs: https://developers.mercadolibre.com/es_ar/buscar-productos
  */
 
@@ -116,8 +116,8 @@ function normaliseMeliItem(item, siteId, currency, query) {
     const rawThumb = item.thumbnail ? item.thumbnail.replace(/^http:\/\//, 'https://') : null;
     const thumbnail = rawThumb ? rawThumb.replace(/-I(\.jpg)$/i, '-O$1') : null;
 
-    // Build purchase URL — prefer permalink, fall back to constructed URL
-    const productUrl = item.permalink || `https://www.mercadolibre.com/p/${item.id}`;
+    // Use the provider-issued destination; an item ID is not a catalog product ID.
+    const productUrl = item.permalink;
 
     const shippingText = item.shipping?.free_shipping
         ? 'Envío gratis'
@@ -125,7 +125,7 @@ function normaliseMeliItem(item, siteId, currency, query) {
             ? 'Envío Mercado Envíos'
             : '';
 
-    const conditionLabel = item.condition === 'new' ? 'Nuevo' : item.condition === 'used' ? 'Usado' : '';
+    const conditionLabel = item.condition === 'new' ? 'Nuevo' : item.condition === 'used' ? 'Usado' : item.condition === 'refurbished' ? 'Reacondicionado' : '';
 
     return {
         titulo: String(item.title || '').trim(),
@@ -133,7 +133,12 @@ function normaliseMeliItem(item, siteId, currency, query) {
         precio: price,
         price: price,
         originalPrice: hasDiscount ? originalPrice : null,
-        moneda: currency,
+        moneda: /^[A-Z]{3}$/.test(item.currency_id || '') ? item.currency_id : null,
+        currency: /^[A-Z]{3}$/.test(item.currency_id || '') ? item.currency_id : null,
+        available_quantity: item.available_quantity,
+        status: item.status,
+        availabilitySource: 'mercadolibre_api',
+        availabilityObservedAt: new Date().toISOString(),
         tienda: `Mercado Libre (${seller})`,
         source: 'Mercado Libre',
         urlOriginal: productUrl,
@@ -216,6 +221,7 @@ async function searchMeli(query, countryCode = 'MX', options = {}) {
     try {
         const response = await fetchWithTimeout(url, {
             method: 'GET',
+        redirect: 'error',
             headers: getMeliHeaders(siteId),
             timeout: 10000,
             signal: options.signal
@@ -238,7 +244,8 @@ async function searchMeli(query, countryCode = 'MX', options = {}) {
         const validItems = items.filter(item =>
             Number.isFinite(Number(item.price)) &&
             Number(item.price) > 0 &&
-            item.available_quantity !== 0
+            item.available_quantity !== 0 &&
+            typeof item.permalink === 'string' && /^https:\/\//.test(item.permalink)
         );
 
         const page = Math.floor(offset / Math.max(1, limit)) + 1;
@@ -314,6 +321,7 @@ async function fetchMeliSearch(url, signal) {
 
     const response = await fetchWithTimeout(url, {
         method: 'GET',
+        redirect: 'error',
         headers,
         signal
     }, 10000);
@@ -330,7 +338,9 @@ async function fetchMeliSearch(url, signal) {
 function mapFlashDealItem(item, siteId, currency, countryCode) {
     const price = Number(item?.price);
     const originalPrice = Number(item?.original_price);
-    if (!Number.isFinite(price) || price <= 0 || !Number.isFinite(originalPrice) || originalPrice <= price) {
+    if (!Number.isFinite(price) || price <= 0 || !Number.isFinite(originalPrice) || originalPrice <= price
+        || item.currency_id !== currency || !/^https:\/\//.test(item.permalink || '')
+        || item.available_quantity === 0 || ['closed','inactive','paused'].includes(item.status)) {
         return null;
     }
 
@@ -345,7 +355,7 @@ function mapFlashDealItem(item, siteId, currency, countryCode) {
         originalPrice,
         discountPct,
         image,
-        url: item.permalink || `https://www.mercadolibre.com/p/${item.id}`,
+        url: item.permalink,
         source: 'Mercado Libre',
         shipping: item.shipping?.free_shipping ? 'Envío gratis' : '',
         currencyCode: currency,

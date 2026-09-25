@@ -182,6 +182,7 @@ async function searchAmazonSerpApi(query, countryCode = 'MX', signal) {
     try {
         response = await axios.get('https://serpapi.com/search.json', {
             timeout: 6000,
+            maxRedirects: 0,
             signal,
             params: {
                 engine: 'amazon',
@@ -382,7 +383,7 @@ const MERCADO_LIBRE_SITE_MAP = {
     AR: 'MLA',
     CO: 'MCO',
     PE: 'MPE',
-    US: 'MLM'
+    BR: 'MLB'
 };
 
 const MERCADO_LIBRE_SOURCE_MAP = {
@@ -391,7 +392,7 @@ const MERCADO_LIBRE_SOURCE_MAP = {
     AR: 'Mercado Libre AR',
     CO: 'Mercado Libre CO',
     PE: 'Mercado Libre PE',
-    US: 'Mercado Libre'
+    BR: 'Mercado Livre BR'
 };
 
 const MERCADO_LIBRE_BASE_DOMAIN_MAP = {
@@ -400,7 +401,7 @@ const MERCADO_LIBRE_BASE_DOMAIN_MAP = {
     AR: 'www.mercadolibre.com.ar',
     CO: 'www.mercadolibre.com.co',
     PE: 'www.mercadolibre.com.pe',
-    US: 'www.mercadolibre.com.mx'
+    BR: 'www.mercadolivre.com.br'
 };
 
 const FALABELLA_CONFIG_MAP = {
@@ -449,12 +450,12 @@ function mapMercadoLibreApiResults(data, sourceLabel) {
         ? data.results.map((item) => {
             const price = Number(item.price);
             const permalink = item.permalink || item.url || '';
-            if (!item.title || !Number.isFinite(price) || !permalink) return null;
+            if (!item.title || !Number.isFinite(price) || price <= 0 || !permalink) return null;
             const originalPrice = Number(item.original_price);
             const hasDiscount = Number.isFinite(originalPrice) && originalPrice > price;
             const shippingFree = item.shipping?.free_shipping === true;
             const shippingText = shippingFree ? 'Envío gratis' : '';
-            const conditionLabel = item.condition === 'used' ? 'used' : (item.condition === 'refurbished' ? 'refurbished' : 'new');
+            const conditionLabel = ['new', 'used', 'refurbished'].includes(item.condition) ? item.condition : '';
             const sellerRep = item.seller?.seller_reputation?.level_id || '';
             const sellerPowerLevel = item.seller?.seller_reputation?.power_seller_status || '';
             const installments = item.installments;
@@ -480,6 +481,11 @@ function mapMercadoLibreApiResults(data, sourceLabel) {
                 observedPrices: [price].filter(Boolean),
                 priceConfidence: 0.95,
                 priceSource: 'ml_api_direct',
+                currency: /^[A-Z]{3}$/.test(item.currency_id || '') ? item.currency_id : null,
+                available_quantity: item.available_quantity,
+                status: item.status,
+                availabilitySource: 'mercadolibre_api',
+                availabilityObservedAt: new Date().toISOString(),
                 resultSource: 'ml_api_direct',
                 isDirectProductPage: true,
                 hasStockSignal: item.available_quantity > 0,
@@ -566,6 +572,7 @@ exports.scrapeMercadoLibreAPI = async (query, countryCode = 'MX', signal, condit
         const encodedQuery = encodeURIComponent(query);
         const apiOpts = {
             timeout: 6000,
+            maxRedirects: 0,
             signal,
             headers: {
                 'User-Agent': getRandomUA(),
@@ -575,7 +582,8 @@ exports.scrapeMercadoLibreAPI = async (query, countryCode = 'MX', signal, condit
                 'Cache-Control': 'no-cache',
                 'Connection': 'keep-alive',
                 'Origin': `https://${baseDomain}`,
-                'Referer': `https://${baseDomain}/`
+                'Referer': `https://${baseDomain}/`,
+                ...(process.env.MELI_ACCESS_TOKEN ? {Authorization: `Bearer ${process.env.MELI_ACCESS_TOKEN}`} : {})
             }
         };
         const conditionParam = buildMercadoLibreConditionParam(conditionMode);
