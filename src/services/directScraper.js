@@ -1,7 +1,7 @@
 const providerCircuit = require('../utils/providerCircuit');
 const axios = require('axios');
 const cheerio = require('cheerio');
-const crypto = require('crypto');
+const {searchAmazonCreators} = require('./amazonCreatorsService');
 
 // Pool de User-Agents reales para rotación — reduce bloqueos en producción
 const USER_AGENTS = [
@@ -127,22 +127,6 @@ function simplifyMarketplaceQuery(query = '') {
         .trim();
 }
 
-function sha256Hex(value) {
-    return crypto.createHash('sha256').update(value).digest('hex');
-}
-
-function hmac(key, value, encoding) {
-    return crypto.createHmac('sha256', key).update(value).digest(encoding);
-}
-
-function getAmazonPaapiConfig(countryCode = 'MX') {
-    const normalizedCountry = String(countryCode || 'MX').toUpperCase();
-    const host = process.env.AMAZON_PAAPI_HOST || (normalizedCountry === 'US' ? 'webservices.amazon.com' : 'webservices.amazon.com.mx');
-    const region = process.env.AMAZON_PAAPI_REGION || 'us-east-1';
-    const marketplace = process.env.AMAZON_PAAPI_MARKETPLACE || (normalizedCountry === 'US' ? 'www.amazon.com' : 'www.amazon.com.mx');
-    return { host, region, marketplace };
-}
-
 function getAmazonDomainConfig(countryCode = 'MX') {
     const normalizedCountry = String(countryCode || 'MX').toUpperCase();
     return normalizedCountry === 'US'
@@ -247,85 +231,6 @@ async function searchAmazonSerpApi(query, countryCode = 'MX', signal) {
 
     setMarketplaceCache(cacheKey, mapped);
     return mapped;
-}
-
-async function searchAmazonPaapi(query, countryCode = 'MX', signal) {
-    const accessKey = process.env.AMAZON_PAAPI_ACCESS_KEY;
-    const secretKey = process.env.AMAZON_PAAPI_SECRET_KEY;
-    const partnerTag = process.env.AMAZON_PAAPI_PARTNER_TAG;
-    if (!accessKey || !secretKey || !partnerTag) return null;
-
-    const { host, region, marketplace } = getAmazonPaapiConfig(countryCode);
-    const service = 'ProductAdvertisingAPI';
-    const target = 'com.amazon.paapi5.v1.ProductAdvertisingAPIv1.SearchItems';
-    const payload = JSON.stringify({
-        Keywords: query,
-        SearchIndex: 'All',
-        ItemCount: 10,
-        PartnerTag: partnerTag,
-        PartnerType: 'Associates',
-        Marketplace: marketplace,
-        Resources: [
-            'Images.Primary.Medium',
-            'ItemInfo.Title',
-            'ItemInfo.ByLineInfo',
-            'Offers.Listings.Price',
-            'Offers.Summaries.LowestPrice'
-        ]
-    });
-
-    const now = new Date();
-    const amzDate = now.toISOString().replace(/[:-]|\.\d{3}/g, '');
-    const dateStamp = amzDate.slice(0, 8);
-    const canonicalHeaders = `content-encoding:amz-1.0\ncontent-type:application/json; charset=utf-8\nhost:${host}\nx-amz-date:${amzDate}\nx-amz-target:${target}\n`;
-    const signedHeaders = 'content-encoding;content-type;host;x-amz-date;x-amz-target';
-    const canonicalRequest = `POST\n/paapi5/searchitems\n\n${canonicalHeaders}\n${signedHeaders}\n${sha256Hex(payload)}`;
-    const credentialScope = `${dateStamp}/${region}/${service}/aws4_request`;
-    const stringToSign = `AWS4-HMAC-SHA256\n${amzDate}\n${credentialScope}\n${sha256Hex(canonicalRequest)}`;
-    const kDate = hmac(`AWS4${secretKey}`, dateStamp);
-    const kRegion = hmac(kDate, region);
-    const kService = hmac(kRegion, service);
-    const kSigning = hmac(kService, 'aws4_request');
-    const signature = hmac(kSigning, stringToSign, 'hex');
-    const authorization = `AWS4-HMAC-SHA256 Credential=${accessKey}/${credentialScope}, SignedHeaders=${signedHeaders}, Signature=${signature}`;
-
-    const response = await axios.post(`https://${host}/paapi5/searchitems`, payload, {
-        timeout: 4500,
-        signal,
-        headers: {
-            'Content-Encoding': 'amz-1.0',
-            'Content-Type': 'application/json; charset=utf-8',
-            'X-Amz-Date': amzDate,
-            'X-Amz-Target': target,
-            'Authorization': authorization,
-            'Host': host
-        }
-    });
-
-    const items = Array.isArray(response.data?.SearchResult?.Items) ? response.data.SearchResult.Items : [];
-    return items.map((item) => {
-        const price = Number(item?.Offers?.Listings?.[0]?.Price?.Amount || item?.Offers?.Summaries?.[0]?.LowestPrice?.Amount || 0);
-        const originalPrice = Number(item?.Offers?.Listings?.[0]?.SavingBasis?.Amount || 0);
-        const savingsAmount = Number(item?.Offers?.Listings?.[0]?.Price?.Savings?.Amount || 0);
-        const hasDiscount = (Number.isFinite(originalPrice) && originalPrice > price) || (Number.isFinite(savingsAmount) && savingsAmount > 0);
-        const url = item?.DetailPageURL || '';
-        if (!item?.ItemInfo?.Title?.DisplayValue || !url || !Number.isFinite(price) || price <= 0) return null;
-        return {
-            title: item.ItemInfo.Title.DisplayValue,
-            price,
-            url,
-            source: String(countryCode || 'MX').toUpperCase() === 'US' ? 'Amazon' : 'Amazon MX',
-            image: item?.Images?.Primary?.Medium?.URL || '',
-            rating: null,
-            originalPrice: hasDiscount ? (originalPrice > price ? originalPrice : price + savingsAmount) : null,
-            discountPct: hasDiscount
-                ? Math.round((1 - (price / Math.max(price + savingsAmount, originalPrice || 0))) * 100)
-                : 0,
-            isDealPrice: hasDiscount,
-            hasStrikeThroughPrice: hasDiscount,
-            couponApplied: false
-        };
-    }).filter(Boolean);
 }
 
 const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
@@ -732,6 +637,11 @@ exports.scrapeAmazonDirect = async (query, countryCode = 'MX', signal) => {
         throwIfAborted(signal);
         const normalizedCountry = String(countryCode || 'MX').toUpperCase();
         const { sourceLabel, amazonDomain } = getAmazonDomainConfig(normalizedCountry);
+        const creatorsResults = await searchAmazonCreators(query, normalizedCountry, signal).catch(error => {
+            console.warn(`[Amazon Creators] Request failed (${error.status || 'unavailable'})`);
+            return null;
+        });
+        if (Array.isArray(creatorsResults) && creatorsResults.length) return creatorsResults;
         const serpApiResults = await searchAmazonSerpApi(query, normalizedCountry, signal).catch((error) => {
             console.warn(`[Amazon SerpApi] Fallback a otras fuentes: ${error.message}`);
             return null;
@@ -739,14 +649,6 @@ exports.scrapeAmazonDirect = async (query, countryCode = 'MX', signal) => {
         if (Array.isArray(serpApiResults) && serpApiResults.length > 0) {
             console.log(`[Amazon SerpApi] ${sourceLabel} encontró: ${serpApiResults.length} resultados.`);
             return serpApiResults;
-        }
-        const paApiResults = await searchAmazonPaapi(query, normalizedCountry, signal).catch((error) => {
-            console.warn(`[Amazon PAAPI] Fallback al scraper HTML: ${error.message}`);
-            return null;
-        });
-        if (Array.isArray(paApiResults) && paApiResults.length > 0) {
-            console.log(`[Amazon PAAPI] ${sourceLabel} encontró: ${paApiResults.length} resultados.`);
-            return paApiResults;
         }
         console.log(`[Direct Scraper] Iniciando búsqueda ultra-rápida en ${sourceLabel} para: ${query} (Con Retry)`);
         const url = `${amazonDomain}/s?k=${encodeURIComponent(query)}`;

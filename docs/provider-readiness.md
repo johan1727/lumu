@@ -12,12 +12,25 @@ Official price documentation: https://developers.mercadolibre.com.mx/api-de-prec
 
 ## Amazon
 
-The repository still contains a legacy PA-API adapter. Amazon's current deprecation notice says legacy calls return 403; this adapter is not a working production catalog integration. Do not provision old PA-API credentials to repair it.
+The legacy PA-API adapter has been removed. `amazonCreatorsService.js` implements the official REST OAuth flow and SearchItems/OffersV2, integrated before existing SerpApi/HTML sources. It makes no request unless enabled and fully configured. Fixtures validate the contract; no approved live account has been tested.
 
-Creators API migration needs an approved Associates account in the relevant market, Credential ID, Credential Secret, credential Version and an approved partner tag. It uses OAuth, regional token endpoints, `x-marketplace` and OffersV2. Old AWS PA-API credentials are incompatible. Implement and verify the new adapter against the approved account once access is available; no guessed tokens/endpoints or live activation in this pass.
+Required server-only configuration:
+
+- `AMAZON_CREATORS_ENABLED=true` to opt in (absent/false means off).
+- `AMAZON_CREATORS_CREDENTIAL_ID` and `AMAZON_CREATORS_CREDENTIAL_SECRET` issued by Creators API, not legacy AWS keys.
+- `AMAZON_CREATORS_CREDENTIAL_VERSION`: `3.1`, `3.2` or `3.3`, exactly as issued. The token endpoint follows that version; the marketplace follows the requested country.
+- `AMAZON_AFFILIATE_TAG_MX` (legacy `AMAZON_AFFILIATE_TAG` fallback) for MX and/or `AMAZON_AFFILIATE_TAG_US` for US. Missing tag disables that market. No other countries are supported by this adapter.
+
+Redeploy after changing configuration. Access approval and tag validity must be established in Associates Central before opt-in. Old `AMAZON_PAAPI_*` variables are unused. No flag or credentials were changed during migration.
+
+OAuth tokens are cached until shortly before expiry and coalesced during concurrent requests. Fixed endpoints, no redirects, 4.5-second requests and response-size limits constrain access. 401/403/429 enter a local cooldown with no automatic retries or credential switching. Errors exclude provider bodies/headers/secrets. Existing fallback sources remain separate.
+
+Only the featured listing's explicit numeric price in the requested market currency is used. Prime-gated/subscription offers and mismatched destinations are excluded. Stock and condition remain unknown when absent; quantity-to-order is not stock quantity. Shipping/fees are not inferred. Provider URLs are preserved; no commission is asserted.
 
 - https://affiliate-program.amazon.com/creatorsapi/docs/en-us/paapiv5-deprecation
 - https://affiliate-program.amazon.com/creatorsapi/docs/en-us/migrating-to-creatorsapi-from-paapi
+
+Account review on 2026-09-25 confirmed an Amazon rejection/closure notice dated 2026-09-19 for the historical US account (insufficient qualifying purchases in the application period). Treat that affiliation as closed, not approved. Reapplication is an account-side process; do not activate the old tag as evidence of commission or create artificial purchases.
 
 MX and US tags are separate (`AMAZON_AFFILIATE_TAG_MX`/legacy MX fallback versus `AMAZON_AFFILIATE_TAG_US`). A US tag must not be copied to MX. Tag presence and click analytics do not demonstrate approved affiliation, attributed orders or earned commission; provider reports are needed.
 
