@@ -410,8 +410,13 @@ exports.getPriceHistoryMap = async (query, radius, lat, lng, products = [], coun
     if (!supabase || !Array.isArray(products) || products.length === 0) return {};
 
     const queryKey = generateCacheKey(query, radius, lat, lng, countryCode);
-    const normalizedUrls = products
-        .map((p) => normalizeProductUrl(p.urlMonetizada || p.urlOriginal))
+    const marketProducts = products.filter(product => {
+        const currency = String(product.currency || product.currencyCode || product.moneda || '').trim().toUpperCase();
+        const marketCountry = String(product.countryCode || countryCode || '').trim().toUpperCase();
+        return /^[A-Z]{3}$/.test(currency) && getSupportedCountries().includes(marketCountry);
+    });
+    const normalizedUrls = marketProducts
+        .map(product => normalizeProductUrl(product.urlOriginal || product.urlMonetizada))
         .filter(Boolean);
 
     if (normalizedUrls.length === 0) return {};
@@ -419,7 +424,7 @@ exports.getPriceHistoryMap = async (query, radius, lat, lng, products = [], coun
     try {
         const { data, error } = await supabase
             .from('price_history')
-            .select('normalized_url, price, created_at')
+            .select('normalized_url, price, created_at, country_code, currency')
             .eq('query_key', queryKey)
             .in('normalized_url', [...new Set(normalizedUrls)])
             .gte('created_at', new Date(Date.now() - (30 * 24 * 60 * 60 * 1000)).toISOString())
@@ -428,22 +433,39 @@ exports.getPriceHistoryMap = async (query, radius, lat, lng, products = [], coun
 
         if (error || !data) return {};
 
-        const historyMap = {};
-        for (const row of data) {
-            if (!historyMap[row.normalized_url]) {
-                historyMap[row.normalized_url] = [];
-            }
-            historyMap[row.normalized_url].push(row);
-        }
-        return historyMap;
+        return buildPriceHistoryMap(data, marketProducts, countryCode);
     } catch (err) {
         console.error('Error consultando historial de precios:', err.message);
         return {};
     }
 };
 
+function buildPriceHistoryMap(data = [], products = [], countryCode = 'MX') {
+    const marketByUrl = new Map();
+    for (const product of products) {
+        const url = normalizeProductUrl(product.urlOriginal || product.urlMonetizada);
+        const currency = String(product.currency || product.currencyCode || product.moneda || '').trim().toUpperCase();
+        const country = String(product.countryCode || countryCode || '').trim().toUpperCase();
+        if (url && /^[A-Z]{3}$/.test(currency) && getSupportedCountries().includes(country)) {
+            marketByUrl.set(url, { currency, country });
+        }
+    }
+    const historyMap = {};
+    for (const row of data) {
+        const url = normalizeProductUrl(row.normalized_url);
+        const market = marketByUrl.get(url);
+        const rowCurrency = String(row.currency || '').trim().toUpperCase();
+        const rowCountry = String(row.country_code || '').trim().toUpperCase();
+        if (!market || rowCurrency !== market.currency || rowCountry !== market.country) continue;
+        if (!historyMap[url]) historyMap[url] = [];
+        historyMap[url].push(row);
+    }
+    return historyMap;
+}
+
 exports.normalizeProductUrl = normalizeProductUrl;
 exports.buildPriceSnapshotRows = buildPriceSnapshotRows;
+exports.buildPriceHistoryMap = buildPriceHistoryMap;
 exports.generateCacheKey = generateCacheKey;
 exports.generateCanonicalCacheKey = generateCanonicalCacheKey;
 exports.normalizeCanonicalKey = normalizeCanonicalKey;

@@ -1,6 +1,6 @@
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
-const { buildPriceSnapshotRows } = require('../src/services/cacheService');
+const { buildPriceSnapshotRows, buildPriceHistoryMap } = require('../src/services/cacheService');
 
 const goodOffer = (patch = {}) => ({
     titulo: 'Laptop Model X',
@@ -36,4 +36,14 @@ test('snapshots skip unknown currency, uncertain, low confidence and unavailable
         goodOffer({ countryCode: 'ZZ' })
     ], 'query-key', 'US');
     assert.deepEqual(rows, []);
+});
+
+test('price history only returns observations for the same explicit market', () => {
+    const rows = buildPriceHistoryMap([
+        { normalized_url: 'https://store.example/product', price: 1200, country_code: 'US', currency: 'USD' },
+        { normalized_url: 'https://store.example/product', price: 15, country_code: 'US', currency: 'MXN' },
+        { normalized_url: 'https://store.example/product', price: 1000, country_code: 'MX', currency: 'USD' },
+        { normalized_url: 'https://store.example/product', price: 900, country_code: null, currency: null }
+    ], [goodOffer()], 'US');
+    assert.deepEqual(rows['https://store.example/product'].map(row => row.price), [1200]);
 });
