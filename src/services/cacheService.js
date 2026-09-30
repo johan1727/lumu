@@ -388,7 +388,7 @@ function buildPriceSnapshotRows(products = [], queryKey, countryCode = 'MX') {
         const normalizedUrl = normalizeProductUrl(url);
         if (!normalizedUrl || !Number.isFinite(price) || price <= 0 || !/^[A-Z]{3}$/.test(currency)
             || !getSupportedCountries().includes(marketCountry) || product.priceNeedsVerification
-            || product.isPotentiallyUnavailable || (Number.isFinite(confidence) && confidence < 0.65)) return null;
+            || product.isPotentiallyUnavailable || !Number.isFinite(confidence) || confidence < 0.65) return null;
         return {
             query_key: queryKey,
             normalized_url: normalizedUrl,

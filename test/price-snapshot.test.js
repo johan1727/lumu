@@ -30,6 +30,7 @@ test('snapshots skip unknown currency, uncertain, low confidence and unavailable
         goodOffer({ currency: null }),
         goodOffer({ priceNeedsVerification: true }),
         goodOffer({ priceConfidence: 0.5 }),
+        goodOffer({ priceConfidence: undefined }),
         goodOffer({ isPotentiallyUnavailable: true }),
         goodOffer({ currency: 'US' }),
         goodOffer({ countryCode: 'ZZ' })
