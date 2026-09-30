@@ -83,3 +83,27 @@ test('featured offers do not fabricate verification or translate paid shipping t
  await page.evaluate(()=>renderFlashDeals([{title:'Producto observado',source:'Tienda',price:100,currencyCode:'MXN'}]));
  await expect(page.locator('#flash-deals-grid')).toContainText('Confirma precio y stock en la tienda');
 });
+
+
+test('English CTA selects US despite stored and detected Mexico', async ({page})=>{
+ await page.goto('/?region=US');
+ await expect(page.locator('html')).toHaveAttribute('lang', /^en/);
+ expect(await page.evaluate(()=>currentRegion)).toBe('US');
+});
+
+test('English guides expose consistent metadata and working US CTA without overflow',async({page})=>{
+ const paths=['index','blog','best-price-iphone-16','compare-prices-laptops','best-budget-headphones','best-time-to-buy-a-laptop','amazon-vs-walmart-electronics'];
+ const titles=new Set();
+ for(const slug of paths){
+  await page.goto('/en/'+slug+'.html');
+  await expect(page.locator('h1')).toBeVisible();
+  await expect(page.locator('html')).toHaveAttribute('lang','en-US');
+  const title=await page.title();expect(titles.has(title)).toBe(false);titles.add(title);
+  expect(await page.locator('link[rel=canonical]').getAttribute('href')).toContain('/en/');
+  expect(await page.locator('meta[name=description]').getAttribute('content')).toBeTruthy();
+  const schema=JSON.parse(await page.locator('script[type="application/ld+json"]').textContent());expect(schema.url).toContain('/en/');
+  expect(await page.locator('a[href="/?region=US"]').count()).toBeGreaterThan(0);
+  expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
+ }
+ await page.screenshot({path:test.info().outputPath('english-guide.png'),fullPage:true});
+});

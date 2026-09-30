@@ -1977,6 +1977,11 @@ function renderContinuityHub() {
 }
 
 function detectRegion() {
+    // An explicit market link takes precedence over geolocation and saved defaults.
+    const linkedRegion = new URLSearchParams(window.location.search).get('region');
+    if (linkedRegion && REGION_LABELS[linkedRegion] && linkedRegion !== 'auto') {
+        return linkedRegion;
+    }
     const savedOverride = localStorage.getItem(REGION_OVERRIDE_KEY);
     if (savedOverride && savedOverride !== 'auto' && REGION_LABELS[savedOverride]) {
         return savedOverride;
@@ -2025,6 +2030,7 @@ function applyRegionalCopy() {
     const config = getRegionConfig();
     const ui = getRegionUICopy();
     const isEnglish = isEnglishRegion(currentRegion);
+    document.documentElement.lang = isEnglish ? 'en-US' : 'es';
     const languageBucket = getLanguageBucket(currentRegion);
     const regionBadge = currentRegion === 'auto' ? 'AUTO' : currentRegion;
     const savedOverride = localStorage.getItem(REGION_OVERRIDE_KEY) || 'auto';
@@ -3716,6 +3722,10 @@ async function initApp() {
                 btn.addEventListener('click', () => {
                     const selectedRegion = btn.getAttribute('data-region') || 'auto';
                     localStorage.setItem(REGION_OVERRIDE_KEY, selectedRegion);
+                    const marketURL = new URL(window.location.href);
+                    if (selectedRegion === 'auto') marketURL.searchParams.delete('region');
+                    else marketURL.searchParams.set('region', selectedRegion);
+                    window.history.replaceState(null, '', marketURL);
                     currentRegion = selectedRegion === 'auto' ? detectRegion() : selectedRegion;
                     hideRegionSelectorMenu();
                     applyRegionalCopy();
@@ -9977,5 +9987,4 @@ function updateDealsCountdown() {
 }
 updateDealsCountdown();
 setInterval(updateDealsCountdown, 30000);
-
 
