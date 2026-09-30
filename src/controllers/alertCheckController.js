@@ -24,7 +24,7 @@ exports.checkAlerts = async (req, res) => {
     try {
         const { data: alerts, error: alertsErr } = await supabase
             .from('price_alerts')
-            .select('id, user_id, product_name, target_price, store_name')
+            .select('id, user_id, product_name, target_price, product_url, store_name')
             .eq('triggered', false)
             .limit(MAX_ALERTS_PER_RUN);
 
@@ -47,17 +47,32 @@ exports.checkAlerts = async (req, res) => {
         for (const alert of alerts) {
             summary.checked++;
             try {
-                // Cheapest fresh price whose title matches the alerted product
-                const { data: matches, error: matchErr } = await supabase
+                // Prefer the exact normalized product URL; title-only matches can
+                // confuse variants or unrelated products with similar names.
+                let matchQuery = supabase
                     .from('price_history')
                     .select('product_title, price, store_name, normalized_url, currency')
-                    .ilike('product_title', `%${alert.product_name.replace(/[%_]/g, '')}%`)
                     .gte('created_at', windowStart)
-                    .gt('price', 0)
+                    .gt('price', 0);
+                if (alert.product_url) {
+                    const normalizedUrl = normalizeProductUrl(alert.product_url);
+                    if (!normalizedUrl) {
+                        await supabase.from('price_alerts')
+                            .update({ last_checked_at: nowIso })
+                            .eq('id', alert.id);
+                        continue;
+                    }
+                    matchQuery = matchQuery.eq('normalized_url', normalizedUrl);
+                } else {
+                    matchQuery = matchQuery.ilike('product_title', `%${alert.product_name.replace(/[%_]/g, '')}%`);
+                }
+                if (alert.store_name) matchQuery = matchQuery.eq('store_name', alert.store_name);
+                const { data: matches, error: matchErr } = await matchQuery
                     .order('price', { ascending: true })
                     .limit(1);
 
-                if (matchErr || !matches || matches.length === 0) {
+                if (matchErr) throw matchErr;
+                if (!matches || matches.length === 0) {
                     await supabase.from('price_alerts')
                         .update({ last_checked_at: nowIso })
                         .eq('id', alert.id);
@@ -65,30 +80,54 @@ exports.checkAlerts = async (req, res) => {
                 }
 
                 const best = matches[0];
-                const hit = Number(best.price) <= Number(alert.target_price);
+                const currencyCode = String(best.currency || '').trim().toUpperCase();
+                // Never compare an unlabelled amount or silently assume MXN.
+                const hit = /^[A-Z]{3}$/.test(currencyCode) && Number(best.price) <= Number(alert.target_price);
 
-                // Mark triggered BEFORE notifying so a crash/retry can't double-send
-                const { error: updErr } = await supabase.from('price_alerts')
+                // Claim the alert atomically. A second cron run that read the same
+                // row will get no returned row and must not send another message.
+                const { data: claimed, error: updErr } = await supabase.from('price_alerts')
                     .update({
                         last_checked_at: nowIso,
                         last_price: best.price,
                         ...(hit ? { triggered: true } : {})
                     })
-                    .eq('id', alert.id);
+                    .eq('id', alert.id)
+                    .eq('triggered', false)
+                    .select('id');
 
-                if (hit && !updErr) {
+                if (updErr) throw updErr;
+
+                if (hit && claimed && claimed.length > 0) {
                     summary.triggered++;
                     const chatId = chatByUser.get(alert.user_id);
                     if (chatId) {
-                        const sent = await telegramController.sendPriceAlert(chatId, {
-                            product_name: best.product_title || alert.product_name,
-                            target_price: alert.target_price,
-                            current_price: best.price,
-                            store_name: best.store_name,
-                            product_url: best.normalized_url,
-                            currency_code: best.currency || 'MXN'
-                        });
-                        if (sent) summary.notified++;
+                        let sent = false;
+                        try {
+                            sent = await telegramController.sendPriceAlert(chatId, {
+                                product_name: best.product_title || alert.product_name,
+                                target_price: alert.target_price,
+                                current_price: best.price,
+                                store_name: best.store_name,
+                                product_url: best.normalized_url,
+                                currency_code: currencyCode
+                            });
+                        } catch (sendErr) {
+                            console.error(`[AlertCheck] Telegram send failed for alert ${alert.id}:`, sendErr.message);
+                        }
+
+                        if (sent) {
+                            summary.notified++;
+                        } else {
+                            // Keep the alert eligible for the next cron run when
+                            // Telegram rejects the message or is temporarily down.
+                            const { error: releaseErr } = await supabase.from('price_alerts')
+                                .update({ triggered: false })
+                                .eq('id', alert.id)
+                                .eq('triggered', true);
+                            if (releaseErr) throw releaseErr;
+                            summary.errors++;
+                        }
                     }
                 }
             } catch (err) {
@@ -109,4 +148,13 @@ function timingSafeMatch(a, b) {
     const ha = crypto.createHmac('sha256', 'lumu-cron').update(String(a)).digest();
     const hb = crypto.createHmac('sha256', 'lumu-cron').update(String(b)).digest();
     return crypto.timingSafeEqual(ha, hb);
+}
+
+function normalizeProductUrl(value) {
+    try {
+        const parsed = new URL(String(value));
+        return `${parsed.origin}${parsed.pathname}`.toLowerCase();
+    } catch {
+        return '';
+    }
 }
