@@ -1,6 +1,3 @@
-Warning: truncated output (original token count: 23510)
-Total output lines: 1741
-
 const {merchantReference} = require('./merchantReference');
 const {fetchPrimarySearchRoutes} = require('./primarySearchRoutes');
 const { assessResult } = require('./resultQuality');
@@ -494,7 +491,826 @@ function looksLikeProductPage(url = '', countryCode = 'MX') {
     if (/cyberpuerta\./.test(normalizedUrl)) return /\/producto\//i.test(normalizedUrl);
     if (/ddtech\./.test(normalizedUrl)) return /\/producto\//i.test(normalizedUrl);
     if (/elektra\./.test(normalizedUrl)) return /\/[^/]+\/p/i.test(normalizedUrl) || /\/producto\//i.test(normalizedUrl);
-    if (/costco\./.test(normalizedUrl)) return /…11510 tokens truncated…nownStoreUrl(r.link, countryCode);
+    if (/costco\./.test(normalizedUrl)) return /\/[^/]+\.html/i.test(normalizedUrl) || /\/CatalogSearch/i.test(normalizedUrl) === false;
+    if (/nintendo\.com|playstation\.com|sony\.com|apple\.com|samsung\.com/.test(normalizedUrl)) return /\/products?\//i.test(normalizedUrl);
+    if (/shopify|myshopify|tiendanube|vtexassets|woocommerce|wixsite|square\.site/.test(normalizedUrl)) return /\/products?\/|\/product\/|\/p\//i.test(normalizedUrl);
+
+    return cc === 'US'
+        ? /\/p\/|\/product\/|\/products\/|\/dp\/|\/site\/|\/ip\//i.test(normalizedUrl)
+        : /\/p\/|\/producto\/|\/product\/|\/products\/|\/dp\/|\/ip\//i.test(normalizedUrl);
+}
+
+function isKnownStoreUrl(url = '', countryCode = 'MX') {
+    const resolved = regionConfigService.resolveStoreName(url, countryCode);
+    const domain = String((url.match(/https?:\/\/(?:www\.)?([^/]+)/i) || [])[1] || '').trim().toLowerCase();
+    return Boolean(resolved && resolved !== domain && resolved.length > 1);
+}
+
+function isRegionCompatibleUrl(url = '', countryCode = 'MX') {
+    const normalizedUrl = String(url || '').toLowerCase();
+    const normalizedCountry = String(countryCode || 'MX').toUpperCase();
+    if (!normalizedUrl) return false;
+    if (normalizedCountry === 'MX') {
+        if (/amazon\.com(?!\.mx)/i.test(normalizedUrl)) return false;
+        if (/walmart\.com(?!\.mx)/i.test(normalizedUrl)) return false;
+        if (/bestbuy\.com(?!\.mx)/i.test(normalizedUrl)) return false;
+        if (/target\.com/i.test(normalizedUrl)) return false;
+        if (/apple\.com\/(us|us-edu|ca|us-es|uk)\//i.test(normalizedUrl)) return false;
+        if (/apple\.com\/.+\/newsroom\//i.test(normalizedUrl) || /apple\.com\/newsroom\//i.test(normalizedUrl)) return false;
+        if (/\.co\.uk|\.de|\.fr|\.it|\.es|\.ca|\.com\.au|\.co\.jp/i.test(normalizedUrl)) {
+            try {
+                const hostname = new URL(normalizedUrl.startsWith('http') ? normalizedUrl : `https://${normalizedUrl}`).hostname;
+                if (/\.co\.uk$|\.de$|\.fr$|\.it$|\.es$|\.ca$|\.com\.au$|\.co\.jp$/i.test(hostname)) return false;
+            } catch (e) {
+                // Ignore invalid URLs
+            }
+        }
+    }
+    return true;
+}
+
+function getMercadoLibreDomain(countryCode = 'MX') {
+    const normalizedCountry = String(countryCode || 'MX').toUpperCase();
+    if (normalizedCountry === 'CL') return 'mercadolibre.cl';
+    if (normalizedCountry === 'CO') return 'mercadolibre.com.co';
+    if (normalizedCountry === 'AR') return 'mercadolibre.com.ar';
+    if (normalizedCountry === 'PE') return 'mercadolibre.com.pe';
+    return 'mercadolibre.com.mx';
+}
+
+function isMercadoLibreListingCandidate(url = '') {
+    const normalizedUrl = String(url || '').toLowerCase();
+    if (!/mercadolibre\./.test(normalizedUrl)) return false;
+    if (/\/search|\/jm\/search|[?&](q|query|search)=/i.test(normalizedUrl)) return false;
+    if (/\/categoria|\/categorias|\/ofertas/i.test(normalizedUrl)) return false;
+    return true;
+}
+
+function tokenizeSellableText(value = '') {
+    return String(value || '')
+        .toLowerCase()
+        .replace(/[^a-z0-9áéíóúñü\s]/gi, ' ')
+        .split(/\s+/)
+        .filter(token => token.length > 2);
+}
+
+function looksGenericListingTitleLocal(item = {}) {
+    const title = String(item.title || '').trim().toLowerCase();
+    if (!title) return true;
+    return /^(televisores?|pantallas?|laptops?|computadoras? y laptops|celulares? y smartphones|aud[íi]fonos y bocinas|aud[íi]fonos|smart ?tv|oled pantallas y proyectores|asus laptop exclusivos en l[íi]nea|lenovo laptop computadoras y laptops)$/i.test(title)
+        || /^(belleza|productos de belleza|cosm[eé]ticos|maquillaje|belleza y cuidado personal|bases de maquillaje|perfumes?|fragancias?|hogar|electrodom[eé]sticos|moda|tenis|zapatos|ropa)$/i.test(title)
+        || /\b(todos los accesorios|exclusivos en l[íi]nea|computadoras y laptops|pantallas y proyectores|belleza y cuidado personal|cosm[eé]ticos belleza|productos de belleza|maquillaje belleza)\b/i.test(title);
+}
+
+function looksLikeGarbageTitleLocal(value = '') {
+    const title = String(value || '').replace(/\s+/g, ' ').trim();
+    if (!title) return true;
+    const normalized = title.toLowerCase();
+    if (title.length < 5) return true;
+    if (/^(ingresa tu|adjust|mexican peso|sign in|inicia sesi[oó]n|continuar|continue|ver m[aá]s|shop|comprar|buy now)$/i.test(normalized)) return true;
+    if (/^(mxn|usd|clp|cop|ars|pen|peso|pesos|d[oó]lar(?:es)?)$/i.test(normalized)) return true;
+    if (/^[^a-záéíóúñü]*$/.test(normalized)) return true;
+    if (/^(home|inicio|ofertas|sale|rebajas|promociones?)$/i.test(normalized)) return true;
+    const tokens = tokenizeSellableText(normalized);
+    if (tokens.length === 0) return true;
+    if (tokens.length <= 2 && !/\d/.test(normalized) && !/(nike|adidas|apple|samsung|xiaomi|motorola|sony|lg|jbl|bose|coppel|liverpool|walmart|amazon|mercado libre|mercadolibre|aliexpress)/i.test(normalized)) {
+        return true;
+    }
+    return false;
+}
+
+function getAffiliateStoreRank(result = {}) {
+    const text = `${result.source || ''} ${result.url || ''}`.toLowerCase();
+    if (/mercadolibre\./.test(text) || /mercado\s*libre/.test(text)) return 0;
+    if (/amazon\./.test(text) || /\bamazon\b/.test(text)) return 1;
+    if (/aliexpress\./.test(text) || /\baliexpress\b/.test(text)) return 2;
+    return 9;
+}
+
+function isResultSellable(result = {}) {
+    const title = String(result.title || '').toLowerCase();
+    const snippet = String(result.snippet || '').toLowerCase();
+    const url = String(result.url || '').toLowerCase();
+    const combined = `${title} ${snippet}`;
+    if (!url || !/^https?:\/\//i.test(url)) return false;
+    if (result.qualityRejected) return false;
+    if (/\/s\?|\/search\?|[?&](k|q|query|search|searchterm|searchterms|ntt)=/i.test(url) && !result.isDirectProductPage) return false;
+    const isKnownMarketplace = /amazon\.|mercadolibre\.|walmart\.|liverpool\.|costco\.|bestbuy\.|target\./i.test(url);
+    const hasResolvedPrice = Number.isFinite(Number(result.price)) && Number(result.price) > 0;
+    const hasSnippetPrice = Number.isFinite(extractSnippetPrice(snippet) ?? extractSnippetPrice(title));
+    const isTrustedResult = isKnownMarketplace || result.isKnownStoreDomain || result.isDirectProductPage || result.isOfficialBrandResult;
+    if (!isTrustedResult && !hasResolvedPrice && !hasSnippetPrice) return false;
+    if (result.resultSource === 'shopping_api') {
+        return !looksGenericListingTitleLocal(result);
+    }
+    return !looksLikeGarbageTitleLocal(result.title || '') && !looksGenericListingTitleLocal(result);
+}
+
+function shouldRunPlacesQuery(query = '', intentType = '') {
+    const normalized = String(query || '').toLowerCase().trim();
+    if (!normalized) return false;
+    if (intentType === 'servicio_local') return true;
+    return /\b(cerca de mi|cerca|near me|nearby|pickup|pick up|recoger hoy|recoger en tienda|tienda f[ií]sica|in store|in-store|localmente|disponible en tienda|same day pickup)\b/i.test(normalized);
+}
+
+function shouldRunBroadWebQuery(query = '', { productCategory = '', preferredStoreKeys = [], isBroadExploration = false, alternativeQueries = [] } = {}) {
+    if (isBroadExploration) return true;
+    const normalized = String(query || '').trim().toLowerCase();
+    if (!normalized) return false;
+    const tokenCount = normalized.split(/\s+/).filter(Boolean).length;
+    const hasBudgetOrConstraint = /\b(menos de|hasta|under|below|budget|presupuesto|barato|cheap|mejor|best|vs|compare|comparar)\b/i.test(normalized);
+    const hasExplorationIntent = /\b(opciones|alternativas|deals|ofertas|recomendaciones|recomendado|top|ranking)\b/i.test(normalized);
+    if (!productCategory) return tokenCount <= 3 || hasBudgetOrConstraint || hasExplorationIntent;
+    if (preferredStoreKeys.length === 0 && (!Array.isArray(alternativeQueries) || alternativeQueries.length === 0)) {
+        return tokenCount <= 3 || hasBudgetOrConstraint || hasExplorationIntent;
+    }
+    return tokenCount <= 2 || hasBudgetOrConstraint;
+}
+
+function shouldRunOfficialWebQuery(query = '', brandOfficialQuery = null, countryCode = 'MX') {
+    if (!['US', 'MX', 'CL', 'CO', 'AR', 'PE'].includes(String(countryCode || '').toUpperCase())) return false;
+    if (brandOfficialQuery && String(brandOfficialQuery).trim()) return true;
+    const normalized = String(query || '').trim().toLowerCase();
+    if (!normalized) return false;
+    return /\b(apple|samsung|sony|nintendo|xiaomi|huawei|lenovo|hp|asus|acer|dell|lg|motorola|jbl|bose|nike|adidas|playstation|xbox)\b/i.test(normalized);
+}
+
+// Helper para limitar concurrencia
+async function runWithConcurrencyLimit(promiseFns, limit, abortSignal) {
+    const results = [];
+    const executing = new Set();
+    
+    for (const [index, promiseFn] of promiseFns.entries()) {
+        if (abortSignal?.aborted) {
+            break;
+        }
+        const p = Promise.resolve().then(() => promiseFn()).then(result => ({ status: 'fulfilled', value: result, index })).catch(err => ({ status: 'rejected', reason: err, index }));
+        results.push(p);
+        
+        if (promiseFns.length >= limit) {
+            const tracked = p.then(() => executing.delete(tracked));
+            executing.add(tracked);
+            if (executing.size >= limit) {
+                await Promise.race(executing);
+            }
+        }
+    }
+    
+    return Promise.all(results);
+}
+
+function tokenizeMeliComparableText(text = '') {
+    return String(text || '')
+        .toLowerCase()
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .replace(/[^a-z0-9+]+/g, ' ')
+        .trim()
+        .split(/\s+/)
+        .filter(token => token && token.length > 1);
+}
+
+function buildMeliSearchVariants(query = '', alternativeQueries = [], conditionMode = 'all', productCategory = '', maxVariants = 10) {
+    const baseQuery = String(query || '').trim();
+    const normalizedBase = baseQuery.replace(/\s+/g, ' ').trim();
+    const variants = [];
+    const pushVariant = (value) => {
+        const next = String(value || '').replace(/\s+/g, ' ').trim();
+        if (!next) return;
+        if (variants.some(existing => existing.toLowerCase() === next.toLowerCase())) return;
+        variants.push(next);
+    };
+    pushVariant(normalizedBase);
+    (alternativeQueries || []).forEach(pushVariant);
+
+    const withoutNegativeTerms = normalizedBase.replace(/\s+-[\w-]+/g, ' ').replace(/\s+/g, ' ').trim();
+    pushVariant(withoutNegativeTerms);
+
+    const withoutConditionWords = withoutNegativeTerms
+        .replace(/\b(nuevo|nueva|usado|usada|reacondicionado|refurbished|seminuevo|open box|segunda mano)\b/gi, ' ')
+        .replace(/\s+/g, ' ')
+        .trim();
+    pushVariant(withoutConditionWords);
+
+    const tokens = tokenizeMeliComparableText(withoutConditionWords);
+    const specificTokens = tokens.filter(token => /\d/.test(token) || /^(pro|max|mini|plus|ultra|oled|fe|air|128gb|256gb|512gb|1tb|16gb|8gb|4k)$/i.test(token) || /^[a-z]{1,4}\d{1,4}$/i.test(token));
+    const broadTokens = tokens.filter(token => !/^(negro|blanco|azul|rojo|rosa|verde|morado|gris|plateado|silver|black|white|blue|red|pink|green|gray|grey|titanio|titanium)$/i.test(token));
+
+    if (broadTokens.length > 0) {
+        pushVariant(broadTokens.join(' '));
+    }
+    if (specificTokens.length >= 2) {
+        pushVariant(specificTokens.join(' '));
+    }
+    if (specificTokens.length >= 1) {
+        pushVariant(`${broadTokens.slice(0, Math.max(2, broadTokens.length - 1)).join(' ')} ${specificTokens[0]}`.trim());
+    }
+
+    if (['smartphone', 'laptop', 'audio', 'gaming', 'tv'].includes(String(productCategory || '').toLowerCase())) {
+        const withoutColor = withoutConditionWords
+            .replace(/\b(negro|blanco|azul|rojo|rosa|verde|morado|gris|plateado|silver|black|white|blue|red|pink|green|gray|grey|titanio|titanium)\b/gi, ' ')
+            .replace(/\s+/g, ' ')
+            .trim();
+        pushVariant(withoutColor);
+    }
+
+    if (conditionMode === 'new') {
+        pushVariant(`${withoutConditionWords} nuevo`.trim());
+    } else if (conditionMode === 'used') {
+        pushVariant(`${withoutConditionWords} usado`.trim());
+        pushVariant(`${withoutConditionWords} reacondicionado`.trim());
+    }
+
+    return variants.slice(0, Math.max(1, maxVariants));
+}
+
+function scoreMeliCandidate(result = {}, canonicalQuery = '', productCategory = '', countryCode = 'MX') {
+    const title = String(result?.title || result?.titulo || '').trim();
+    const normalizedQuery = String(canonicalQuery || '').toLowerCase();
+    const normalizedCategory = String(productCategory || '').toLowerCase();
+    const queryTokens = tokenizeMeliComparableText(canonicalQuery);
+    const titleTokens = new Set(tokenizeMeliComparableText(title));
+    const specificTokens = queryTokens.filter(token => /\d/.test(token) || /^(pro|max|mini|plus|ultra|oled|fe|air|128gb|256gb|512gb|1tb|16gb|8gb|4k)$/i.test(token) || /^[a-z]{1,4}\d{1,4}$/i.test(token));
+    const overlap = queryTokens.length > 0 ? queryTokens.filter(token => titleTokens.has(token)).length / queryTokens.length : 0.5;
+    const exactModelScore = specificTokens.length > 0
+        ? specificTokens.filter(token => titleTokens.has(token)).length / specificTokens.length
+        : overlap;
+    const variantTokens = queryTokens.filter(token => /^(128gb|256gb|512gb|1tb|64gb|16gb|8gb|32gb|negro|blanco|azul|rojo|verde|morado|gris|silver|black|white|blue|red|pink|green|gray|grey|titanio|titanium)$/i.test(token));
+    const variantScore = variantTokens.length > 0
+        ? variantTokens.filter(token => titleTokens.has(token)).length / variantTokens.length
+        : Math.max(overlap, exactModelScore * 0.82);
+    const accessoryPenalty = /\b(funda|case|mica|protector|display|pantalla|refaccion|refacci[oó]n|bateria|bater[ií]a|carcasa|compatible|reemplazo|cargador|charger|cable|glass|templado|housing|teclado|keyboard|mouse|adaptador|adapter|forro)\b/i.test(title)
+        ? 0.65
+        : 0;
+    const queryLooksLikeConsoleSearch = normalizedCategory === 'gaming' && /\b(xbox|series\s*[xs]|playstation|ps5|ps4|nintendo\s+switch|switch|steam\s*deck|consola)\b/i.test(normalizedQuery) && !/\b(juego|videojuego|game|bundle|pack|dlc|season\s+pass|codigo|c[oó]digo|key|gift\s*card|tarjeta\s+de\s+regalo)\b/i.test(normalizedQuery);
+    const gameContentPenalty = queryLooksLikeConsoleSearch && /\b(juego|videojuego|game\s+pass|game\s+key|gift\s*card|tarjeta\s+de\s+regalo|season\s+pass|dlc|expansi[oó]n|expansion|moneda\s+virtual|skin|c[oó]digo\s+digital|digital\s+key|c[oó]digo\s+de\s+activaci[oó]n|codigo\s+de\s+activacion)\b/i.test(title)
+        ? 0.62
+        : 0;
+    const genericTitlePenalty = /\b(android|smartphone|telefono|celular)\b/i.test(title) && specificTokens.length >= 2 && exactModelScore < 0.5
+        ? 0.22
+        : 0;
+    const clonePenalty = /\b(clon|generico|gen[eé]rico|replica|r[eé]plica|copia|1\.1|oem|similar|calidad\s*original|tipo\s*original)\b/i.test(title) ? 0.8 : 0;
+    const categoryPenalty = ['smartphone', 'laptop', 'audio', 'gaming', 'tv'].includes(String(productCategory || '').toLowerCase())
+        && /\b(refaccion|compatible|reemplazo|display|pantalla|funda|case|mica|protector)\b/i.test(title)
+        ? 0.18
+        : normalizedCategory === 'gaming' && gameContentPenalty > 0
+            ? 0.22
+        : 0;
+    const sellerQualityScore = Math.min(1,
+        (result._meliOfficialStoreId ? 0.34 : 0)
+        + (result._meliCatalogListing ? 0.24 : 0)
+        + (result.shippingText ? 0.16 : 0)
+        + (result.hasStockSignal ? 0.12 : 0.04)
+        + Math.min(0.14, Math.log10(Math.max(1, Number(result._meliSoldQuantity || 0)) + 1) * 0.08)
+    );
+    const listingQualityScore = Math.min(1,
+        (result.imagen ? 0.18 : 0)
+        + (Number(result.priceConfidence || 0) * 0.30)
+        + (result.hasStockSignal ? 0.14 : 0.04)
+        + (result.isPotentiallyUnavailable ? 0 : 0.12)
+        + (looksLikeProductPage(result.urlOriginal || result.url, countryCode) ? 0.12 : 0)
+    );
+    const pagePenalty = Math.min(0.12, Math.max(0, Number(result._meliPage || 1) - 1) * 0.04);
+    const score = Math.max(0, Math.min(1,
+        (overlap * 0.24)
+        + (exactModelScore * 0.26)
+        + (variantScore * 0.18)
+        + (sellerQualityScore * 0.14)
+        + (listingQualityScore * 0.18)
+        - accessoryPenalty
+        - gameContentPenalty
+        - genericTitlePenalty
+        - categoryPenalty
+        - clonePenalty
+        - pagePenalty
+    ));
+    return {
+        overlap,
+        exactModelScore,
+        variantScore,
+        sellerQualityScore,
+        listingQualityScore,
+        accessoryPenalty,
+        gameContentPenalty,
+        genericTitlePenalty,
+        categoryPenalty,
+        clonePenalty,
+        mlScore: Number(score.toFixed(3))
+    };
+}
+
+function rerankMeliCandidates(results = [], canonicalQuery = '', productCategory = '', countryCode = 'MX') {
+    return (results || []).map(result => {
+        const scores = scoreMeliCandidate(result, canonicalQuery, productCategory, countryCode);
+        const hardReject = scores.accessoryPenalty >= 0.65 && scores.exactModelScore < 0.55;
+        return {
+            ...result,
+            _meliOverlapScore: scores.overlap,
+            _meliExactModelScore: scores.exactModelScore,
+            _meliVariantScore: scores.variantScore,
+            _meliSellerQualityScore: scores.sellerQualityScore,
+            _meliListingQualityScore: scores.listingQualityScore,
+            _meliAccessoryPenalty: scores.accessoryPenalty,
+            _meliGameContentPenalty: scores.gameContentPenalty,
+            _meliGenericTitlePenalty: scores.genericTitlePenalty,
+            _meliCategoryPenalty: scores.categoryPenalty,
+            _meliScore: scores.mlScore,
+            _meliHardRejected: hardReject,
+            _meliPriorityBoost: !hardReject && scores.mlScore >= 0.72 ? Number(Math.min(0.08, 0.02 + ((scores.mlScore - 0.72) * 0.2)).toFixed(3)) : 0,
+            _meliPriorityVisible: !hardReject && scores.mlScore >= 0.8
+        };
+    }).sort((a, b) => {
+        const hardDelta = Number(Boolean(a._meliHardRejected)) - Number(Boolean(b._meliHardRejected));
+        if (hardDelta !== 0) return hardDelta;
+        const scoreDelta = Number(b._meliScore || 0) - Number(a._meliScore || 0);
+        if (Math.abs(scoreDelta) >= 0.02) return scoreDelta;
+        const priceDelta = Number(a.price || Number.MAX_SAFE_INTEGER) - Number(b.price || Number.MAX_SAFE_INTEGER);
+        if (priceDelta !== 0) return priceDelta;
+        return String(a.title || '').localeCompare(String(b.title || ''));
+    });
+}
+
+function shouldExpandMeliCoverage(results = [], minStrongMatches = 8) {
+    const useful = (results || []).filter(item => !item._meliHardRejected);
+    if (useful.length < minStrongMatches) return true;
+    const topSlice = useful.slice(0, Math.min(10, useful.length));
+    const avgScore = topSlice.length > 0
+        ? topSlice.reduce((sum, item) => sum + Number(item._meliScore || 0), 0) / topSlice.length
+        : 0;
+    const accessoryNoiseRatio = useful.length > 0
+        ? useful.filter(item => Number(item._meliAccessoryPenalty || 0) >= 0.4).length / useful.length
+        : 1;
+    return avgScore < 0.68 || accessoryNoiseRatio >= 0.28;
+}
+
+async function fetchExpandedVipMeliResults({ query = '', alternativeQueries = [], countryCode = 'MX', signal = null, conditionMode = 'all', productCategory = '', resultLimit = 40 }) {
+    const variants = buildMeliSearchVariants(query, alternativeQueries, conditionMode, productCategory, 10);
+    const limit = Math.min(40, Math.max(20, Number(resultLimit) || 40));
+    const pageOffsets = [0];
+    const firstPassFns = variants.map((variant, index) => () => meliService.searchMeli(variant, countryCode, {
+        limit,
+        offset: 0,
+        sort: index === 0 ? 'best_sellers' : 'price_asc',
+        signal,
+        conditionMode
+    }));
+    const firstPass = await runWithConcurrencyLimit(firstPassFns, 4, signal);
+    let aggregate = firstPass.flatMap(result => result.status === 'fulfilled' && Array.isArray(result.value) ? result.value : []);
+    let reranked = rerankMeliCandidates(aggregate, query, productCategory, countryCode);
+    if (shouldExpandMeliCoverage(reranked, 8)) {
+        pageOffsets.push(limit);
+    }
+    if (shouldExpandMeliCoverage(reranked, 10)) {
+        pageOffsets.push(limit * 2);
+    }
+    if (pageOffsets.length > 1) {
+        const trailingVariants = variants.slice(0, Math.min(10, variants.length));
+        const extraFns = [];
+        pageOffsets.slice(1).forEach(offset => {
+            trailingVariants.forEach(variant => {
+                extraFns.push(() => meliService.searchMeli(variant, countryCode, {
+                    limit,
+                    offset,
+                    sort: 'price_asc',
+                    signal,
+                    conditionMode
+                }));
+            });
+        });
+        const extraPass = await runWithConcurrencyLimit(extraFns, 4, signal);
+        aggregate = aggregate.concat(extraPass.flatMap(result => result.status === 'fulfilled' && Array.isArray(result.value) ? result.value : []));
+        reranked = rerankMeliCandidates(aggregate, query, productCategory, countryCode);
+    }
+    return reranked;
+}
+
+exports.searchGoogleShopping = async (query, radius, lat, lng, intentType, abortSignal, conditionMode = 'all', countryCode = 'MX', alternativeQueries = [], productCategory = '', preferredStoreKeys = [], brandOfficialQuery = null, searchOptions = {}) => {
+    const regionCfg = regionConfigService.getRegionConfig(countryCode);
+    const isLocalFastMode = process.env.NODE_ENV !== 'production' && process.env.FORCE_FULL_SEARCH !== 'true';
+    const serperTimeout = isLocalFastMode ? LOCAL_FAST_TIMEOUT : SERPER_TIMEOUT;
+    const serperRetries = isLocalFastMode ? 0 : SERPER_MAX_RETRIES;
+    console.log(`[ShoppingService] Region: ${regionCfg.countryCode} (gl=${regionCfg.gl}, hl=${regionCfg.hl}, currency=${regionCfg.currency})`);
+    const apiKey = process.env.SERPER_API_KEY;
+    let serperResults = [];
+    let mlPrioritySkipped = false;
+    let isService = intentType === 'servicio_local';
+    const searchConditionMode = conditionMode || 'all';
+    const searchPolicy = normalizeSearchPolicy(searchOptions?.searchPolicy || {});
+    const rawShoppingQuery = String(query || '').trim();
+    const shoppingQuery = buildStoreFocusedShoppingQuery(rawShoppingQuery, countryCode, searchPolicy);
+    const webQuery = String(searchOptions.webQuery || query || '').trim();
+    const isBroadExploration = Boolean(searchOptions?.broadProfile?.broad);
+    const queryType = String(searchOptions?.queryType || 'generic').toLowerCase();
+    const searchTier = String(searchOptions?.searchTier || 'free').toLowerCase() === 'vip' ? 'vip' : 'free';
+    const isVipSearch = searchTier === 'vip';
+    const deepSearchEnabled = Boolean(searchOptions?.deepSearchEnabled);
+    const isSpecificProduct = queryType === 'brand_model' || queryType === 'comparison';
+    const restrictToPreferredStore = searchPolicy.preferredStoreKeys.length > 0 && searchPolicy.preferredStoreMode === 'exclusive';
+    const preferredIncludesMeli = restrictToPreferredStore && searchPolicy.preferredStoreKeys.some(k => /mercado.?libre|meli/i.test(k));
+    const preferredIncludesAmazon = restrictToPreferredStore && searchPolicy.preferredStoreKeys.some(k => /amazon/i.test(k));
+    const shouldQueryBroadWeb = isVipSearch && !restrictToPreferredStore && !isSpecificProduct && shouldRunBroadWebQuery(webQuery, {
+        productCategory,
+        preferredStoreKeys,
+        isBroadExploration: isBroadExploration && !['smartphone', 'laptop', 'audio', 'tv'].includes(String(productCategory || '').toLowerCase()),
+        alternativeQueries
+    });
+    const shouldQueryOfficialWeb = !restrictToPreferredStore && !isSpecificProduct && deepSearchEnabled && shouldRunOfficialWebQuery(webQuery, brandOfficialQuery, countryCode);
+    const shouldQueryMlPriority = (!restrictToPreferredStore && !isSpecificProduct && (isVipSearch || searchPolicy.preferredStoreKeys.length === 0)) || preferredIncludesMeli;
+    const shouldRunDirectScrapers = !isService
+        && intentType !== 'mayoreo_perecedero'
+        && (!isLocalFastMode || isBroadExploration || ['smartphone', 'laptop', 'audio', 'tv', 'fashion', 'home', 'appliance'].includes(String(productCategory || '').toLowerCase()));
+
+    // 1. Resolver búsqueda según la intención de la IA
+    if (intentType === 'mayoreo_perecedero') {
+        const supermarketScraper = require('./supermarketScraper');
+        serperResults = await supermarketScraper.searchSupermarkets(query);
+    } else if (isService) {
+        // O.1: Para servicios locales (plomero, dentista), saltamos Google Shopping de Productos
+        if (apiKey) {
+            try {
+                const localPayload = { q: query, gl: regionCfg.gl, hl: regionCfg.hl };
+                if (lat && lng && radius !== 'global' && radius !== '999999') {
+                    localPayload.ll = `@${lat},${lng},14z`;
+                }
+                const localConfig = {
+                    method: 'post',
+                    url: 'https://google.serper.dev/places',
+                    headers: { 'X-API-KEY': apiKey, 'Content-Type': 'application/json' },
+                    data: JSON.stringify(localPayload),
+                    timeout: SERPER_TIMEOUT,
+                    signal: abortSignal
+                };
+                const localRes = await axios(localConfig);
+                const places = localRes.data.places || [];
+
+                serperResults = places.map(p => {
+                    const mapsUrl = p.cid
+                        ? `https://www.google.com/maps?cid=${p.cid}`
+                        : `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(p.address || p.title)}`;
+                    const ratingStr = p.rating ? `⭐ ${p.rating}` : '';
+                    const phoneStr = p.phoneNumber ? ` · 📞 ${p.phoneNumber}` : '';
+
+                    return {
+                        title: p.title || 'Servicio Local',
+                        price: null,
+                        isLocalStore: true,
+                        localDetails: { address: p.address || '', rating: p.rating || null, phone: p.phoneNumber || null },
+                        url: mapsUrl,
+                        source: `📍 Profesional Local · ${ratingStr}${phoneStr}`,
+                        image: 'https://cdn-icons-png.flaticon.com/512/854/854878.png'
+                    };
+                });
+            } catch (err) {
+                console.error('Error consultando Google Places para Servicio:', err.message);
+            }
+        }
+    } else if (apiKey) {
+        // Flujo normal: Google Shopping + Web en PARALELO para máxima velocidad y variedad
+        const skippedCalls = isSpecificProduct ? ' [COST-OPT: skipping broadWeb/officialWeb/mlPriority/altShopping]' : '';
+        console.log(`[ShoppingService] Ejecutando Serper Shopping + Web para: "${shoppingQuery}" (${searchConditionMode}, queryType=${queryType})${skippedCalls}`);
+        const shoppingNum = deepSearchEnabled ? 100 : (isVipSearch ? 100 : 80);
+        const webNum = deepSearchEnabled ? 100 : (isVipSearch ? 80 : 50);
+        const broadWebNum = deepSearchEnabled ? 30 : (isVipSearch ? 20 : 10);
+        const officialWebNum = deepSearchEnabled ? 30 : (isVipSearch ? 20 : 10);
+        const marketplaceNum = deepSearchEnabled ? 30 : (isVipSearch ? 20 : 10);
+        const mlPriorityNum = deepSearchEnabled ? 30 : (isVipSearch ? 20 : 12);
+        const altShoppingNum = deepSearchEnabled ? 50 : (isVipSearch ? 40 : 30);
+        const amazonSpecificShoppingNum = deepSearchEnabled ? 30 : (isVipSearch ? 24 : 20);
+        
+        const shoppingPromise = fetchWithRetry({
+            method: 'post',
+            url: 'https://google.serper.dev/shopping',
+            headers: { 'X-API-KEY': apiKey, 'Content-Type': 'application/json' },
+            data: JSON.stringify({ q: shoppingQuery, gl: regionCfg.gl, hl: regionCfg.hl, num: shoppingNum }),
+            timeout: serperTimeout,
+            signal: abortSignal
+        }, serperRetries).catch(err => { console.error('Error Google Shopping:', err.message); return null; });
+
+        // Build web query with priority: 1) intent-memory preferred stores, 2) category-specific domains, 3) general domains
+        let webSearchQ;
+        if (preferredStoreKeys.length > 0) {
+            webSearchQ = regionConfigService.buildAdaptiveWebSearchQuery(webQuery, countryCode, preferredStoreKeys, searchPolicy.preferredStoreMode);
+        } else if (productCategory) {
+            webSearchQ = regionConfigService.buildCategoryWebSearchQuery(webQuery, countryCode, productCategory);
+        } else {
+            webSearchQ = regionConfigService.buildWebSearchQuery(webQuery, countryCode);
+        }
+
+        const normalizedWebSearchQ = String(webSearchQ || '').toLowerCase();
+        const mainWebAlreadyTargetsAmazon = /site:amazon\.(com|com\.mx)/i.test(normalizedWebSearchQ);
+        const mainWebAlreadyTargetsMercadoLibre = /site:mercadolibre\./i.test(normalizedWebSearchQ);
+        const shouldQueryMlAmazon = (!restrictToPreferredStore && !isSpecificProduct && !(mainWebAlreadyTargetsAmazon && mainWebAlreadyTargetsMercadoLibre)) || (restrictToPreferredStore && (preferredIncludesMeli || preferredIncludesAmazon));
+        const amazonSpecificDomain = countryCode === 'US' ? 'amazon.com' : 'amazon.com.mx';
+        const {webPromise, amazonSpecificShoppingPromise} = fetchPrimarySearchRoutes({
+            request: fetchWithRetry, apiKey, isSpecificProduct, preferredIncludesAmazon,
+            shoppingQuery, webSearchQ, amazonDomain: amazonSpecificDomain,
+            gl: regionCfg.gl, hl: regionCfg.hl, webNum,
+            amazonNum: amazonSpecificShoppingNum, timeout: serperTimeout,
+            signal: abortSignal, retries: serperRetries
+        });
+
+        const broadWebPromise = !isSpecificProduct
+            ? fetchWithRetry({
+                method: 'post',
+                url: 'https://google.serper.dev/search',
+                headers: { 'X-API-KEY': apiKey, 'Content-Type': 'application/json' },
+                data: JSON.stringify({
+                    q: regionConfigService.buildBroadWebSearchQuery(query, countryCode),
+                    gl: regionCfg.gl, hl: regionCfg.hl, num: broadWebNum
+                }),
+                timeout: serperTimeout,
+                signal: abortSignal
+            }, serperRetries).catch(err => { console.error('Error Serper Broad Web:', err.message); return null; })
+            : Promise.resolve(null);
+
+        const officialSearchQuery = brandOfficialQuery || query;
+        const officialWebPromise = shouldQueryOfficialWeb
+            ? fetchWithRetry({
+                method: 'post',
+                url: 'https://google.serper.dev/search',
+                headers: { 'X-API-KEY': apiKey, 'Content-Type': 'application/json' },
+                data: JSON.stringify({
+                    q: regionConfigService.buildOfficialWebSearchQuery(officialSearchQuery, countryCode),
+                    gl: regionCfg.gl, hl: regionCfg.hl, num: officialWebNum
+                }),
+                timeout: serperTimeout,
+                signal: abortSignal
+            }, serperRetries).catch(err => { console.error('Error Official Serper Web:', err.message); return null; })
+            : Promise.resolve(null);
+
+        // PERF: Dedicated ML+Amazon Serper query to guarantee results from top marketplaces
+        // Skip it when the primary web query already includes both marketplace site: operators.
+        const mlAmazonDomains = countryCode === 'US'
+            ? 'site:amazon.com'
+            : countryCode === 'CL'
+                ? 'site:mercadolibre.cl OR site:amazon.com'
+                : countryCode === 'CO'
+                    ? 'site:mercadolibre.com.co OR site:amazon.com'
+                    : countryCode === 'AR'
+                        ? 'site:mercadolibre.com.ar'
+                        : countryCode === 'PE'
+                            ? 'site:mercadolibre.com.pe OR site:amazon.com'
+                            : 'site:mercadolibre.com.mx OR site:amazon.com.mx';
+        const mlAmazonPromise = shouldQueryMlAmazon
+            ? fetchWithRetry({
+                method: 'post',
+                url: 'https://google.serper.dev/search',
+                headers: { 'X-API-KEY': apiKey, 'Content-Type': 'application/json' },
+                data: JSON.stringify({
+                    q: `${webQuery} ${mlAmazonDomains}`,
+                    gl: regionCfg.gl, hl: regionCfg.hl, num: marketplaceNum
+                }),
+                timeout: serperTimeout,
+                signal: abortSignal
+            }, serperRetries).catch(err => { console.error('Error Serper ML+Amazon:', err.message); return null; })
+            : Promise.resolve(null);
+
+        const mercadoLibreDomain = getMercadoLibreDomain(countryCode);
+        const mlPriorityPromise = !shouldQueryMlPriority
+            ? Promise.resolve(null)
+            : fetchWithRetry({
+                method: 'post',
+                url: 'https://google.serper.dev/search',
+                headers: { 'X-API-KEY': apiKey, 'Content-Type': 'application/json' },
+                data: JSON.stringify({
+                    q: `${webQuery} site:${mercadoLibreDomain}`,
+                    gl: regionCfg.gl,
+                    hl: regionCfg.hl,
+                    num: mlPriorityNum
+                }),
+                timeout: serperTimeout,
+                signal: abortSignal
+            }, serperRetries).catch(err => { console.error('Error Serper MercadoLibre Priority:', err.message); return null; });
+
+        const serperAltQueryCount = isSpecificProduct ? 0 : (deepSearchEnabled ? 5 : (isVipSearch ? 2 : 0));
+        const plannedAltShoppingCalls = Math.min((alternativeQueries || []).filter(Boolean).length, serperAltQueryCount);
+        const expectedSerperCallCount = [
+            1,
+            isSpecificProduct ? 0 : 1,
+            isSpecificProduct ? 1 : 0,
+            !isSpecificProduct ? 1 : 0,
+            shouldQueryOfficialWeb ? 1 : 0,
+            shouldQueryMlAmazon ? 1 : 0,
+            shouldQueryMlPriority ? 1 : 0,
+            plannedAltShoppingCalls
+        ].reduce((sum, value) => sum + value, 0);
+        console.log(`[ShoppingService] Serper call plan: ${expectedSerperCallCount} (tier=${searchTier}, shopping=1, web=1, amazonSpecific=${!isSpecificProduct && preferredIncludesAmazon ? 1 : 0}, broad=${!isSpecificProduct ? 1 : 0}, official=${shouldQueryOfficialWeb ? 1 : 0}, mlAmazon=${shouldQueryMlAmazon ? 1 : 0}, mlPriority=${shouldQueryMlPriority ? 1 : 0}, alt=${plannedAltShoppingCalls})`);
+        const altShoppingPromises = (alternativeQueries || [])
+            .filter(Boolean)
+            .slice(0, serperAltQueryCount)
+            .map(altQuery => fetchWithRetry({
+                method: 'post',
+                url: 'https://google.serper.dev/shopping',
+                headers: { 'X-API-KEY': apiKey, 'Content-Type': 'application/json' },
+                data: JSON.stringify({ q: buildStoreFocusedShoppingQuery(altQuery, countryCode, searchPolicy), gl: regionCfg.gl, hl: regionCfg.hl, num: altShoppingNum }),
+                timeout: serperTimeout,
+                signal: abortSignal
+            }, serperRetries).catch(err => {
+                console.error(`Error Google Shopping alt query "${altQuery}":`, err.message);
+                return null;
+            }));
+
+        const [shoppingRes, webRes, amazonSpecificShoppingRes, broadWebRes, officialWebRes, mlAmazonRes, ...altShoppingResponses] = await Promise.all([shoppingPromise, webPromise, amazonSpecificShoppingPromise, broadWebPromise, officialWebPromise, mlAmazonPromise, ...altShoppingPromises]);
+
+        // Check if Shopping API already returned ML results to skip mlPriority query
+        let hasMercadoLibreInShopping = false;
+        if (shoppingRes?.data?.shopping) {
+            hasMercadoLibreInShopping = shoppingRes.data.shopping.some(item => 
+                /mercadolibre\./i.test(String(item.link || '')) || 
+                /mercado\s*libre/i.test(String(item.source || ''))
+            );
+        }
+
+        // Only execute mlPriority if Shopping didn't return ML results
+        const mlPriorityRes = (!shouldQueryMlPriority || hasMercadoLibreInShopping) 
+            ? null 
+            : await mlPriorityPromise;
+
+        if (hasMercadoLibreInShopping && shouldQueryMlPriority) {
+            mlPrioritySkipped = true;
+            console.log('[COST-OPT] Skipping mlPriority query - Shopping API already returned MercadoLibre results');
+        }
+
+        // Procesar Shopping
+        if (shoppingRes?.data?.shopping) {
+            const rawShopping = shoppingRes.data.shopping;
+            // Keep raw provider evidence here; final quality filtering rejects
+            // opaque Google destinations. Organic results supply independent links.
+            serperResults = rawShopping.map(item => {
+                const parsedPrice = parseShoppingPrice(item.price);
+                const isGoogleRedirect = (item.link || '').includes('google.com/search');
+                const priceMeta = resolvePriceMetadata({
+                    primaryPrice: parsedPrice,
+                    text: `${item.title || ''} ${item.snippet || ''}`,
+                    sourceType: 'shopping_api',
+                    isRedirect: isGoogleRedirect,
+                    isDirectProductPage: true
+                });
+                return {
+                    title: item.title || 'Sin Título',
+                    price: priceMeta.price,
+                    url: item.link || '',
+                    source: item.source || 'Tienda Desconocida',
+                    image: normalizeIncomingImage(item.imageUrl || ''),
+                    isGoogleRedirect,
+                    snippet: item.snippet || '',
+                    ...priceMeta,
+                    resultSource: 'shopping_api',
+                    isDirectProductPage: true
+                };
+            });
+            console.log(`[Serper Shopping] ${serperResults.length} resultados procesados`);
+        }
+
+        altShoppingResponses.forEach((altRes) => {
+            if (!altRes?.data?.shopping) return;
+            const altMapped = altRes.data.shopping.map(item => {
+                const parsedPrice = parseShoppingPrice(item.price);
+                const isGoogleRedirect = (item.link || '').includes('google.com/search');
+                const priceMeta = resolvePriceMetadata({
+                    primaryPrice: parsedPrice,
+                    text: `${item.title || ''} ${item.snippet || ''}`,
+                    sourceType: 'shopping_api',
+                    isRedirect: isGoogleRedirect,
+                    isDirectProductPage: true
+                });
+                return {
+                    title: item.title || 'Sin Título',
+                    price: priceMeta.price,
+                    url: item.link || '',
+                    source: item.source || 'Tienda Desconocida',
+                    image: normalizeIncomingImage(item.imageUrl || ''),
+                    isGoogleRedirect,
+                    hasEphemeralRedirect: isGoogleRedirect,
+                    snippet: item.snippet || '',
+                    ...priceMeta,
+                    resultSource: 'shopping_api',
+                    isDirectProductPage: true
+                };
+            });
+            serperResults = [...serperResults, ...altMapped];
+        });
+
+        if (amazonSpecificShoppingRes?.data?.shopping) {
+            const amazonSpecificMapped = amazonSpecificShoppingRes.data.shopping.map(item => {
+                const parsedPrice = parseShoppingPrice(item.price);
+                const isGoogleRedirect = (item.link || '').includes('google.com/search');
+                const priceMeta = resolvePriceMetadata({
+                    primaryPrice: parsedPrice,
+                    text: `${item.title || ''} ${item.snippet || ''}`,
+                    sourceType: 'shopping_api',
+                    isRedirect: isGoogleRedirect,
+                    isDirectProductPage: true
+                });
+                return {
+                    title: item.title || 'Sin Título',
+                    price: priceMeta.price,
+                    url: item.link || '',
+                    source: item.source || 'Amazon',
+                    image: normalizeIncomingImage(item.imageUrl || ''),
+                    isGoogleRedirect,
+                    snippet: item.snippet || '',
+                    isAmazonSpecificBoost: true,
+                    ...priceMeta,
+                    resultSource: 'amazon_specific_shopping',
+                    isDirectProductPage: true
+                };
+            });
+            serperResults = [...serperResults, ...amazonSpecificMapped];
+            console.log(`[Serper Amazon Specific] Encontró ${amazonSpecificMapped.length} resultados dedicados de Amazon`);
+        }
+
+        // Procesar Web complementario
+        if (webRes?.data?.organic) {
+            // Filter out category/listing pages that aren't actual product pages
+            const categoryPatterns = [
+                /\/c\//,           // walmart.com.mx/c/
+                /\/browse\//,      // generic browse pages
+                /\/tienda\?/,      // ?s= search results pages
+                /\/catst\//,       // category listings
+                /\/categoria\//,   // category pages
+                /\/categorias\//,
+                /\/l\//,           // mercadolibre.com.mx/l/
+                /\/b\//,           // mercadolibre category 
+                /\/ofertas/,       // offers landing pages
+                /\/search\?/,      // search result pages
+                /\/s\?/,           // amazon search pages
+                /\/dp\/(?![a-z0-9]{10}(?:[/?#]|$))/i, // broken amazon dp links
+                /\/collections?\//,
+                /\/department\//,
+                /[?&](k|q|query|search|searchterm|searchterms|ntt)=/i
+            ];
+            const webResults = webRes.data.organic.filter(r => {
+                if (!r.link || r.link.includes('google.com')) return false;
+                // Exclude category-type URLs
+                const path = r.link.toLowerCase();
+                if (!isRegionCompatibleUrl(r.link, countryCode)) return false;
+                if (categoryPatterns.some(pattern => pattern.test(path))) return false;
+                return looksLikeProductPage(r.link, countryCode);
+            });
+            const webMapped = webResults.map(r => {
+                const storeName = regionConfigService.resolveStoreName(r.link, countryCode);
+                const knownStore = isKnownStoreUrl(r.link, countryCode);
+                const directProductPage = looksLikeProductPage(r.link, countryCode);
+                const priceMeta = resolvePriceMetadata({
+                    primaryPrice: extractSnippetPrice(r.snippet || '') ?? extractSnippetPrice(r.title || ''),
+                    text: `${r.title || ''} ${r.snippet || ''}`,
+                    sourceType: 'web_snippet',
+                    isDirectProductPage: directProductPage
+                });
+                return {
+                    title: r.title || 'Sin Título',
+                    price: priceMeta.price,
+                    url: r.link,
+                    source: storeName,
+                    image: normalizeIncomingImage(r.imageUrl || ''),
+                    snippet: r.snippet || '',
+                    isDirectProductPage: directProductPage,
+                    isKnownStoreDomain: knownStore,
+                    ...priceMeta,
+                    resultSource: 'web_search',
+                    ...merchantReference(r, query)
+                };
+            });
+            serperResults = [...serperResults, ...webMapped];
+            console.log(`[Serper Web] Encontró ${webMapped.length} resultados web complementarios`);
+        }
+
+        if (officialWebRes?.data?.organic) {
+            const officialMapped = officialWebRes.data.organic
+                .filter(r => r.link && isRegionCompatibleUrl(r.link, countryCode) && (looksLikeProductPage(r.link, countryCode) || isKnownStoreUrl(r.link, countryCode)))
+                .map(r => {
+                    const priceMeta = resolvePriceMetadata({
+                        primaryPrice: extractSnippetPrice(r.snippet || '') ?? extractSnippetPrice(r.title || ''),
+                        text: `${r.title || ''} ${r.snippet || ''}`,
+                        sourceType: 'official_web',
+                        isDirectProductPage: true
+                    });
+                    return {
+                        title: r.title || 'Sin Título',
+                        price: priceMeta.price,
+                        url: r.link,
+                        source: regionConfigService.resolveStoreName(r.link, countryCode),
+                        image: normalizeIncomingImage(r.imageUrl || ''),
+                        snippet: r.snippet || '',
+                        isDirectProductPage: looksLikeProductPage(r.link, countryCode),
+                        isKnownStoreDomain: true,
+                        isOfficialBrandResult: true,
+                        ...priceMeta,
+                        resultSource: 'official_web'
+                    };
+                });
+            serperResults = [...serperResults, ...officialMapped];
+            console.log(`[Serper Official Web] Encontró ${officialMapped.length} resultados oficiales`);
+        }
+
+        // Process dedicated ML+Amazon results
+        if (mlAmazonRes?.data?.organic) {
+            const mlAmazonMapped = mlAmazonRes.data.organic
+                .filter(r => r.link && !r.link.includes('google.com'))
+                .filter(r => looksLikeProductPage(r.link, countryCode) || isKnownStoreUrl(r.link, countryCode) || Number.isFinite(extractSnippetPrice(r.snippet || '') ?? extractSnippetPrice(r.title || '')))
+                .map(r => {
+                    const knownStore = isKnownStoreUrl(r.link, countryCode);
                     const directProductPage = looksLikeProductPage(r.link, countryCode);
                     const priceMeta = resolvePriceMetadata({
                         primaryPrice: extractSnippetPrice(r.snippet || '') ?? extractSnippetPrice(r.title || ''),
