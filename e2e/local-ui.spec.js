@@ -92,7 +92,7 @@ test('English CTA selects US despite stored and detected Mexico', async ({page})
 });
 
 test('English guides expose consistent metadata and working US CTA without overflow',async({page})=>{
- const paths=['index','blog','best-price-iphone-16','compare-prices-laptops','best-budget-headphones','best-time-to-buy-a-laptop','amazon-vs-walmart-electronics'];
+ const paths=['index','blog','best-price-iphone-16','compare-prices-laptops','best-budget-headphones','best-time-to-buy-a-laptop','amazon-vs-walmart-electronics','compare-total-cost','new-vs-refurbished-electronics','how-lumu-compares-prices'];
  const titles=new Set();
  for(const slug of paths){
   await page.goto('/en/'+slug+'.html');
@@ -101,7 +101,8 @@ test('English guides expose consistent metadata and working US CTA without overf
   const title=await page.title();expect(titles.has(title)).toBe(false);titles.add(title);
   expect(await page.locator('link[rel=canonical]').getAttribute('href')).toContain('/en/');
   expect(await page.locator('meta[name=description]').getAttribute('content')).toBeTruthy();
-  const schema=JSON.parse(await page.locator('script[type="application/ld+json"]').textContent());expect(schema.url).toContain('/en/');
+  const schema=JSON.parse(await page.locator('script[type="application/ld+json"]').first().textContent());expect(schema.url).toContain('/en/');
+  if(slug!=='index'){const crumbs=JSON.parse(await page.locator('script[type="application/ld+json"]').nth(1).textContent());expect(crumbs['@type']).toBe('BreadcrumbList');expect(crumbs.itemListElement.at(-1).item).toBe(schema.url);await expect(page.getByRole('navigation',{name:'Breadcrumb',exact:true})).toBeVisible();}
   expect(await page.locator('a[href="/?region=US"]').count()).toBeGreaterThan(0);
   expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
  }
