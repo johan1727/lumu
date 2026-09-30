@@ -4,6 +4,7 @@ const telegramController = require('./telegramController');
 
 const MAX_ALERTS_PER_RUN = 200;
 const PRICE_WINDOW_HOURS = 48;
+const STRONG_PRICE_SOURCES = Object.freeze(['direct_scraper', 'meli_api', 'ml_api_direct', 'amazon_creators_api', 'amazon_serpapi']);
 
 // GET /api/cron/check-alerts — Daily Vercel Cron.
 // Compares active price_alerts against recent price_history and notifies
@@ -24,7 +25,7 @@ exports.checkAlerts = async (req, res) => {
     try {
         const { data: alerts, error: alertsErr } = await supabase
             .from('price_alerts')
-            .select('id, user_id, product_name, target_price, product_url, store_name')
+            .select('id, user_id, product_name, target_price, target_currency, country_code, product_url, store_name')
             .eq('triggered', false)
             .limit(MAX_ALERTS_PER_RUN);
 
@@ -47,11 +48,20 @@ exports.checkAlerts = async (req, res) => {
         for (const alert of alerts) {
             summary.checked++;
             try {
+                const targetCurrency = String(alert.target_currency || '').trim().toUpperCase();
+                const targetCountry = String(alert.country_code || '').trim().toUpperCase();
+                // Legacy alerts lack a trustworthy target market; never infer it.
+                if (!/^[A-Z]{3}$/.test(targetCurrency) || !/^[A-Z]{2}$/.test(targetCountry)) {
+                    await supabase.from('price_alerts')
+                        .update({ last_checked_at: nowIso })
+                        .eq('id', alert.id);
+                    continue;
+                }
                 // Prefer the exact normalized product URL; title-only matches can
                 // confuse variants or unrelated products with similar names.
                 let matchQuery = supabase
                     .from('price_history')
-                    .select('product_title, price, store_name, normalized_url, currency')
+                    .select('product_title, price, store_name, normalized_url, currency, country_code, price_source, price_confidence')
                     .gte('created_at', windowStart)
                     .gt('price', 0);
                 if (alert.product_url) {
@@ -64,9 +74,15 @@ exports.checkAlerts = async (req, res) => {
                     }
                     matchQuery = matchQuery.eq('normalized_url', normalizedUrl);
                 } else {
-                    matchQuery = matchQuery.ilike('product_title', `%${alert.product_name.replace(/[%_]/g, '')}%`);
+                    // Title-only matches can cross variants and editions.
+                    await supabase.from('price_alerts')
+                        .update({ last_checked_at: nowIso })
+                        .eq('id', alert.id);
+                    continue;
                 }
                 if (alert.store_name) matchQuery = matchQuery.eq('store_name', alert.store_name);
+                matchQuery = matchQuery.eq('country_code', targetCountry).eq('currency', targetCurrency);
+                matchQuery = matchQuery.in('price_source', STRONG_PRICE_SOURCES).gte('price_confidence', 0.85);
                 const { data: matches, error: matchErr } = await matchQuery
                     .order('price', { ascending: true })
                     .limit(1);
@@ -81,8 +97,13 @@ exports.checkAlerts = async (req, res) => {
 
                 const best = matches[0];
                 const currencyCode = String(best.currency || '').trim().toUpperCase();
-                // Never compare an unlabelled amount or silently assume MXN.
-                const hit = /^[A-Z]{3}$/.test(currencyCode) && Number(best.price) <= Number(alert.target_price);
+                const source = String(best.price_source || '').toLowerCase();
+                const confidence = Number(best.price_confidence);
+                const hit = currencyCode === targetCurrency
+                    && String(best.country_code || '').trim().toUpperCase() === targetCountry
+                    && STRONG_PRICE_SOURCES.includes(source)
+                    && Number.isFinite(confidence) && confidence >= 0.85
+                    && Number(best.price) <= Number(alert.target_price);
 
                 // Claim the alert atomically. A second cron run that read the same
                 // row will get no returned row and must not send another message.

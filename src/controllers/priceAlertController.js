@@ -1,5 +1,6 @@
 const supabase = require('../config/supabase');
 const profileCache = require('../utils/profileCache');
+const regionConfigService = require('../services/regionConfigService');
 
 const MAX_ALERTS_FREE = 3;
 const MAX_ALERTS_VIP = 50;
@@ -36,13 +37,22 @@ exports.createAlert = async (req, res) => {
     if (!userId) return res.status(401).json({ error: 'Inicia sesión para crear alertas de precio.' });
     if (!supabase) return res.status(503).json({ error: 'Base de datos no disponible.' });
 
-    const { product_name, target_price, product_url, store_name } = req.body;
+    const { product_name, target_price, product_url, store_name, target_currency, country_code } = req.body;
 
     if (!product_name || typeof product_name !== 'string' || product_name.trim().length < 2) {
         return res.status(400).json({ error: 'Nombre de producto inválido.' });
     }
     if (!target_price || isNaN(target_price) || target_price <= 0) {
         return res.status(400).json({ error: 'Precio meta debe ser mayor a 0.' });
+    }
+    const normalizedCountry = String(country_code || '').trim().toUpperCase();
+    const normalizedCurrency = String(target_currency || '').trim().toUpperCase();
+    if (!regionConfigService.getSupportedCountries().includes(normalizedCountry)
+        || !/^[A-Z]{3}$/.test(normalizedCurrency)) {
+        return res.status(400).json({ error: 'País o moneda de la alerta no válidos.' });
+    }
+    if (!product_url || !/^https:\/\//i.test(String(product_url))) {
+        return res.status(400).json({ error: 'La alerta necesita el enlace exacto del producto.' });
     }
 
     try {
@@ -73,7 +83,9 @@ exports.createAlert = async (req, res) => {
                 user_id: userId,
                 product_name: product_name.trim().slice(0, 200),
                 target_price: parseFloat(target_price),
-                product_url: product_url ? String(product_url).slice(0, 2000) : null,
+                country_code: normalizedCountry,
+                target_currency: normalizedCurrency,
+                product_url: String(product_url).slice(0, 2000),
                 store_name: store_name ? String(store_name).slice(0, 100) : null
             })
             .select()

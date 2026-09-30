@@ -1,5 +1,7 @@
 const supabase = require('../config/supabase');
 const Redis = require('ioredis');
+const { parseShoppingPrice } = require('./priceParser');
+const { getSupportedCountries } = require('./regionConfigService');
 
 // --- Configuración Redis Opcional ---
 const redisClient = process.env.REDIS_URL ? new Redis(process.env.REDIS_URL) : null;
@@ -361,25 +363,7 @@ exports.savePriceSnapshot = async (query, radius, lat, lng, products = [], count
     if (!supabase || !Array.isArray(products) || products.length === 0) return;
 
     const queryKey = generateCacheKey(query, radius, lat, lng, countryCode);
-    const snapshotRows = products
-        .map((product) => {
-            const rawPrice = product.precio;
-            const price = typeof rawPrice === 'number'
-                ? rawPrice
-                : parseFloat(String(rawPrice || '').replace(/[^0-9.]/g, ''));
-            const url = product.urlMonetizada || product.urlOriginal;
-            if (!url || !Number.isFinite(price) || price <= 0) return null;
-
-            return {
-                query_key: queryKey,
-                normalized_url: normalizeProductUrl(url),
-                product_title: product.titulo || null,
-                store_name: product.tienda || null,
-                price: Number(price.toFixed(2))
-            };
-        })
-        .filter(Boolean)
-        .slice(0, 30);
+    const snapshotRows = buildPriceSnapshotRows(products, queryKey, countryCode);
 
     if (snapshotRows.length === 0) return;
 
@@ -392,6 +376,32 @@ exports.savePriceSnapshot = async (query, radius, lat, lng, products = [], count
         console.error('Excepción guardando snapshot de precios:', err.message);
     }
 };
+
+function buildPriceSnapshotRows(products = [], queryKey, countryCode = 'MX') {
+    if (!Array.isArray(products)) return [];
+    return products.map(product => {
+        const price = parseShoppingPrice(product.precio ?? product.price);
+        const url = product.urlOriginal || product.urlMonetizada;
+        const currency = String(product.currency || product.currencyCode || product.moneda || '').trim().toUpperCase();
+        const marketCountry = String(product.countryCode || countryCode || '').trim().toUpperCase();
+        const confidence = Number(product.priceConfidence);
+        const normalizedUrl = normalizeProductUrl(url);
+        if (!normalizedUrl || !Number.isFinite(price) || price <= 0 || !/^[A-Z]{3}$/.test(currency)
+            || !getSupportedCountries().includes(marketCountry) || product.priceNeedsVerification
+            || product.isPotentiallyUnavailable || (Number.isFinite(confidence) && confidence < 0.65)) return null;
+        return {
+            query_key: queryKey,
+            normalized_url: normalizedUrl,
+            product_title: product.titulo || null,
+            store_name: product.tienda || null,
+            price: Number(price.toFixed(2)),
+            country_code: marketCountry,
+            currency,
+            price_source: String(product.priceSource || product.priceEvidenceSource || product.resultSource || '').slice(0, 80) || null,
+            price_confidence: Number.isFinite(confidence) ? Math.max(0, Math.min(1, confidence)) : null
+        };
+    }).filter(Boolean).slice(0, 30);
+}
 
 /**
  * Crea un mapa de tendencias por URL normalizada
@@ -433,6 +443,7 @@ exports.getPriceHistoryMap = async (query, radius, lat, lng, products = [], coun
 };
 
 exports.normalizeProductUrl = normalizeProductUrl;
+exports.buildPriceSnapshotRows = buildPriceSnapshotRows;
 exports.generateCacheKey = generateCacheKey;
 exports.generateCanonicalCacheKey = generateCanonicalCacheKey;
 exports.normalizeCanonicalKey = normalizeCanonicalKey;

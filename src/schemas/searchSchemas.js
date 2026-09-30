@@ -62,8 +62,10 @@ const feedbackSchema = z.object({
 const priceAlertSchema = z.object({
     product_name: z.string().trim().min(2, 'Nombre de producto inválido.').max(200),
     target_price: z.coerce.number().positive('Precio meta debe ser mayor a 0.'),
-    product_url: z.string().url('URL de producto inválida.').max(2000).nullable().optional(),
-    store_name: z.string().trim().max(100).nullable().optional()
+    product_url: z.string().url('URL de producto inválida.').max(2000),
+    store_name: z.string().trim().max(100).nullable().optional(),
+    target_currency: z.string().trim().regex(/^[A-Z]{3}$/),
+    country_code: z.string().trim().regex(/^[A-Z]{2}$/)
 });
 
 const trackEventSchema = z.object({

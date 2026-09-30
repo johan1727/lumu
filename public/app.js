@@ -1495,28 +1495,27 @@ function formatCurrencyByRegion(amount) {
     }).format(Number(amount || 0));
 }
 
-function formatCurrencyByCode(amount, regionCode = currentRegion) {
+function formatCurrencyByCode(amount, regionCode = currentRegion, currencyOverride = null) {
     const normalizedRegion = String(regionCode || currentRegion || 'MX').toUpperCase();
     const config = REGION_LABELS[normalizedRegion] || REGION_LABELS.MX;
+    const currency = /^[A-Z]{3}$/.test(String(currencyOverride || '')) ? currencyOverride : config.currency;
     return new Intl.NumberFormat(config.locale, {
         style: 'currency',
-        currency: config.currency
+        currency
     }).format(Number(amount || 0));
 }
 
 function getProductCurrencyCode(product = {}) {
     const explicitCode = String(product.currencyCode || product.currency || '').trim().toUpperCase();
-    if (explicitCode) return explicitCode;
-    const countryCode = String(product.countryCode || product.country || product.region || currentRegion || 'MX').trim().toUpperCase();
-    const config = REGION_LABELS[countryCode] || REGION_LABELS.MX;
-    return config.currency || 'MXN';
+    return /^[A-Z]{3}$/.test(explicitCode) ? explicitCode : null;
 }
 
 function formatProductPriceLabel(amount, product = {}) {
     const countryCode = String(product.countryCode || product.country || product.region || currentRegion || 'MX').trim().toUpperCase();
-    const formatted = formatCurrencyByCode(amount, countryCode);
     const currencyCode = getProductCurrencyCode(product);
-    return `${formatted} ${currencyCode}`.trim();
+    const locale = (REGION_LABELS[countryCode] || REGION_LABELS.MX).locale;
+    if (!currencyCode) return `${new Intl.NumberFormat(locale, { maximumFractionDigits: 2 }).format(Number(amount || 0))} · ${currentRegion === 'US' ? 'currency unverified' : 'moneda sin verificar'}`;
+    return `${formatCurrencyByCode(amount, countryCode, currencyCode)} ${currencyCode}`.trim();
 }
 
 function getFlashDealsLoadingMarkup() {
@@ -2286,6 +2285,8 @@ function applyRegionalCopy() {
     setTextById('price-alert-title', ui.priceAlerts.title);
     setTextById('price-alert-copy', ui.priceAlerts.copy);
     setPlaceholderById('alert-product', ui.priceAlerts.productPlaceholder);
+    setPlaceholderById('alert-product-url', currentRegion === 'US' ? 'Exact product URL' : 'URL exacta del producto');
+    setTextById('alert-product-url-label', currentRegion === 'US' ? 'Exact product listing on the store' : 'Enlace exacto del producto en la tienda');
     setTextById('alert-currency-label', ui.priceAlerts.currencyLabel);
     setPlaceholderById('alert-price', ui.priceAlerts.maxPricePlaceholder);
     setTextById('alert-submit-label', ui.priceAlerts.submit);
@@ -6971,16 +6972,24 @@ async function initApp() {
                 } else if (!hasUsableOnlinePrice) {
                     priceDisplay = `<span class="text-base md:text-lg font-black text-slate-500">${isUS ? 'Price unavailable' : 'Precio no disponible'}</span>`;
                 } else {
-                    const formattedFull = formatCurrencyByCode(precioNumerico, String(product.countryCode || product.country || product.region || currentRegion || 'MX').trim().toUpperCase());
+                    const countryForPrice = String(product.countryCode || product.country || product.region || currentRegion || 'MX').trim().toUpperCase();
+                    const explicitCurrencyCode = getProductCurrencyCode(product);
+                    const localeForPrice = (REGION_LABELS[countryForPrice] || REGION_LABELS.MX).locale;
+                    const formattedFull = explicitCurrencyCode
+                        ? formatCurrencyByCode(precioNumerico, countryForPrice, explicitCurrencyCode)
+                        : new Intl.NumberFormat(localeForPrice, { maximumFractionDigits: 2 }).format(precioNumerico);
                     const numericMatch = formattedFull.match(/[\d,.]+/);
                     const numericPart = numericMatch ? numericMatch[0] : '0.00';
-                    const currencySymbol = formattedFull.replace(numericPart, '').trim() || (getRegionConfig().currency === 'USD' ? '$' : '$');
+                    const currencySymbol = explicitCurrencyCode ? (formattedFull.replace(numericPart, '').trim() || '$') : '';
                     const lastSeparatorIndex = Math.max(numericPart.lastIndexOf('.'), numericPart.lastIndexOf(','));
                     const integerPart = lastSeparatorIndex >= 0 ? numericPart.slice(0, lastSeparatorIndex) : numericPart;
                     const decimalPart = lastSeparatorIndex >= 0 ? numericPart.slice(lastSeparatorIndex + 1) : '00';
-                    const explicitCurrencyCode = getProductCurrencyCode(product);
-                    
-                    priceDisplay = `<span class="text-xs md:text-sm font-bold text-slate-500">${currencySymbol}</span><span class="text-[1.7rem] md:text-3xl font-black text-slate-900 leading-none">${integerPart}</span><span class="text-xs md:text-sm font-bold text-slate-900">.${decimalPart}</span><span class="ml-2 text-[10px] md:text-xs font-black uppercase tracking-[0.18em] text-slate-400">${explicitCurrencyCode}</span>`;
+                    const decimalSeparator = /([.,])\d+$/.exec(numericPart)?.[1] || '.';
+                    const fractionDisplay = /[.,]\d+$/.test(numericPart)
+                        ? `<span class="text-xs md:text-sm font-bold text-slate-900">${decimalSeparator}${decimalPart}</span>`
+                        : '';
+                    const currencyLabel = explicitCurrencyCode || (isUS ? 'currency unverified' : 'moneda sin verificar');
+                    priceDisplay = `<span class="text-xs md:text-sm font-bold text-slate-500">${currencySymbol}</span><span class="text-[1.7rem] md:text-3xl font-black text-slate-900 leading-none">${integerPart}</span>${fractionDisplay}<span class="ml-2 text-[10px] md:text-xs font-black uppercase tracking-[0.18em] text-slate-400">${currencyLabel}</span>`;
                     if (hasStructuredDeal) {
                         const originalPriceLabel = formatCurrencyByCode(originalPriceNumeric, String(product.countryCode || product.country || product.region || currentRegion || 'MX').trim().toUpperCase());
                         priceDisplay += `<span class="ml-1 text-xs md:text-sm font-bold text-slate-400 line-through decoration-2 decoration-slate-300">${originalPriceLabel}</span>`;
@@ -7295,11 +7304,13 @@ async function initApp() {
                             </button>
                             
                             <!-- Acciones secundarias en botones Outline abajo -->
-                            ${(!isLocal && precioNumerico > 0) ? `
+                            ${(!isLocal && precioNumerico > 0 && /^[A-Z]{3}$/.test(String(product.currency || product.currencyCode || ''))) ? `
                             <div class="grid grid-cols-1 sm:grid-cols-2 gap-2 w-full mt-1">
                                 <button class="btn-quick-alert flex-1 min-h-[42px] py-2 flex justify-center items-center gap-1.5 bg-white text-slate-600 hover:text-amber-600 hover:bg-amber-50 rounded-xl border border-slate-200 hover:border-amber-300 transition-all text-xs font-bold shadow-sm" title="${isUS ? 'Price alert' : 'Alerta de precio'}"
                                         data-alert-name="${sanitize(product.titulo)}"
                                         data-alert-price="${precioNumerico}"
+                                        data-alert-currency="${sanitize(product.currency || product.currencyCode)}"
+                                        data-alert-country="${sanitize(product.countryCode || currentRegion)}"
                                         data-alert-url="${product.urlMonetizada || product.urlOriginal}"
                                         data-alert-store="${sanitize(product.tienda)}">
                                     <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"/></svg>
@@ -7530,6 +7541,8 @@ async function initApp() {
                         const price = parseFloat(btnQuickAlert.getAttribute('data-alert-price'));
                         const url = btnQuickAlert.getAttribute('data-alert-url');
                         const store = btnQuickAlert.getAttribute('data-alert-store');
+                        const currency = btnQuickAlert.getAttribute('data-alert-currency');
+                        const country = btnQuickAlert.getAttribute('data-alert-country');
                         _trackEvent('alert_create', {
                             ...trackingBase,
                             product_title: name || product.titulo,
@@ -7538,7 +7551,7 @@ async function initApp() {
                             store: store || product.tienda,
                             action_context: 'quick_alert'
                         });
-                        window.createQuickAlert(name, price, url, store);
+                        window.createQuickAlert(name, price, url, store, currency, country);
                     });
                 }
 
@@ -7930,6 +7943,8 @@ async function fetchServerAlerts() {
                 id: a.id,
                 product: a.product_name,
                 price: a.target_price,
+                target_currency: a.target_currency,
+                country_code: a.country_code,
                 product_url: a.product_url,
                 store_name: a.store_name,
                 triggered: a.triggered,
@@ -7956,6 +7971,9 @@ function renderAlerts() {
     if (!alertsList) return;
     const alerts = _alertsCache;
     const isUS = currentRegion === 'US';
+    const formatAlertPrice = (amount, alert) => /^[A-Z]{3}$/.test(String(alert.target_currency || ''))
+        ? `${formatCurrencyByCode(amount, alert.country_code)} ${alert.target_currency}`
+        : (isUS ? 'Currency unverified' : 'Moneda sin verificar');
     if (alerts.length === 0) {
         alertsList.innerHTML = `
             <div class="text-center py-6">
@@ -7971,8 +7989,9 @@ function renderAlerts() {
             <div class="min-w-0 flex-grow">
                 <p class="text-sm font-bold text-slate-800 truncate" title="${sanitize(a.product)}">${sanitize(cleanAlertTitle(a.product))}</p>
                 <p class="text-xs text-slate-500 truncate">
-                    <span class="text-emerald-600 font-bold">${isUS ? 'Target' : 'Meta'} ${formatCurrencyByRegion(a.price)}</span>${a.last_price ? ` · ${isUS ? 'last seen' : 'visto'} ${formatCurrencyByRegion(a.last_price)}` : ''}
+                    <span class="text-emerald-600 font-bold">${isUS ? 'Target' : 'Meta'} ${formatAlertPrice(a.price, a)}</span>${a.last_price ? ` · ${isUS ? 'last seen' : 'visto'} ${formatAlertPrice(a.last_price, a)}` : ''}
                 </p>
+                ${(!a.target_currency || !a.product_url) ? `<p class="text-[11px] text-amber-700 font-semibold">${isUS ? 'Recreate this alert with a market and exact product link.' : 'Vuelve a crearla con país, moneda y enlace exacto.'}</p>` : ''}
                 ${a.triggered ? `<p class="text-[11px] text-emerald-700 font-black">${isUS ? 'Target reached!' : '¡Meta alcanzada!'}</p>` : ''}
             </div>
             <button aria-label="${isUS ? 'Delete alert' : 'Eliminar alerta'}" class="flex-shrink-0 w-9 h-9 flex items-center justify-center rounded-full text-slate-400 hover:text-red-500 hover:bg-red-50 transition-colors" onclick="deleteAlert('${a.id || i}')">
@@ -8024,8 +8043,9 @@ priceAlertBackdrop?.addEventListener('click', closePriceAlertModal);
 alertForm?.addEventListener('submit', async (e) => {
     e.preventDefault();
     const product = document.getElementById('alert-product')?.value.trim();
+    const productUrl = document.getElementById('alert-product-url')?.value.trim();
     const price = document.getElementById('alert-price')?.value;
-    if (!product || !price) return;
+    if (!product || !productUrl || !price) return;
 
     const sb = window.supabaseClient;
     const user = window.currentUser;
@@ -8037,7 +8057,7 @@ alertForm?.addEventListener('submit', async (e) => {
             const res = await fetch('/api/price-alerts', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
-                body: JSON.stringify({ product_name: product, target_price: parseFloat(price) })
+                body: JSON.stringify({ product_name: product, target_price: parseFloat(price), product_url: productUrl, target_currency: getRegionConfig().currency, country_code: currentRegion === 'auto' ? 'MX' : currentRegion })
             });
             const json = await res.json();
             if (!res.ok) {
@@ -8093,7 +8113,7 @@ window.checkPriceAlerts = (products) => {
 };
 
 // Quick-alert: create from product card (called from UI)
-window.createQuickAlert = async (productName, currentPrice, productUrl, storeName) => {
+window.createQuickAlert = async (productName, currentPrice, productUrl, storeName, currencyCode, countryCode) => {
     // Suggest 10% below current price as default target
     const suggestedPrice = Math.floor(currentPrice * 0.9);
 
@@ -8161,7 +8181,7 @@ window.createQuickAlert = async (productName, currentPrice, productUrl, storeNam
                 const res = await fetch('/api/price-alerts', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
-                    body: JSON.stringify({ product_name: productName, target_price: targetPrice, product_url: productUrl, store_name: storeName })
+                    body: JSON.stringify({ product_name: productName, target_price: targetPrice, product_url: productUrl, store_name: storeName, target_currency: currencyCode, country_code: countryCode })
                 });
                 const json = await res.json();
                 if (res.ok) {
@@ -9987,4 +10007,3 @@ function updateDealsCountdown() {
 }
 updateDealsCountdown();
 setInterval(updateDealsCountdown, 30000);
-

@@ -219,7 +219,14 @@ async function createVipAutoAlert({ userId = null, product = null }) {
     const productUrl = String(product.urlOriginal || product.urlMonetizada || '').trim();
     const productName = String(product.titulo || '').trim().slice(0, 200);
     const storeName = String(product.tienda || '').trim().slice(0, 100) || null;
-    if (!productName || !Number.isFinite(numericPrice) || numericPrice < 500) {
+    const targetCurrency = String(product.currency || product.currencyCode || '').trim().toUpperCase();
+    const countryCode = String(product.countryCode || '').trim().toUpperCase();
+    const confidence = Number(product.priceConfidence);
+    const reliableSources = new Set(['direct_scraper', 'meli_api', 'ml_api_direct', 'amazon_creators_api', 'amazon_serpapi']);
+    if (!productName || !Number.isFinite(numericPrice) || numericPrice < 500 || !productUrl
+        || !/^[A-Z]{3}$/.test(targetCurrency) || !regionConfigService.getSupportedCountries().includes(countryCode)
+        || !reliableSources.has(String(product.priceSource || '').toLowerCase())
+        || !Number.isFinite(confidence) || confidence < 0.85 || product.priceNeedsVerification) {
         return { created: false, reason: 'low_signal_product' };
     }
     try {
@@ -228,6 +235,7 @@ async function createVipAutoAlert({ userId = null, product = null }) {
             .select('id', { head: true, count: 'exact' })
             .eq('user_id', userId)
             .eq('triggered', false);
+        existingQuery = existingQuery.eq('country_code', countryCode).eq('target_currency', targetCurrency);
         if (productUrl) {
             existingQuery = existingQuery.eq('product_url', productUrl);
         } else {
@@ -243,6 +251,8 @@ async function createVipAutoAlert({ userId = null, product = null }) {
                 user_id: userId,
                 product_name: productName,
                 target_price: targetPrice,
+                country_code: countryCode,
+                target_currency: targetCurrency,
                 product_url: productUrl || null,
                 store_name: storeName
             });
@@ -2193,7 +2203,7 @@ exports.searchProduct = async (req, res) => {
                         aiCoherencePenalty: coherence.penalty,
                         isPotentiallyUnavailable: product.isPotentiallyUnavailable || coherence.unavailableSignal,
                         hasStockSignal: coherence.unavailableSignal ? false : product.hasStockSignal,
-                        currency: /^[A-Z]{3}$/.test(String(product.currency || '')) ? product.currency : regionCfg.currency,
+                        currency: /^[A-Z]{3}$/.test(String(product.currency || '')) ? product.currency : null,
                         countryCode: product.countryCode || countryCode,
                         // Old cache entries used a mixed-model average that was not a valid benchmark.
                         priceDiffPct: null,
@@ -2573,7 +2583,7 @@ exports.searchProduct = async (req, res) => {
                 urlOriginal: resolvedOriginalUrl,
                 urlMonetizada: resolvedAffiliateUrl,
                 imagen: product.imagen || product.image || '',
-                currency: product.currency || regionCfg.currency,
+                currency: /^[A-Z]{3}$/.test(String(product.currency || '')) ? product.currency : null,
                 countryCode: product.countryCode || countryCode,
                 originalQuery: product.originalQuery || shoppingBaseQuery || searchQuery,
                 productCategory: product.productCategory || llmAnalysis.productCategory || '',
