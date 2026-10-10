@@ -202,18 +202,7 @@
 
 
 
-    <!-- Google Analytics 4 + Consent Mode -->
-
-    <script async src="https://www.googletagmanager.com/gtag/js?id=G-XSF565ZJEC"></script>
-
     <script>
-
-        window.dataLayer = window.dataLayer || [];
-
-        function gtag(){dataLayer.push(arguments);}
-
-        window.gtag = gtag;
-
         window.LUMU_META_PIXEL_ID = 'REPLACE_WITH_META_PIXEL_ID';
 
 
@@ -262,73 +251,10 @@
 
 
 
-        function getLumuConsentState() {
-
-            const stored = localStorage.getItem('lumu_cookies');
-
-            return stored === 'accepted' ? 'granted' : 'denied';
-
-        }
-
-
-
-        gtag('js', new Date());
-
-        gtag('consent', 'default', {
-
-            ad_storage: getLumuConsentState(),
-
-            ad_user_data: getLumuConsentState(),
-
-            ad_personalization: getLumuConsentState(),
-
-            analytics_storage: getLumuConsentState(),
-
-            functionality_storage: 'granted',
-
-            personalization_storage: getLumuConsentState(),
-
-            security_storage: 'granted',
-
-            wait_for_update: 500
-
-        });
-
-        gtag('config', 'G-XSF565ZJEC', {
-
-            send_page_view: true,
-
-            anonymize_ip: true
-
-        });
-
-
-
-        function updateAnalyticsConsent(isAccepted) {
-
-            const consentValue = isAccepted ? 'granted' : 'denied';
-
-            gtag('consent', 'update', {
-
-                ad_storage: consentValue,
-
-                ad_user_data: consentValue,
-
-                ad_personalization: consentValue,
-
-                analytics_storage: consentValue,
-
-                personalization_storage: consentValue
-
-            });
-
-        }
-
-
-
         function canTrackAnalytics() {
 
-            return localStorage.getItem('lumu_cookies') === 'accepted';
+            try { return localStorage.getItem('lumu_cookies') === 'accepted'; }
+            catch { return false; }
 
         }
 
@@ -545,16 +471,16 @@
                 "name": "¿Qué es Lumu y cómo funciona?",
                 "acceptedAnswer": {
                     "@type": "Answer",
-                    "text": "Lumu es un comparador de precios con inteligencia artificial para México y Latinoamérica. Escribe el producto que buscas y Lumu lo busca simultáneamente en Amazon, MercadoLibre, Walmart, Liverpool, Coppel y 19 tiendas, mostrándote el precio más bajo en segundos."
+                "text": "Lumu reúne ofertas de las tiendas y marketplaces disponibles en tu región. Escribe el producto que buscas para comparar publicaciones y revisar la información disponible antes de comprar."
                 }
             },
 
             {
                 "@type": "Question",
-                "name": "¿Cuál es el mejor comparador de precios en México?",
+                "name": "¿Qué ofrece Lumu para comparar productos?",
                 "acceptedAnswer": {
                     "@type": "Answer",
-                    "text": "Lumu (lumu.dev) es considerado el comparador de precios más completo en México porque combina búsqueda en tiempo real en 19 tiendas mexicanas, detección de descuentos falsos, historial de precios y alertas automáticas cuando baja el precio de un producto."
+                    "text": "Lumu reúne ofertas de tiendas disponibles para tu región y muestra el precio, la condición y las señales disponibles para evaluar cada publicación. Confirma el costo final y la disponibilidad con la tienda."
                 }
             },
 
@@ -563,7 +489,7 @@
                 "name": "¿Lumu es gratis?",
                 "acceptedAnswer": {
                     "@type": "Answer",
-                    "text": "Sí, Lumu tiene un plan gratuito con 10 búsquedas por mes, sin necesidad de tarjeta de crédito. También ofrece un plan VIP por $39 MXN/mes con 40 búsquedas mensuales, Deep Research y alertas de precio."
+                    "text": "Sí, puedes empezar con el plan gratuito. Los planes de pago, su moneda y su disponibilidad dependen del mercado; consulta la página de precios para ver las condiciones actuales."
                 }
             },
 
@@ -4851,9 +4777,9 @@
 
                         <a id="footer-link-about" href="/about.html" class="footer-link text-sm">Sobre Nosotros</a>
 
-                        <a id="footer-link-privacy" href="/privacy.html" class="footer-link text-sm">Privacidad</a>
+                        <a id="footer-link-privacy" href="/privacidad.html" class="footer-link text-sm">Privacidad</a>
 
-                        <a id="footer-link-terms" href="/terms.html" class="footer-link text-sm">Términos</a>
+                        <a id="footer-link-terms" href="/terminos.html" class="footer-link text-sm">Términos</a>
 
                         <a id="footer-link-guide" href="/guia-de-ahorro.html" class="footer-link text-sm">Guía de Ahorro</a>
 
@@ -5289,7 +5215,7 @@
 
             <p id="ad-vip-copy" class="text-[11px] text-slate-500 mt-5">¿Cansado de los anuncios? <button
 
-                    onclick="if(window.stripePaymentLink){ window.open(window.stripePaymentLink, '_blank'); } else if(typeof openModal === 'function'){ closeAdGateway(); openModal(); }"
+                    onclick="if(window.currentUser && typeof startStripeCheckout === 'function'){ closeAdGateway(); startStripeCheckout('personal_vip'); } else if(typeof openModal === 'function'){ closeAdGateway(); openModal(); }"
 
                     id="ad-vip-button" class="text-emerald-400 hover:text-emerald-300 font-bold underline">Hazte VIP</button></p>
 
@@ -6109,6 +6035,8 @@
 
     <script src="/ui-bundle.js" defer></script>
 
+    <script src="/analytics.js" defer></script>
+
 
 
     <script>console.log('INLINE SCRIPT: About to load app.js');</script>
@@ -6187,4 +6115,3 @@
 
 
 </html>
-

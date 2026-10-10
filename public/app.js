@@ -1,11 +1,8 @@
 console.log('SCRIPT TOP: app.js is starting...');
 // --- Global State ---
 let supabaseClient = null;
-let stripePaymentLink = null;
 let currentUser = null;
-let stripeB2bPaymentLink = null;
-let stripeVipAnnualPaymentLink = null;
-let stripeB2bAnnualPaymentLink = null;
+let currentStripePlanPrices = null;
 
 // Canonical list of plans that grant VIP/premium access
 const VIP_PLANS = ['personal_vip', 'personal_vip_annual', 'b2b', 'b2b_annual', 'vip', 'pro'];
@@ -13,20 +10,23 @@ function isVipPlan(plan) { return VIP_PLANS.includes(String(plan || '').toLowerC
 let _allProducts = [];
 let latestFlashDealsRequestId = 0;
 
-function appendClientReferenceId(baseUrl, userId) {
-    if (!baseUrl || !userId) return baseUrl;
-    const separator = baseUrl.includes('?') ? '&' : '?';
-    return `${baseUrl}${separator}client_reference_id=${encodeURIComponent(userId)}`;
-}
-
-async function startStripeCheckout(plan, fallbackUrl = '') {
+async function startStripeCheckout(plan) {
     if (!currentUser) {
-        showToast('Inicia sesión primero para suscribirte', 'info');
+        showToast(isEnglishRegion(currentRegion) ? 'Sign in to choose a plan.' : 'Inicia sesión para elegir un plan.', 'info');
         openModal();
         return;
     }
 
     try {
+        if (currentRegion === 'US') {
+            const normalizedPlan = plan === 'vip' ? 'personal_vip' : (plan === 'vip_annual' ? 'personal_vip_annual' : plan);
+            const catalogResponse = await fetch('/api/stripe/plan-prices?country=US');
+            const catalog = catalogResponse.ok ? await catalogResponse.json() : null;
+            if (!catalog?.plans?.[normalizedPlan]) {
+                window.location.assign('/precios.html?region=US');
+                return;
+            }
+        }
         const { data: sessionData } = await supabaseClient.auth.getSession();
         const token = sessionData?.session?.access_token || '';
         const res = await fetch('/api/stripe/create-checkout-session', {
@@ -35,7 +35,7 @@ async function startStripeCheckout(plan, fallbackUrl = '') {
                 'Content-Type': 'application/json',
                 'Authorization': `Bearer ${token}`
             },
-            body: JSON.stringify({ plan, email: currentUser.email || '' })
+            body: JSON.stringify({ plan, email: currentUser.email || '', country: currentRegion || detectRegion() })
         });
         const data = await res.json().catch(() => ({}));
         if (res.ok && data.url) {
@@ -45,11 +45,7 @@ async function startStripeCheckout(plan, fallbackUrl = '') {
         throw new Error(data.error || 'No se pudo iniciar checkout');
     } catch (error) {
         console.warn('[Stripe] Checkout Session fallback:', error.message);
-        if (fallbackUrl) {
-            window.open(appendClientReferenceId(fallbackUrl, currentUser.id), '_blank');
-        } else {
-            showToast('No se pudo iniciar el checkout. Intenta más tarde.', 'error');
-        }
+        showToast(error.message || (isEnglishRegion(currentRegion) ? 'This plan is not available in your market yet.' : 'Este plan no está disponible en tu mercado todavía.'), 'error');
     }
 }
 
@@ -1453,9 +1449,31 @@ function getRegionUICopy() {
 // Precios VIP reales por región — deben coincidir con plan_prices (Supabase)
 // y con la tabla PRICING de precios.html. El "$39" estático solo aplica a MX.
 function getVipPriceLabels(regionCode = currentRegion) {
-    // Stripe solo cobra en MXN — todos los planes muestran precio real
-    void regionCode;
-    return { monthly: '$39 MXN', annual: '$399 MXN' };
+    const region = String(regionCode || '').toUpperCase();
+    const expectedCountry = region === 'US' ? 'US' : 'MX';
+    const catalog = currentStripePlanPrices?.country === expectedCountry ? currentStripePlanPrices.plans : null;
+    const format = (price) => {
+        if (!price || !Number.isInteger(price.amount)) return null;
+        const currency = price.currency || (expectedCountry === 'US' ? 'USD' : 'MXN');
+        const locale = expectedCountry === 'US' ? 'en-US' : 'es-MX';
+        return new Intl.NumberFormat(locale, { style: 'currency', currency, maximumFractionDigits: 2 }).format(price.amount / 100);
+    }
+    const monthly = format(catalog?.personal_vip);
+    const annual = format(catalog?.personal_vip_annual);
+    if (region === 'US') return { monthly: monthly || 'See plans', annual: annual || 'Not available' };
+    return { monthly: monthly || '$39 MXN', annual: annual || '$399 MXN' };
+}
+
+async function loadStripePlanPrices(country = currentRegion) {
+    const requestedCountry = String(country || 'MX').toUpperCase() === 'US' ? 'US' : 'MX';
+    try {
+        const response = await fetch(`/api/stripe/plan-prices?country=${requestedCountry}`);
+        if (!response.ok) throw new Error('Price catalog unavailable');
+        const catalog = await response.json();
+        currentStripePlanPrices = { country: catalog.country, plans: catalog.plans || {} };
+    } catch {
+        currentStripePlanPrices = { country: requestedCountry, plans: {} };
+    }
 }
 
 function setTextById(id, value) {
@@ -2030,9 +2048,19 @@ function applyRegionalCopy() {
     const ui = getRegionUICopy();
     const isEnglish = isEnglishRegion(currentRegion);
     document.documentElement.lang = isEnglish ? 'en-US' : 'es';
+    const localizedTitle = isEnglish ? 'Lumu — Compare offers with confidence' : 'Lumu — Compara precios y decide mejor';
+    document.title = localizedTitle;
+    document.querySelector('meta[property="og:title"]')?.setAttribute('content', localizedTitle);
+    document.querySelector('meta[name="twitter:title"]')?.setAttribute('content', localizedTitle);
     const languageBucket = getLanguageBucket(currentRegion);
     const regionBadge = currentRegion === 'auto' ? 'AUTO' : currentRegion;
     const savedOverride = localStorage.getItem(REGION_OVERRIDE_KEY) || 'auto';
+    document.querySelectorAll('a[href="/precios.html"]').forEach((link) => {
+        link.href = `/precios.html?region=${encodeURIComponent(currentRegion)}`;
+    });
+    document.querySelectorAll('a[href="/"]').forEach((link) => {
+        link.href = `/?region=${encodeURIComponent(currentRegion)}`;
+    });
 
     const searchInputEl = document.getElementById('search-input');
     if (searchInputEl) searchInputEl.placeholder = config.searchPlaceholder;
@@ -2106,8 +2134,21 @@ function applyRegionalCopy() {
     if (pricingCopy) {
         const vipMonthly = getVipPriceLabels().monthly;
         pricingCopy.innerHTML = isEnglish
-            ? `From <strong class="text-emerald-600">${vipMonthly}/month</strong> — no ads, price alerts, and tools to find the best deals faster.`
+            ? (currentRegion === 'US' && vipMonthly === 'See plans'
+                ? 'Compare products for free. US subscription pricing will appear here when available.'
+                : `From <strong class="text-emerald-600">${vipMonthly}/month</strong> — no ads, price alerts, and tools to find the best deals faster.`)
             : `Desde <strong class="text-emerald-600">${vipMonthly}/mes</strong> — sin anuncios, con alertas de precio y herramientas para encontrar más rápido las mejores ofertas.`;
+    }
+    if (currentRegion === 'US') {
+        const labels = getVipPriceLabels();
+        if (labels.monthly === 'See plans') {
+            setTextById('pricing-title', 'Get more from every comparison');
+            setTextById('pricing-copy', 'View plans and billing details for the US market.');
+        } else {
+            setHTMLById('pricing-title', `VIP for <span class="text-emerald-600">${labels.monthly}/month</span> — 4× more searches, ad-free`);
+            setTextById('pricing-copy', `Price alerts · Exclusive coupons · Cancel anytime · Annual: ${labels.annual}/year`);
+        }
+        setTextById('pricing-button-label', 'View plans →');
     }
 
     const flashDealsSection = document.getElementById('flash-deals-section');
@@ -2312,12 +2353,18 @@ function applyRegionalCopy() {
     // + mención del plan anual (2 meses gratis), que ya existe en precios.html y Stripe.
     const vipLabels = getVipPriceLabels();
     const isEnglishPricing = isEnglishRegion();
-    setHTMLById('pricing-title', isEnglishPricing
-        ? `VIP for <span class="text-emerald-600">${vipLabels.monthly}/month</span> — 4× more searches, ad-free`
-        : `VIP por <span class="text-emerald-600">${vipLabels.monthly}/mes</span> — 4× más búsquedas, sin anuncios`);
-    setHTMLById('pricing-copy', isEnglishPricing
-        ? `Price alerts · Exclusive coupons · Cancel anytime · Or save with annual (${vipLabels.annual}/yr)`
-        : `Alertas de precio · Cupones exclusivos · Cancela cuando quieras · O ahorra pagando anual (${vipLabels.annual}/año)`);
+    if (currentRegion === 'US') {
+        setTextById('pricing-title', 'Get more from every comparison');
+        setTextById('pricing-copy', 'View plans and billing details for the US market.');
+        setTextById('pricing-button-label', 'View plans →');
+    } else {
+        setHTMLById('pricing-title', isEnglishPricing
+            ? `VIP for <span class="text-emerald-600">${vipLabels.monthly}/month</span> — 4× more searches, ad-free`
+            : `VIP por <span class="text-emerald-600">${vipLabels.monthly}/mes</span> — 4× más búsquedas, sin anuncios`);
+        setHTMLById('pricing-copy', isEnglishPricing
+            ? `Price alerts · Exclusive coupons · Cancel anytime · Or save with annual (${vipLabels.annual}/yr)`
+            : `Alertas de precio · Cupones exclusivos · Cancela cuando quieras · O ahorra pagando anual (${vipLabels.annual}/año)`);
+    }
 
     setTextById('footer-brand-tagline', config.footer.tagline);
     setTextById('footer-brand-supporting', ui.footer.supporting);
@@ -3352,27 +3399,33 @@ async function initApp() {
                 console.log('Config loaded:', config);
                 if (config.detectedCountry && REGION_LABELS[config.detectedCountry]) {
                     serverDetectedRegion = config.detectedCountry;
-                    currentRegion = config.detectedCountry;
+                    currentRegion = detectRegion();
+                    applyRegionalCopy();
                 }
+                await loadStripePlanPrices(currentRegion || detectRegion());
+                applyRegionalCopy();
                 if (config.supabaseUrl && window.supabase) {
                     supabaseClient = window.supabase.createClient(config.supabaseUrl, config.supabaseAnonKey);
                     window.supabaseClient = supabaseClient; // Polyfill for the rest of the app
                 }
-                if (config.stripePaymentLink) stripePaymentLink = config.stripePaymentLink;
-                if (config.stripeB2bPaymentLink) stripeB2bPaymentLink = config.stripeB2bPaymentLink;
-                if (config.stripeVipAnnualPaymentLink) stripeVipAnnualPaymentLink = config.stripeVipAnnualPaymentLink;
-                if (config.stripeB2bAnnualPaymentLink) stripeB2bAnnualPaymentLink = config.stripeB2bAnnualPaymentLink;
-                window.stripeB2bPaymentLink = stripeB2bPaymentLink;
-                window.stripeVipAnnualPaymentLink = stripeVipAnnualPaymentLink;
-                window.stripeB2bAnnualPaymentLink = stripeB2bAnnualPaymentLink;
                 // Store config globally for push notifications and ad tags
                 window.__LUMU_CONFIG = {
                     vapidPublicKey: config.vapidPublicKey || '',
                     rewardedAdTagUrl: config.rewardedAdTagUrl || ''
                 };
-                // Populate hardcoded Stripe buttons with live config
+                // Upgrade actions use server-side country-specific prices.
                 const stripeBtn = document.getElementById('stripe-checkout-btn');
-                if (stripeBtn && config.stripePaymentLink) stripeBtn.href = config.stripePaymentLink;
+                if (stripeBtn) {
+                    stripeBtn.href = `/precios.html?region=${encodeURIComponent(currentRegion || detectRegion())}`;
+                    stripeBtn.addEventListener('click', (event) => {
+                        event.preventDefault();
+                        if (currentRegion === 'US') {
+                            window.location.assign('/precios.html?region=US');
+                            return;
+                        }
+                        startStripeCheckout('personal_vip');
+                    });
+                }
             } else {
                 console.warn('Config fetch failed or timed out.');
             }
@@ -4039,51 +4092,23 @@ async function initApp() {
         // --- Pricing Section Buttons ---
         const btnPricingVip = document.getElementById('btn-pricing-vip');
         if (btnPricingVip) btnPricingVip.addEventListener('click', () => {
-            if (!currentUser) {
-                showToast('Inicia sesión primero para suscribirte', 'info');
-                openModal();
+            if (currentRegion === 'US') {
+                window.location.assign('/precios.html?region=US');
                 return;
             }
-            if (stripePaymentLink) {
-                trackMetaEventSafe('PlanSelected', {
-                    plan_name: 'vip',
-                    plan_price: 39,
-                    currency: 'MXN',
-                    source: 'homepage_pricing'
-                });
-                trackFunnelEvent('checkout_click', {
-                    action_context: 'homepage_pricing',
-                    price: 39,
-                    brand: 'vip'
-                });
-                window.open(`${stripePaymentLink}?client_reference_id=${encodeURIComponent(currentUser.id)}`, '_blank');
-            } else {
-                showToast('Link de pago no disponible. Intenta más tarde.', 'error');
-            }
+            trackMetaEventSafe('PlanSelected', { plan_name: 'personal_vip', country: currentRegion, source: 'homepage_pricing' });
+            trackFunnelEvent('checkout_click', { action_context: 'homepage_pricing', country_code: currentRegion, brand: 'personal_vip' });
+            startStripeCheckout('personal_vip');
         });
         const btnPricingB2b = document.getElementById('btn-pricing-b2b');
         if (btnPricingB2b) btnPricingB2b.addEventListener('click', () => {
-            if (!currentUser) {
-                showToast('Inicia sesión primero para suscribirte', 'info');
-                openModal();
+            if (currentRegion === 'US') {
+                window.location.assign('/precios.html?region=US');
                 return;
             }
-            if (window.stripeB2bPaymentLink) {
-                trackMetaEventSafe('PlanSelected', {
-                    plan_name: 'b2b',
-                    plan_price: 199,
-                    currency: 'MXN',
-                    source: 'homepage_pricing'
-                });
-                trackFunnelEvent('checkout_click', {
-                    action_context: 'homepage_pricing',
-                    price: 199,
-                    brand: 'b2b'
-                });
-                window.open(`${window.stripeB2bPaymentLink}?client_reference_id=${encodeURIComponent(currentUser.id)}`, '_blank');
-            } else {
-                showToast('Contacta a ventas: soporte.lumu@gmail.com', 'info');
-            }
+            trackMetaEventSafe('PlanSelected', { plan_name: 'b2b', country: currentRegion, source: 'homepage_pricing' });
+            trackFunnelEvent('checkout_click', { action_context: 'homepage_pricing', country_code: currentRegion, brand: 'b2b' });
+            startStripeCheckout('b2b');
         });
 
         if (btnPricingVip || btnPricingB2b) {
@@ -5397,8 +5422,7 @@ async function initApp() {
                             return;
                         }
                         const isPaywall = data.paywall;
-                        const vipLink = stripePaymentLink || data.stripe_url || '#';
-                        const vipUrl = vipLink !== '#' && currentUser ? `${vipLink}?client_reference_id=${encodeURIComponent(currentUser.id)}` : vipLink;
+                        const vipUrl = `/precios.html?region=${encodeURIComponent(currentRegion || detectRegion())}`;
                         if (isPaywall) {
                             const rewardAvailable = typeof hasRealRewardedAdConfigured === 'function' && hasRealRewardedAdConfigured();
                             const isES = currentRegion !== 'US';
@@ -5432,9 +5456,9 @@ async function initApp() {
                                     </div>
                                     <div class="flex flex-col gap-3 w-full max-w-xs">
                                         ${signupButton}
-                                        <a href="${sanitize(vipUrl)}" target="_blank" class="w-full bg-amber-500 hover:bg-amber-600 text-white px-8 py-3.5 rounded-2xl font-bold transition-all shadow-lg shadow-amber-500/20 flex items-center justify-center gap-2">
+                    <a href="${sanitize(vipUrl)}" class="w-full bg-amber-500 hover:bg-amber-600 text-white px-8 py-3.5 rounded-2xl font-bold transition-all shadow-lg shadow-amber-500/20 flex items-center justify-center gap-2">
                                             <span>⚡</span>
-                                            <span>${getLocalizedText('Hacerme VIP — $39 MXN/mes', 'Go VIP — $39 MXN/mo')}</span>
+                                            <span>${getLocalizedText('Hacerme VIP — $39 MXN/mes', currentRegion === 'US' ? 'View plans' : 'Go VIP — $39 MXN/mo')}</span>
                                         </a>
                                         ${rewardAvailable ? `
                                         <button onclick="window.watchRewardedAdForSearches();" class="w-full bg-white hover:bg-slate-50 text-slate-700 border border-slate-200 px-8 py-3.5 rounded-2xl font-bold transition-all flex justify-center items-center gap-2">
@@ -5491,12 +5515,6 @@ async function initApp() {
                     localStorage.setItem('lumu_searches_data', JSON.stringify(sgData));
                     // Fase 7: check achievements
                     if (typeof window.checkAchievementsOnSearch === 'function') window.checkAchievementsOnSearch();
-                    // Psicología de ventas: mostrar contador de búsquedas restantes con urgencia
-                    if (!currentUser) {
-                        const _vipLink = stripePaymentLink || '/precios.html';
-                        showSearchesRemainingBanner(sgData.count, 5, _vipLink);
-                    }
-
                     // Fase 6: Lumu Coins UI Update
                     if (data.lumu_coins_awarded === 1) {
                         const coinsBadge = document.getElementById('lumu-coins-nav');
@@ -5524,16 +5542,15 @@ async function initApp() {
                     if (currentUser && _currentSearchTier !== 'vip' && hasStoreFilterActive && !sessionStorage.getItem('lumu_vip_store_nudge_shown')) {
                         setTimeout(() => {
                             if (!resultsContainer) return;
-                            const vipLink = stripePaymentLink || '#';
-                            const vipUrl = vipLink !== '#' && currentUser ? `${vipLink}?client_reference_id=${encodeURIComponent(currentUser.id)}` : vipLink;
+                            const vipUrl = `/precios.html?region=${encodeURIComponent(currentRegion || detectRegion())}`;
                             const vipNudge = document.createElement('div');
                             vipNudge.className = 'col-span-full mt-4 rounded-3xl border border-amber-200 bg-gradient-to-r from-amber-50 to-orange-50 px-5 py-4 flex flex-col md:flex-row items-center justify-between gap-4 shadow-sm';
                             vipNudge.innerHTML = `
                                 <div class="text-center md:text-left min-w-0">
                                     <p class="text-xs font-black text-amber-700 uppercase tracking-wide mb-1">⚡ ${getLocalizedText('Busca más profundo con VIP', 'Search deeper with VIP')}</p>
-                                    <p class="text-sm text-slate-700 font-medium">${getLocalizedText('Con VIP revisas más variantes, más tiendas y recibes alertas cuando baje el precio — por solo $39 MXN/mes.', 'With VIP you check more variants, more stores and get price drop alerts — for only $39 MXN/mo.')}</p>
+                                    <p class="text-sm text-slate-700 font-medium">${getLocalizedText('Con VIP revisas más variantes, más tiendas y recibes alertas cuando baje el precio — por solo $39 MXN/mes.', currentRegion === 'US' ? 'Compare products for free. View plans and availability.' : 'With VIP you check more variants, more stores and get price drop alerts — for only $39 MXN/mo.')}</p>
                                 </div>
-                                <a href="${sanitize(vipUrl)}" target="_blank" class="flex-shrink-0 w-full md:w-auto bg-amber-500 hover:bg-amber-600 text-white px-5 py-2.5 rounded-2xl text-sm font-black transition-colors shadow-md shadow-amber-500/20 text-center">
+                                <a href="${sanitize(vipUrl)}" class="flex-shrink-0 w-full md:w-auto bg-amber-500 hover:bg-amber-600 text-white px-5 py-2.5 rounded-2xl text-sm font-black transition-colors shadow-md shadow-amber-500/20 text-center">
                                     ${getLocalizedText('Ver VIP', 'See VIP')}
                                 </a>
                             `;
@@ -6900,9 +6917,19 @@ async function initApp() {
                 resultsContainer.appendChild(compareBanner);
             }
 
-            // Find cheapest product for "Mejor precio" badge
-            const validPrices = products.filter(p => parseFloat(p.precio) > 0).map(p => parseFloat(p.precio));
-            const minPrice = validPrices.length > 0 ? Math.min(...validPrices) : null;
+            // Compare listed prices only within the same declared market and currency.
+            const cheapestByMarket = new Map();
+            products.forEach(item => {
+                const currency = String(item.currency || item.currencyCode || '').toUpperCase();
+                const country = String(item.countryCode || '').toUpperCase();
+                const amount = parseProductPriceValue(item.precio);
+                if (!/^[A-Z]{3}$/.test(currency) || !/^[A-Z]{2}$/.test(country) || amount <= 0) return;
+                const key = `${country}:${currency}`;
+                const group = cheapestByMarket.get(key) || { min: Infinity, count: 0 };
+                group.min = Math.min(group.min, amount);
+                group.count += 1;
+                cheapestByMarket.set(key, group);
+            });
 
             products.forEach((product, index) => {
                 const imageState = buildImageRenderState(product, isUS);
@@ -6929,7 +6956,10 @@ async function initApp() {
                     }
                 }
 
-                const isBestPrice = minPrice && precioNumerico === minPrice && precioNumerico > 0;
+                const productCurrency = String(product.currency || product.currencyCode || '').toUpperCase();
+                const productCountry = String(product.countryCode || '').toUpperCase();
+                const marketGroup = cheapestByMarket.get(`${productCountry}:${productCurrency}`);
+                const isBestPrice = /^[A-Z]{3}$/.test(productCurrency) && marketGroup?.count > 1 && precioNumerico > 0 && precioNumerico === marketGroup.min;
                 const buyTimingBadgeHtml = (index === 0 && buyTimingPrediction) 
                     ? getBuyTimingBadgeHtml(buyTimingPrediction, isUS) 
                     : '';
@@ -7127,7 +7157,7 @@ async function initApp() {
                             </div>`;
                         } else {
                             couponHtml = `
-                            <div class="mt-2 w-full p-2.5 bg-gradient-to-r from-amber-50 to-orange-50 border border-amber-200 rounded-xl relative overflow-hidden group/upsell cursor-pointer hover:shadow-sm" onclick="event.preventDefault(); event.stopPropagation(); const btn = document.getElementById('stripe-checkout-btn') || document.querySelector('a[href*=\'buy.stripe.com\']'); if(btn) btn.click();">
+                            <div class="mt-2 w-full p-2.5 bg-gradient-to-r from-amber-50 to-orange-50 border border-amber-200 rounded-xl relative overflow-hidden group/upsell cursor-pointer hover:shadow-sm" onclick="event.preventDefault(); event.stopPropagation(); const btn = document.getElementById('stripe-checkout-btn'); if(btn) btn.click();">
                                 <div class="absolute inset-0 border-2 border-dashed border-amber-300/50 rounded-xl pointer-events-none"></div>
                                 <div class="flex items-center justify-between relative z-10">
                                     <div class="flex flex-col w-full relative">
@@ -7193,21 +7223,6 @@ async function initApp() {
                     ? '<span class="text-[9px] font-bold text-rose-700 bg-rose-50 px-2 py-0.5 rounded-full ring-1 ring-rose-200">C2C</span>'
                     : '';
                 
-                // Data freshness badge
-                const dataAge = Number(product.dataAgeMinutes || 0);
-                let freshnessBadgeHtml = '';
-                if (!isLocal && precioNumerico > 0) {
-                    if (dataAge < 60) {
-                        freshnessBadgeHtml = `<span class="text-[9px] font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full ring-1 ring-emerald-200" title="${isUS ? 'Verified minutes ago' : 'Verificado hace minutos'}">✓ ${isUS ? 'FRESH' : 'FRESCO'}</span>`;
-                    } else if (dataAge >= 60 && dataAge < 240) {
-                        const hours = Math.round(dataAge / 60);
-                        freshnessBadgeHtml = `<span class="text-[9px] font-bold text-amber-700 bg-amber-50 px-2 py-0.5 rounded-full ring-1 ring-amber-200" title="${isUS ? `Verified ${hours}h ago` : `Verificado hace ${hours}h`}">⏱ ${hours}h</span>`;
-                    } else if (dataAge >= 240) {
-                        const hours = Math.round(dataAge / 60);
-                        freshnessBadgeHtml = `<span class="text-[9px] font-bold text-orange-700 bg-orange-50 px-2 py-0.5 rounded-full ring-1 ring-orange-200" title="${isUS ? 'Price may have changed' : 'Precio puede haber cambiado'}">⚠️ ${hours}h</span>`;
-                    }
-                }
-                
                 // Price confidence warning
                 const priceConfidence = Number(product.priceConfidence || 0);
                 const priceNeedsVerification = Boolean(product.priceNeedsVerification);
@@ -7233,6 +7248,37 @@ async function initApp() {
                     : '';
                 const verifiedPriceBadgeHtml = verifiedDeltaLabel
                     ? `<div class="mt-2 inline-flex items-center gap-1.5 text-[11px] font-bold text-emerald-700 bg-emerald-50 px-2.5 py-1 rounded-lg ring-1 ring-emerald-200 shadow-sm">✅ <span>${verifiedDeltaLabel}</span></div>`
+                    : '';
+                const trackedObservations = Array.isArray(product.priceTrend?.history)
+                    ? product.priceTrend.history.filter(point => Number(point?.price) > 0).length
+                    : 0;
+                const verdictStats = product.dealVerdict?.stats || null;
+                let decisionInsight = isUS
+                    ? 'Not enough tracked price history to judge this listing yet.'
+                    : 'Aún no hay suficiente historial para evaluar esta oferta.';
+                let decisionTone = 'border-slate-200 bg-slate-50 text-slate-700';
+                if (product.dealVerdict?.status === 'real_deal' && Number.isFinite(verdictStats?.belowAveragePct)) {
+                    decisionInsight = isUS
+                        ? `${verdictStats.belowAveragePct}% below Lumu’s tracked average · ${trackedObservations} observations`
+                        : `${verdictStats.belowAveragePct}% por debajo del promedio rastreado · ${trackedObservations} observaciones`;
+                    decisionTone = 'border-emerald-200 bg-emerald-50 text-emerald-800';
+                } else if (product.dealVerdict?.status === 'suspicious_discount') {
+                    decisionInsight = isUS
+                        ? 'The advertised discount differs from recent tracked prices. Check the store price.'
+                        : 'El descuento anunciado difiere de los precios recientes. Confirma el precio en la tienda.';
+                    decisionTone = 'border-amber-200 bg-amber-50 text-amber-900';
+                } else if (product.dealVerdict?.status === 'normal_price' && trackedObservations > 0) {
+                    decisionInsight = isUS
+                        ? `Within Lumu’s tracked range · ${trackedObservations} observations`
+                        : `Dentro del rango rastreado por Lumu · ${trackedObservations} observaciones`;
+                } else if (priceNeedsVerification || priceConfidence < 0.6) {
+                    decisionInsight = isUS
+                        ? 'Price needs verification at the store before you decide.'
+                        : 'Confirma el precio en la tienda antes de decidir.';
+                    decisionTone = 'border-amber-200 bg-amber-50 text-amber-900';
+                }
+                const decisionCardHtml = !isLocal && precioNumerico > 0
+                    ? `<div class="mt-2 rounded-xl border px-3 py-2 ${decisionTone}"><p class="text-[10px] font-black uppercase tracking-wider">${isUS ? 'Lumu’s read' : 'Lectura de Lumu'}</p><p class="mt-0.5 text-xs leading-relaxed">${sanitize(decisionInsight)}</p><p class="mt-1 text-[11px] opacity-80">${isUS ? 'Shipping and taxes are not confirmed.' : 'Envío e impuestos sin confirmar.'}</p></div>`
                     : '';
                 const shippingBadgeHtml = localizedShippingText && !/coupon available|cup[oó]n disponible/i.test(localizedShippingText)
                     ? `<div class="text-[11px] text-emerald-600 font-bold bg-emerald-50 w-fit px-2 py-0.5 rounded-md mt-2 tracking-wide">${sanitize(localizedShippingText)}</div>`
@@ -7263,7 +7309,6 @@ async function initApp() {
                             ${rankingBadgeHtml}
                             ${isBestPrice ? `<span class="text-[9px] font-bold text-white bg-gradient-to-r from-emerald-500 to-teal-500 px-2 py-0.5 rounded-full ring-2 ring-emerald-200 shadow-sm animate-pulse">💰 ${isUS ? 'LOWEST LISTED PRICE' : 'MENOR PRECIO LISTADO'}</span>` : ''}
                             ${product.isLocalStore ? `<span class="text-[9px] font-bold text-emerald-700 bg-emerald-100 px-2 py-0.5 rounded-full ring-1 ring-emerald-200">📍 ${isUS ? 'LOCAL' : 'LOCAL'}</span>` : ''}
-                            ${freshnessBadgeHtml}
                             ${priceWarningHtml}
                             ${regionBadgeHtml}
                             ${verificationBadgeHtml}
@@ -7277,6 +7322,7 @@ async function initApp() {
                     <h3 class="text-sm md:text-[15px] font-extrabold text-slate-900 dark:text-slate-100 leading-snug line-clamp-3 min-h-[3.1rem] md:min-h-[3.5rem] mb-2 group-hover:text-emerald-700 dark:group-hover:text-emerald-400 transition-colors" title="${sanitize(normalizedTitle)}">
                         ${sanitize(normalizedTitle)}
                     </h3>
+                    ${decisionCardHtml}
                     ${product.isMerchantReference ? `<p class="text-sm font-bold text-slate-600">${isUS ? 'Product page — confirm price at the store' : 'Página del producto — confirma el precio en la tienda'}</p>` : shippingBadgeHtml}
                     ${localDetailHtml}
                     <p class="text-xs text-slate-500 mt-2">${sanitize(product.availabilityEvidence?.state === 'in_stock' ? (isUS ? 'Provider reports stock; confirm at checkout.' : 'La fuente reporta stock; confirma en la tienda.') : (isUS ? 'Availability not confirmed.' : 'Disponibilidad sin confirmar.'))}</p>
@@ -7329,12 +7375,22 @@ async function initApp() {
                             </div>` : ''}
                             
                         </div>
+                        ${!isLocal ? `
+                        <details class="offer-issue-report mt-2 text-xs text-slate-500">
+                            <summary class="inline-flex min-h-[44px] cursor-pointer items-center underline underline-offset-2 hover:text-slate-800 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-600">${isUS ? 'Report an offer issue' : 'Reportar un problema con la oferta'}</summary>
+                            <div class="flex flex-wrap gap-2 pb-1" role="group" aria-label="${isUS ? 'Offer issue type' : 'Tipo de problema'}">
+                                <button type="button" class="btn-report-offer-issue min-h-[44px] rounded-lg border border-slate-200 px-3 hover:bg-amber-50" data-offer-issue="incorrect_price">${isUS ? 'Wrong price' : 'Precio incorrecto'}</button>
+                                <button type="button" class="btn-report-offer-issue min-h-[44px] rounded-lg border border-slate-200 px-3 hover:bg-amber-50" data-offer-issue="unavailable">${isUS ? 'Out of stock' : 'Agotado'}</button>
+                                <button type="button" class="btn-report-offer-issue min-h-[44px] rounded-lg border border-slate-200 px-3 hover:bg-amber-50" data-offer-issue="wrong_variant">${isUS ? 'Wrong variant' : 'Variante equivocada'}</button>
+                            </div>
+                        </details>` : ''}
                     </div>
                 </div>
             `;
 
                 // SEO Schema Markup (Phase 7) - Enhanced with AggregateOffer
-                if (!isLocal && precioNumerico > 0) {
+                const structuredCurrency = String(product.currency || product.currencyCode || '').toUpperCase();
+                if (!isLocal && precioNumerico > 0 && /^[A-Z]{3}$/.test(structuredCurrency)) {
                     const schemaData = {
                         "@context": "https://schema.org/",
                         "@type": "Product",
@@ -7347,7 +7403,7 @@ async function initApp() {
                         "offers": {
                             "@type": "Offer",
                             "url": product.urlMonetizada || product.urlOriginal,
-                            "priceCurrency": getRegionConfig().currency,
+                            "priceCurrency": structuredCurrency,
                             "price": precioNumerico.toString(),
                             "seller": {
                                 "@type": "Organization",
@@ -7377,6 +7433,22 @@ async function initApp() {
                 const trackingBase = _buildProductTrackingPayload(product, {
                     position: index,
                     action_context: 'result_card'
+                });
+                card.querySelectorAll('.btn-report-offer-issue').forEach(button => {
+                    button.addEventListener('click', (e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        const issue = button.dataset.offerIssue;
+                        _trackEvent('offer_issue', {
+                            ...trackingBase,
+                            feedback_label: issue,
+                            action_context: 'offer_quality_report'
+                        });
+                        const label = button.textContent.trim();
+                        if (typeof showGlobalFeedback === 'function') {
+                            showGlobalFeedback(isUS ? `Thanks, we recorded: ${label}.` : `Gracias, registramos: ${label}.`, 'success');
+                        }
+                    });
                 });
                 const openProductTarget = (target) => {
                     window._lastSearchHadClick = true;
@@ -7428,14 +7500,14 @@ async function initApp() {
                 }
                 if (cardOpenArea) {
                     cardOpenArea.addEventListener('click', (e) => {
-                        if (e.target.closest('button, a, input, textarea, select, label')) {
+                        if (e.target.closest('button, a, input, textarea, select, label, summary, details')) {
                             return;
                         }
                         openProductTarget(cardOpenArea.getAttribute('data-target-url'));
                     });
                 }
                 card.addEventListener('click', (e) => {
-                    if (e.target.closest('button, a, input, textarea, select, label')) {
+                    if (e.target.closest('button, a, input, textarea, select, label, summary, details')) {
                         return;
                     }
                     openProductTarget(card.getAttribute('data-target-url'));
@@ -8984,13 +9056,9 @@ async function processB2bQueries() {
 
         if (!response.ok) {
             if (data.upgrade_required) {
-                const planValue = 'b2b';
-                const baseB2bUrl = window.stripeB2bPaymentLink || window.stripePaymentLink || '#';
-                const stripeUrl = baseB2bUrl !== '#' ? `${baseB2bUrl}?client_reference_id = ${encodeURIComponent(window.currentUser.id)} ` : '#';
-
                 tbody.innerHTML = `<tr><td colspan="4" class="px-4 py-12 text-center text-amber-600 font-bold bg-amber-50">
                 <p class="mb-4">⚡ ${currentRegion === 'US' ? 'This feature is exclusive to the VIP Reseller Plan.' : 'Esta función es exclusiva del Plan Revendedor VIP.'}</p>
-                <a href="${stripeUrl}" target="_blank" onclick="if(typeof confetti === 'function') confetti({ particleCount: 200, spread: 90, origin: { y: 0.6 } })" class="inline-block bg-amber-500 hover:bg-amber-600 text-white px-6 py-2 rounded-xl transition-all shadow-md">${currentRegion === 'US' ? 'Get the B2B Plan Now' : 'Obtener Plan B2B Ahora'}</a>
+                <button type="button" onclick="startStripeCheckout('b2b')" class="inline-block bg-amber-500 hover:bg-amber-600 text-white px-6 py-2 rounded-xl transition-all shadow-md">${currentRegion === 'US' ? 'Get the B2B Plan' : 'Ver Plan B2B'}</button>
             </td></tr>`;
                 showGlobalFeedback(data.error, 'error');
             } else {
@@ -9790,91 +9858,6 @@ window.startInteractiveTutorial = startInteractiveTutorial;
         lastCheckedCount = count;
     };
 })();
-
-// Psicología de ventas: Banner de búsquedas restantes con urgencia (Escasez artificial)
-function showSearchesRemainingBanner(usedCount, dailyLimit, vipUrl) {
-    const remaining = Math.max(0, dailyLimit - usedCount);
-    const existingBanner = document.getElementById('searches-remaining-banner');
-    if (existingBanner) existingBanner.remove();
-
-    // Solo mostrar desde la 2da búsqueda en adelante
-    if (usedCount < 2) return;
-
-    const isES = (typeof currentRegion === 'undefined' || currentRegion !== 'US');
-    const banner = document.createElement('div');
-    banner.id = 'searches-remaining-banner';
-    banner.style.cssText = 'position:fixed;bottom:24px;left:50%;transform:translateX(-50%);z-index:9000;max-width:480px;width:calc(100% - 32px);animation:slideUpFadeIn 0.4s ease-out';
-
-    let bgClass, iconHTML, messageHTML, urgencyClass;
-    if (remaining >= 3) {
-        bgClass = 'bg-white border border-slate-200 shadow-xl';
-        iconHTML = '🔍';
-        urgencyClass = 'text-slate-700';
-        messageHTML = isES
-            ? `Te quedan <strong class="text-emerald-600">${remaining} búsquedas</strong> gratis hoy.`
-            : `You have <strong class="text-emerald-600">${remaining} searches</strong> left today.`;
-    } else if (remaining === 2) {
-        bgClass = 'bg-amber-50 border border-amber-200 shadow-xl';
-        iconHTML = '⚠️';
-        urgencyClass = 'text-amber-800';
-        messageHTML = isES
-            ? `Solo <strong class="text-amber-700">2 búsquedas</strong> gratis restantes hoy. Pásate a VIP para buscar sin límite.`
-            : `Only <strong class="text-amber-700">2 free searches</strong> left today. Go VIP for unlimited searches.`;
-    } else if (remaining === 1) {
-        bgClass = 'bg-orange-50 border border-orange-300 shadow-xl';
-        iconHTML = '🔥';
-        urgencyClass = 'text-orange-800';
-        messageHTML = isES
-            ? `¡<strong class="text-orange-700">Última búsqueda gratis</strong> del día! Mañana se reinicia o pásate a VIP.`
-            : `<strong class="text-orange-700">Last free search</strong> of the day! Resets tomorrow or go VIP.`;
-    } else {
-        bgClass = 'bg-rose-50 border border-rose-300 shadow-xl';
-        iconHTML = '🚫';
-        urgencyClass = 'text-rose-800';
-        messageHTML = isES
-            ? `<strong class="text-rose-700">Agotaste tus búsquedas de hoy.</strong> Crea cuenta gratis o pásate a VIP.`
-            : `<strong class="text-rose-700">Daily searches exhausted.</strong> Create free account or go VIP.`;
-    }
-
-    const vipSafeUrl = (vipUrl && vipUrl !== '#') ? vipUrl : '/precios.html';
-    const ctaLabel = isES ? 'Quiero VIP →' : 'Go VIP →';
-    const dismissLabel = isES ? '✕' : '✕';
-
-    banner.innerHTML = `
-        <div class="rounded-2xl ${bgClass} px-4 py-3 flex items-center gap-3">
-            <span class="text-xl flex-shrink-0">${iconHTML}</span>
-            <p class="${urgencyClass} text-sm font-medium flex-grow leading-snug">${messageHTML}</p>
-            <a href="${vipSafeUrl}" target="_blank"
-               class="flex-shrink-0 bg-emerald-500 hover:bg-emerald-600 text-white text-xs font-black px-3 py-1.5 rounded-xl transition-colors whitespace-nowrap shadow-sm">
-               ${ctaLabel}
-            </a>
-            <button onclick="this.closest('#searches-remaining-banner').remove()"
-                    class="flex-shrink-0 text-slate-400 hover:text-slate-600 font-bold text-base leading-none">
-                ${dismissLabel}
-            </button>
-        </div>
-    `;
-
-    // Agregar keyframe si no existe
-    if (!document.getElementById('slide-up-style')) {
-        const style = document.createElement('style');
-        style.id = 'slide-up-style';
-        style.textContent = '@keyframes slideUpFadeIn{from{opacity:0;transform:translate(-50%,20px)}to{opacity:1;transform:translate(-50%,0)}}';
-        document.head.appendChild(style);
-    }
-
-    document.body.appendChild(banner);
-
-    // Auto-dismiss después de 8 segundos
-    setTimeout(() => {
-        if (banner.parentNode) {
-            banner.style.animation = 'none';
-            banner.style.opacity = '0';
-            banner.style.transition = 'opacity 0.4s ease';
-            setTimeout(() => banner.remove(), 400);
-        }
-    }, 8000);
-}
 
 // Nudge de inactividad: aparece si el usuario lleva 90s sin buscar (solo anónimos)
 (function initInactivityNudge() {

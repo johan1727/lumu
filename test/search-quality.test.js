@@ -1,6 +1,10 @@
 const {test}=require('node:test');const assert=require('node:assert/strict');
-const {availabilityOf,assessResult}=require('../src/services/resultQuality');
+const {availabilityOf,hasFreshInStockEvidence,assessResult}=require('../src/services/resultQuality');
 const {createProviderRequest}=require('../src/services/providerRequest');
+const {trackEventSchema}=require('../src/schemas/searchSchemas');
+test('offer issue reports are accepted by the tracking API schema',()=>{
+ assert.equal(trackEventSchema.safeParse({event_type:'offer_issue',feedback_label:'wrong_variant'}).success,true);
+});
 test('stock separates terminal listings from verification failures and unknowns',()=>{
  assert.equal(availabilityOf({productHttpStatus:404}),'removed');
  assert.equal(availabilityOf({availability:'https://schema.org/OutOfStock'}),'out_of_stock');
@@ -10,6 +14,15 @@ test('stock separates terminal listings from verification failures and unknowns'
  assert.equal(availabilityOf({snippet:'Envío no disponible para tu código postal'}),'unknown');
  assert.equal(availabilityOf({availability:'https://schema.org/InStock'}),'in_stock');
  assert.equal(availabilityOf({snippet:'Producto agotado'}),'possibly_unavailable');
+});
+test('only recent, sourced in-stock evidence qualifies for automatic alerts',()=>{
+ const now=Date.now();
+ const evidence={available_quantity:2,availabilitySource:'mercadolibre_api',availabilityObservedAt:new Date(now-60_000).toISOString()};
+ assert.equal(hasFreshInStockEvidence(evidence,{now}),true);
+ assert.equal(hasFreshInStockEvidence({...evidence,availabilityObservedAt:new Date(now-7*60*60*1000).toISOString()},{now}),false);
+ assert.equal(hasFreshInStockEvidence({...evidence,availabilityObservedAt:new Date(now+60_000).toISOString()},{now}),false);
+ assert.equal(hasFreshInStockEvidence({...evidence,availabilitySource:''},{now}),false);
+ assert.equal(hasFreshInStockEvidence({availabilityObservedAt:evidence.availabilityObservedAt,availabilitySource:evidence.availabilitySource},{now}),false);
 });
 test('specific devices exclude wrong generation and accessory listings but retain intended accessories',()=>{
  assert.equal(assessResult({title:'Funda para iPhone 15'},'iPhone 15').qualityRejected,true);
@@ -44,7 +57,7 @@ test('live reference: opaque Google Shopping URLs are not buyable merchant offer
  const direct=assessResult({title:'iPhone 15',url:'https://www.google.com/url?q=https%3A%2F%2Fwww.amazon.com.mx%2Fdp%2FB012345678'},'iPhone 15');assert.equal(direct.qualityRejected,false);assert.equal(new URL(direct.url).hostname,'www.amazon.com.mx');
 });
 test('capacity, variant and stated condition are explicit constraints',()=>{
- for(const [title,query,reason] of [['iPhone 15 256GB','iPhone 15 128GB','different_capacity'],['iPhone 15 Pro 128GB','iPhone 15 128GB','different_variant'],['iPhone 15 usado','iPhone 15 nuevo','different_condition']]) assert.equal(assessResult({title},query).qualityReason,reason);
+ for(const [title,query,reason] of [['iPhone 15 256GB','iPhone 15 128GB','different_capacity'],['iPhone 15','iPhone 15 128GB','missing_capacity'],['iPhone 15 Pro 128GB','iPhone 15 128GB','different_variant'],['iPhone 15 usado','iPhone 15 nuevo','different_condition']]) assert.equal(assessResult({title},query).qualityReason,reason);
  assert.equal(assessResult({title:'iPhone 15 1TB'},'iPhone 15 1024GB').qualityRejected,false);
 });
 test('totals require complete explicit costs, and commission cannot affect order',()=>{

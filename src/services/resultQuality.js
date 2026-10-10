@@ -13,6 +13,11 @@ function availabilityOf(result) {
     if (/\b(agotado|sin stock|out of stock|sold out|publicacion finalizada)\b/.test(normalize(result.snippet))) return 'possibly_unavailable';
     return 'unknown';
 }
+function hasFreshInStockEvidence(result, {maxAgeMs = 6 * 60 * 60 * 1000, now = Date.now()} = {}) {
+    if (availabilityOf(result) !== 'in_stock' || !String(result.availabilitySource || '').trim()) return false;
+    const observedAt = Date.parse(result.availabilityObservedAt || '');
+    return Number.isFinite(observedAt) && observedAt <= now && now - observedAt <= maxAgeMs;
+}
 function relevanceOf(result, query, conditionMode = 'all') {
     const q=normalize(query).replace(/(?:^|\s)-(?:"[^"]*"|\S+)/g, ' ').trim(), title=normalize(result.title || result.titulo);
     const accessories=/\b(funda|case|mica|protector|refaccion|repuesto|cargador|charger|cable|carcasa|adaptador|adapter)\b/;
@@ -27,7 +32,8 @@ function relevanceOf(result, query, conditionMode = 'all') {
     }
     const capacity = text => [...text.matchAll(/\b(\d+)\s*(gb|tb)\b/g)].map(m => Number(m[1]) * (m[2] === 'tb' ? 1024 : 1));
     const wantedCapacity = capacity(q), offeredCapacity = capacity(title);
-    if (wantedCapacity.length && offeredCapacity.length && wantedCapacity.some(n => !offeredCapacity.includes(n))) return {score:0,reject:true,reason:'different_capacity'};
+    if (wantedCapacity.length && !offeredCapacity.length) return {score:0,reject:true,reason:'missing_capacity'};
+    if (wantedCapacity.length && wantedCapacity.some(n => !offeredCapacity.includes(n))) return {score:0,reject:true,reason:'different_capacity'};
     const variant = text => (text.match(/\b(?:pro max|pro|plus|ultra|mini|lite|fe)\b/) || [null])[0];
     if (models.length && variant(q) !== variant(title) && (variant(q) || variant(title))) return {score:0,reject:true,reason:'different_variant'};
     const condition = text => /\b(reacondicionado|refurbished|renewed)\b/.test(text) ? 'refurbished' : /\b(usado|used|segunda mano)\b/.test(text) ? 'used' : /\b(nuevo|new)\b/.test(text) ? 'new' : null;
@@ -81,4 +87,4 @@ function compareOffers(a, b) {
 function rankOffers(results, query, options = {}) {
     return results.map(item => assessResult(item, query, options)).filter(item => !item.qualityRejected).sort(compareOffers);
 }
-module.exports={availabilityOf,relevanceOf,assessResult,offerEvidence,compareOffers,rankOffers};
+module.exports={availabilityOf,hasFreshInStockEvidence,relevanceOf,assessResult,offerEvidence,compareOffers,rankOffers};

@@ -1,5 +1,9 @@
 {
     "version": 2,
+    "redirects": [
+        { "source": "/privacy.html", "destination": "/privacidad.html", "permanent": true },
+        { "source": "/terms.html", "destination": "/terminos.html", "permanent": true }
+    ],
     "functions": {
         "api/index.js": {
             "maxDuration": 60

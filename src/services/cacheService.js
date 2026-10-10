@@ -467,6 +467,7 @@ exports.normalizeProductUrl = normalizeProductUrl;
 exports.buildPriceSnapshotRows = buildPriceSnapshotRows;
 exports.buildPriceHistoryMap = buildPriceHistoryMap;
 exports.generateCacheKey = generateCacheKey;
+exports.normalizeQuery = normalizeQuery;
 exports.generateCanonicalCacheKey = generateCanonicalCacheKey;
 exports.normalizeCanonicalKey = normalizeCanonicalKey;
 /**

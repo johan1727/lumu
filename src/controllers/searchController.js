@@ -1,4 +1,4 @@
-const { availabilityOf, assessResult, rankOffers } = require('../services/resultQuality');
+const { availabilityOf, hasFreshInStockEvidence, assessResult, rankOffers } = require('../services/resultQuality');
 const { sameMarket, canCompareOfferPrices } = require('../services/marketPricing');
 const { claimBonus } = require('../services/bonusService');
 const llmService = require('../services/llmService');
@@ -226,7 +226,8 @@ async function createVipAutoAlert({ userId = null, product = null }) {
     if (!productName || !Number.isFinite(numericPrice) || numericPrice < 500 || !productUrl
         || !/^[A-Z]{3}$/.test(targetCurrency) || !regionConfigService.getSupportedCountries().includes(countryCode)
         || !reliableSources.has(String(product.priceSource || '').toLowerCase())
-        || !Number.isFinite(confidence) || confidence < 0.85 || product.priceNeedsVerification) {
+        || !Number.isFinite(confidence) || confidence < 0.85 || product.priceNeedsVerification
+        || !hasFreshInStockEvidence(product)) {
         return { created: false, reason: 'low_signal_product' };
     }
     try {
@@ -1684,13 +1685,11 @@ exports.searchProduct = async (req, res) => {
                     const monthlyRemaining = Math.max(0, FREE_MONTHLY_LIMIT - monthlyUsed);
 
                     if (!dailySearches.error && !monthlySearches.error) {
-                        const _stripeUrl = process.env.STRIPE_PAYMENT_LINK || null;
                         if (monthlyUsed >= FREE_MONTHLY_LIMIT) {
                             return res.status(402).json({
                                 error: 'Ya agotaste tus 10 búsquedas gratis de este mes. Hazte VIP para seguir buscando sin límites mensuales.',
                                 paywall: true,
-                                upgrade_required: false,
-                                stripe_url: _stripeUrl
+                                upgrade_required: false
                             });
                         }
 
@@ -1698,8 +1697,7 @@ exports.searchProduct = async (req, res) => {
                             return res.status(402).json({
                                 error: 'Ya usaste tus 2 búsquedas gratis de hoy. Vuelve mañana o hazte VIP para seguir buscando ahora mismo.',
                                 paywall: true,
-                                upgrade_required: false,
-                                stripe_url: _stripeUrl
+                                upgrade_required: false
                             });
                         }
 
@@ -1745,8 +1743,7 @@ exports.searchProduct = async (req, res) => {
                             return res.status(402).json({
                                 error: errorMsg,
                                 paywall: !profile.is_premium && !hasTempVIP,
-                                upgrade_required: !profile.is_premium && !hasTempVIP,
-                                stripe_url: process.env.STRIPE_PAYMENT_LINK || null
+                                upgrade_required: !profile.is_premium && !hasTempVIP
                             });
                         }
 

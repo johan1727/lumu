@@ -33,15 +33,16 @@ function burstRateLimiter(req, res, next) {
         || req.headers['x-forwarded-for']?.split(',').pop()?.trim()
         || req.ip || 'unknown';
     const now = Date.now();
-    let entry = _burstLog.get(ip);
+    const routeKey = `${req.path || 'unknown'}:${ip}`;
+    let entry = _burstLog.get(routeKey);
     if (!entry || now - entry.windowStart > BURST_WINDOW_MS) {
         entry = { windowStart: now, count: 0 };
-        _burstLog.set(ip, entry);
+        _burstLog.set(routeKey, entry);
     }
     entry.count++;
     if (entry.count > BURST_MAX) {
         const retryAfter = Math.ceil((entry.windowStart + BURST_WINDOW_MS - now) / 1000);
-        console.warn(`[Burst Limiter] IP ${ip} blocked: ${entry.count} reqs in window`);
+        console.warn(`[Burst Limiter] IP ${ip} blocked on ${req.path}: ${entry.count} reqs in window`);
         return res.status(429).json({
             error: 'Demasiadas solicitudes. Por favor espera un momento.',
             retry_after: retryAfter
@@ -140,7 +141,7 @@ router.get('/img-proxy', imageProxy.proxyImage);
 router.post('/track', authMiddleware, validateBody(trackEventSchema), analyticsController.trackEvent);
 
 // GET /api/price-history — Public price trends (cached)
-router.get('/price-history', priceHistoryController.getPriceHistory);
+router.get('/price-history', burstRateLimiter, priceHistoryController.getPriceHistory);
 
 // GET /api/buy-timing — AI-powered buy timing prediction
 router.get('/buy-timing', burstRateLimiter, buyTimingController.getBuyTiming);
@@ -288,6 +289,8 @@ router.get('/config', (req, res, next) => {
         stripeB2bPaymentLink: process.env.STRIPE_B2B_PAYMENT_LINK || '',
         stripeVipAnnualPaymentLink: process.env.STRIPE_VIP_ANNUAL_PAYMENT_LINK || '',
         stripeB2bAnnualPaymentLink: process.env.STRIPE_B2B_ANNUAL_PAYMENT_LINK || '',
+        googleAnalyticsId: /^G-[A-Z0-9]+$/.test(process.env.GA_MEASUREMENT_ID || 'G-808KHQ0BMD') ? (process.env.GA_MEASUREMENT_ID || 'G-808KHQ0BMD') : '',
+        clarityProjectId: /^[a-z0-9]{6,16}$/i.test(process.env.CLARITY_PROJECT_ID || '') ? process.env.CLARITY_PROJECT_ID : '',
         vapidPublicKey: process.env.VAPID_PUBLIC_KEY || '',
         rewardedAdTagUrl: process.env.REWARDED_AD_TAG_URL || '',
         detectedCountry: detectedCountry,

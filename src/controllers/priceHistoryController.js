@@ -3,6 +3,7 @@
 // ============================================================
 const supabase = require('../config/supabase');
 const cacheService = require('../services/cacheService');
+const regionConfigService = require('../services/regionConfigService');
 
 /**
  * GET /api/price-history?query=...
@@ -20,14 +21,25 @@ exports.getPriceHistory = async (req, res) => {
             return res.status(503).json({ error: 'Base de datos no disponible.' });
         }
 
-        // Search price_history for matching query_keys, scoped by country
-        // Query keys now look like: ct_CL_xxx / ct_MX_xxx
-        const queryPattern = `%${cacheService.generateCacheKey(query, 'global', null, null, countryCode).replace(/[%_]/g, '')}%`;
+        const supportedCountries = regionConfigService.getSupportedCountries();
+        if (!supportedCountries.includes(countryCode)) {
+            return res.status(400).json({ error: 'País no disponible.' });
+        }
+        const currency = regionConfigService.getRegionConfig(countryCode).currency;
+        const normalizedQuery = cacheService.normalizeQuery(query);
+        if (!normalizedQuery) return res.status(400).json({ error: 'La búsqueda no es válida.' });
+        // Snapshots are stored as ct_<country>_<normalized query>_pol_<policy>.
+        // Escape LIKE metacharacters instead of stripping underscores, which
+        // previously made this query miss the saved key and mix markets.
+        const escapedQuery = normalizedQuery.replace(/[\\%_]/g, '\\$&');
+        const queryPattern = `ct\\_${countryCode}\\_${escapedQuery}\\_pol\\_%`;
 
         const { data: rawHistory, error } = await supabase
             .from('price_history')
-            .select('normalized_url, product_title, store_name, price, created_at')
+            .select('normalized_url, product_title, store_name, price, created_at, country_code, currency')
             .ilike('query_key', queryPattern)
+            .eq('country_code', countryCode)
+            .eq('currency', currency)
             .gte('created_at', new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString())
             .order('created_at', { ascending: true })
             .limit(2000);
@@ -44,12 +56,15 @@ exports.getPriceHistory = async (req, res) => {
         // Group by normalized_url
         const productMap = {};
         for (const row of rawHistory) {
+            if (row.country_code !== countryCode || row.currency !== currency) continue;
             const key = row.normalized_url;
             if (!productMap[key]) {
                 productMap[key] = {
                     url: key,
                     title: row.product_title || 'Producto',
                     store: row.store_name || 'Desconocida',
+                    countryCode,
+                    currency,
                     history: []
                 };
             }
@@ -80,6 +95,8 @@ exports.getPriceHistory = async (req, res) => {
                 title: p.title,
                 store: p.store,
                 url: p.url,
+                countryCode: p.countryCode,
+                currency: p.currency,
                 currentPrice,
                 minPrice,
                 maxPrice,
@@ -95,6 +112,7 @@ exports.getPriceHistory = async (req, res) => {
         // Build timeline (group by date)
         const dateMap = {};
         for (const row of rawHistory) {
+            if (row.country_code !== countryCode || row.currency !== currency) continue;
             const dateKey = row.created_at.slice(0, 10); // YYYY-MM-DD
             const price = parseFloat(row.price);
             if (!Number.isFinite(price) || price <= 0) continue;
@@ -118,6 +136,7 @@ exports.getPriceHistory = async (req, res) => {
         // Build by-store comparison
         const storeMap = {};
         for (const row of rawHistory) {
+            if (row.country_code !== countryCode || row.currency !== currency) continue;
             const store = row.store_name || 'Desconocida';
             const price = parseFloat(row.price);
             if (!Number.isFinite(price) || price <= 0) continue;
@@ -163,6 +182,8 @@ exports.getPriceHistory = async (req, res) => {
         res.setHeader('Cache-Control', 'public, max-age=1800, s-maxage=3600');
         res.json({
             query,
+            countryCode,
+            currency,
             summary: {
                 lowest,
                 highest,
